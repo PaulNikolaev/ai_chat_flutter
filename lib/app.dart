@@ -24,7 +24,7 @@ class MyApp extends StatefulWidget {
 }
 
 class _MyAppState extends State<MyApp> {
-  final AuthManager _authManager = AuthManager();
+  AuthManager? _authManager;
   OpenRouterClient? _apiClient;
   bool _isAuthenticated = false;
   bool _isLoading = true;
@@ -58,6 +58,9 @@ class _MyAppState extends State<MyApp> {
         // Игнорируем ошибки загрузки .env, если он не обязателен
       }
 
+      // Создаем AuthManager после загрузки конфигурации
+      _authManager = AuthManager();
+
       // Проверяем аутентификацию
       await _checkAuthentication();
     } catch (e, stackTrace) {
@@ -76,15 +79,17 @@ class _MyAppState extends State<MyApp> {
 
   /// Проверяет статус аутентификации и инициализирует API клиент при необходимости.
   Future<void> _checkAuthentication() async {
+    if (_authManager == null) return;
+    
     try {
       _logger?.debug('Checking authentication status...');
-      final isAuthenticated = await _authManager.isAuthenticated();
+      final isAuthenticated = await _authManager!.isAuthenticated();
       
       if (isAuthenticated) {
         _logger?.info('User is authenticated, initializing API client');
         // Получаем сохраненный API ключ и создаем клиент
         try {
-          final apiKey = await _authManager.getStoredApiKey();
+          final apiKey = await _authManager!.getStoredApiKey();
           if (apiKey.isNotEmpty) {
             _apiClient = OpenRouterClient(apiKey: apiKey);
             _logger?.info('API client initialized successfully');
@@ -127,9 +132,11 @@ class _MyAppState extends State<MyApp> {
   ///
   /// Создает API клиент из сохраненного ключа и переходит к экрану чата.
   Future<void> _handleLoginSuccess() async {
+    if (_authManager == null) return;
+    
     try {
       _logger?.info('Login successful, initializing API client');
-      final apiKey = await _authManager.getStoredApiKey();
+      final apiKey = await _authManager!.getStoredApiKey();
       if (apiKey.isNotEmpty) {
         if (mounted) {
           setState(() {
@@ -174,8 +181,9 @@ class _MyAppState extends State<MyApp> {
   Future<void> _handleLogout() async {
     try {
       _logger?.info('User logging out');
-      // Освобождаем ресурсы API клиента
-      _apiClient?.dispose();
+      
+      // Сохраняем ссылку на клиент перед очисткой состояния
+      final clientToDispose = _apiClient;
       
       if (mounted) {
         setState(() {
@@ -183,6 +191,12 @@ class _MyAppState extends State<MyApp> {
           _isAuthenticated = false;
         });
       }
+      
+      // Освобождаем ресурсы API клиента после обновления состояния
+      // Это предотвращает закрытие клиента во время активных запросов
+      await Future.delayed(const Duration(milliseconds: 100));
+      clientToDispose?.dispose();
+      
       _logger?.info('Logout completed');
     } catch (e, stackTrace) {
       _logger?.error(

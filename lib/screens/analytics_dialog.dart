@@ -34,7 +34,7 @@ class AnalyticsDialog extends StatefulWidget {
 }
 
 class _AnalyticsDialogState extends State<AnalyticsDialog> {
-  String _balance = 'Loading...';
+  String _balance = 'Загрузка...';
   bool _isLoadingBalance = false;
   Map<String, Map<String, int>> _modelStatistics = {};
   bool _isLoadingStatistics = false;
@@ -68,7 +68,7 @@ class _AnalyticsDialogState extends State<AnalyticsDialog> {
     final apiClient = widget.apiClient;
     if (apiClient == null) {
       setState(() {
-        _balance = 'N/A';
+        _balance = 'Недоступно';
         _isLoadingBalance = false;
       });
       return;
@@ -89,7 +89,7 @@ class _AnalyticsDialogState extends State<AnalyticsDialog> {
     } catch (e) {
       if (mounted) {
         setState(() {
-          _balance = 'Error';
+          _balance = 'Ошибка';
           _isLoadingBalance = false;
         });
       }
@@ -106,13 +106,17 @@ class _AnalyticsDialogState extends State<AnalyticsDialog> {
 
     try {
       final statistics = await analytics.getModelStatistics();
+      // Отладочная информация
+      debugPrint('AnalyticsDialog: Loaded statistics: ${statistics.length} models');
       if (mounted) {
         setState(() {
           _modelStatistics = statistics;
           _isLoadingStatistics = false;
         });
       }
-    } catch (e) {
+    } catch (e, stackTrace) {
+      debugPrint('AnalyticsDialog: Error loading statistics: $e');
+      debugPrint('AnalyticsDialog: Stack trace: $stackTrace');
       if (mounted) {
         setState(() {
           _modelStatistics = {};
@@ -195,7 +199,6 @@ class _AnalyticsDialogState extends State<AnalyticsDialog> {
   @override
   Widget build(BuildContext context) {
     final isMobile = PlatformUtils.isMobile();
-    final theme = Theme.of(context);
 
     return Dialog(
       backgroundColor: AppStyles.cardColor,
@@ -216,11 +219,12 @@ class _AnalyticsDialogState extends State<AnalyticsDialog> {
             Row(
               mainAxisAlignment: MainAxisAlignment.spaceBetween,
               children: [
-                Text(
-                  'Analytics',
-                  style: theme.textTheme.headlineSmall?.copyWith(
-                    color: AppStyles.textPrimary,
+                const Text(
+                  'Аналитика',
+                  style: TextStyle(
+                    fontSize: 20,
                     fontWeight: FontWeight.bold,
+                    color: AppStyles.textPrimary,
                   ),
                 ),
                 IconButton(
@@ -261,7 +265,7 @@ class _AnalyticsDialogState extends State<AnalyticsDialog> {
             ElevatedButton.icon(
               onPressed: _loadData,
               icon: const Icon(Icons.refresh),
-              label: const Text('Refresh'),
+              label: const Text('Обновить'),
               style: AppStyles.getButtonStyle(),
             ),
           ],
@@ -286,7 +290,7 @@ class _AnalyticsDialogState extends State<AnalyticsDialog> {
             mainAxisAlignment: MainAxisAlignment.spaceBetween,
             children: [
               const Text(
-                'Account Balance',
+                'Баланс аккаунта',
                 style: TextStyle(
                   fontSize: 16,
                   fontWeight: FontWeight.bold,
@@ -327,7 +331,7 @@ class _AnalyticsDialogState extends State<AnalyticsDialog> {
             mainAxisAlignment: MainAxisAlignment.spaceBetween,
             children: [
               const Text(
-                'Model Usage Statistics',
+                'Статистика использования моделей',
                 style: TextStyle(
                   fontSize: 16,
                   fontWeight: FontWeight.bold,
@@ -345,7 +349,7 @@ class _AnalyticsDialogState extends State<AnalyticsDialog> {
           const SizedBox(height: AppStyles.paddingSmall),
           if (_modelStatistics.isEmpty && !_isLoadingStatistics)
             const Text(
-              'No statistics available',
+              'Статистика недоступна',
               style: TextStyle(color: AppStyles.textSecondary),
             )
           else
@@ -372,7 +376,7 @@ class _AnalyticsDialogState extends State<AnalyticsDialog> {
                     ),
                     const SizedBox(width: AppStyles.paddingSmall),
                     Text(
-                      '$count requests',
+                      '$count запросов',
                       style: const TextStyle(
                         color: AppStyles.textSecondary,
                         fontSize: 14,
@@ -380,7 +384,7 @@ class _AnalyticsDialogState extends State<AnalyticsDialog> {
                     ),
                     const SizedBox(width: AppStyles.paddingSmall),
                     Text(
-                      '${_formatTokens(tokens)} tokens',
+                      '${_formatTokens(tokens)} токенов',
                       style: const TextStyle(
                         color: AppStyles.accentColor,
                         fontSize: 14,
@@ -418,7 +422,7 @@ class _AnalyticsDialogState extends State<AnalyticsDialog> {
             mainAxisAlignment: MainAxisAlignment.spaceBetween,
             children: [
               const Text(
-                'Performance Metrics',
+                'Метрики производительности',
                 style: TextStyle(
                   fontSize: 16,
                   fontWeight: FontWeight.bold,
@@ -435,9 +439,9 @@ class _AnalyticsDialogState extends State<AnalyticsDialog> {
           ),
           const SizedBox(height: AppStyles.paddingSmall),
           if (memoryMb != null)
-            _buildMetricRow('Memory Usage', _formatMemory(memoryMb)),
+            _buildMetricRow('Использование памяти', _formatMemory(memoryMb)),
           if (uptimeSeconds != null)
-            _buildMetricRow('Uptime', _formatUptime(uptimeSeconds)),
+            _buildMetricRow('Время работы', _formatUptime(uptimeSeconds)),
         ],
       ),
     );

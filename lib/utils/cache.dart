@@ -1,4 +1,5 @@
 import 'dart:convert';
+import 'package:flutter/foundation.dart' show debugPrint;
 import 'package:sqflite/sqflite.dart';
 import 'database/database.dart';
 import '../models/chat_message.dart';
@@ -140,7 +141,9 @@ class ChatCache {
   Future<bool> clearHistory() async {
     try {
       final db = await _db;
-      await db.delete('messages');
+      // Используем where: '1=1' для удаления всех записей
+      await db.delete('messages', where: '1=1');
+      // Операция считается успешной, даже если удалено 0 записей
       return true;
     } catch (e) {
       return false;
@@ -241,9 +244,12 @@ class ChatCache {
           'tokens_used': tokensUsed,
         },
       );
-
+      
+      debugPrint('ChatCache.saveAnalytics: Saved analytics record with id=$id, model=$model, tokens=$tokensUsed');
       return id;
-    } catch (e) {
+    } catch (e, stackTrace) {
+      debugPrint('ChatCache.saveAnalytics error: $e');
+      debugPrint('Stack trace: $stackTrace');
       return null;
     }
   }
@@ -316,6 +322,17 @@ class ChatCache {
   Future<Map<String, Map<String, int>>> getModelStatistics() async {
     try {
       final db = await _db;
+      
+      // Проверяем, существует ли таблица
+      final tables = await db.rawQuery(
+        "SELECT name FROM sqlite_master WHERE type='table' AND name='analytics_messages'"
+      );
+      
+      if (tables.isEmpty) {
+        // Таблица не существует, возвращаем пустую статистику
+        return {};
+      }
+      
       final results = await db.rawQuery('''
         SELECT 
           model,
@@ -326,15 +343,29 @@ class ChatCache {
       ''');
 
       final statistics = <String, Map<String, int>>{};
+      debugPrint('ChatCache.getModelStatistics: Found ${results.length} model groups');
+      
       for (final row in results) {
-        statistics[row['model'] as String] = {
-          'count': row['count'] as int,
-          'tokens': (row['tokens'] as num).toInt(),
-        };
+        final model = row['model'] as String?;
+        final count = row['count'] as int?;
+        final tokens = row['tokens'] as num?;
+        
+        debugPrint('ChatCache.getModelStatistics: model=$model, count=$count, tokens=$tokens');
+        
+        if (model != null && count != null && tokens != null) {
+          statistics[model] = {
+            'count': count,
+            'tokens': tokens.toInt(),
+          };
+        }
       }
 
+      debugPrint('ChatCache.getModelStatistics: Returning ${statistics.length} models');
       return statistics;
-    } catch (e) {
+    } catch (e, stackTrace) {
+      // Логируем ошибку для отладки
+      debugPrint('ChatCache.getModelStatistics error: $e');
+      debugPrint('Stack trace: $stackTrace');
       return {};
     }
   }

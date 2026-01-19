@@ -1,3 +1,4 @@
+import 'dart:async';
 import 'dart:convert';
 
 import 'package:http/http.dart' as http;
@@ -322,10 +323,16 @@ class OpenRouterClient {
     while (true) {
       attempt += 1;
       try {
+        // Проверяем, что клиент не закрыт перед использованием
         final response = await _client.post(
           uri,
           headers: _defaultHeaders,
           body: jsonEncode(body),
+        ).timeout(
+          const Duration(seconds: 60),
+          onTimeout: () {
+            throw http.ClientException('Request timeout');
+          },
         );
 
         // Повторяем только при 5xx ошибках, остальные возвращаем сразу.
@@ -336,8 +343,12 @@ class OpenRouterClient {
         } else {
           return response;
         }
-      } on http.ClientException {
+      } on http.ClientException catch (e) {
         if (attempt >= maxRetries) rethrow;
+        // Если клиент закрыт, не пытаемся повторять
+        if (e.toString().contains('already closed')) {
+          rethrow;
+        }
       }
 
       // Небольшая задержка перед повторной попыткой.

@@ -9,6 +9,9 @@ import 'package:flutter_dotenv/flutter_dotenv.dart';
 class EnvConfig {
   static bool _loaded = false;
 
+  /// Проверяет, загружена ли конфигурация окружения.
+  static bool get isLoaded => _loaded;
+
   /// Загружает `.env` из корня проекта.
   ///
   /// Если `.env` отсутствует, выбрасывает [EnvConfigException] с понятным сообщением.
@@ -27,8 +30,14 @@ class EnvConfig {
   /// Получает строковую переменную окружения.
   ///
   /// Если переменная обязательная и отсутствует — выбрасывает [EnvConfigException].
+  /// Если `.env` не загружен, использует fallback или возвращает пустую строку.
   static String getString(String key, {bool required = false, String? fallback}) {
-    final value = dotenv.env[key] ?? fallback;
+    String? value;
+    if (_loaded) {
+      value = dotenv.env[key] ?? fallback;
+    } else {
+      value = fallback;
+    }
     if (required && (value == null || value.trim().isEmpty)) {
       throw EnvConfigException('Missing required env var: $key');
     }

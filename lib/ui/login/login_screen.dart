@@ -1,6 +1,7 @@
 import 'package:flutter/material.dart';
 
 import '../../auth/auth_manager.dart';
+import '../../config/env.dart';
 import '../../utils/platform.dart';
 import '../styles.dart';
 
@@ -25,7 +26,7 @@ class _LoginScreenState extends State<LoginScreen> {
   final _formKey = GlobalKey<FormState>();
   final _apiKeyController = TextEditingController();
   final _pinController = TextEditingController();
-  final _authManager = AuthManager();
+  AuthManager? _authManager;
 
   bool _isFirstLogin = true;
   bool _isLoading = false;
@@ -35,7 +36,23 @@ class _LoginScreenState extends State<LoginScreen> {
   @override
   void initState() {
     super.initState();
-    _checkAuthStatus();
+    _initializeAuth();
+  }
+
+  /// Инициализирует AuthManager после загрузки конфигурации.
+  Future<void> _initializeAuth() async {
+    try {
+      // Убеждаемся, что конфигурация загружена
+      if (!EnvConfig.isLoaded) {
+        await EnvConfig.load();
+      }
+      _authManager = AuthManager();
+      _checkAuthStatus();
+    } catch (e) {
+      // Если не удалось загрузить .env, используем значения по умолчанию
+      _authManager = AuthManager();
+      _checkAuthStatus();
+    }
   }
 
   @override
@@ -46,7 +63,8 @@ class _LoginScreenState extends State<LoginScreen> {
   }
 
   Future<void> _checkAuthStatus() async {
-    final isAuthenticated = await _authManager.isAuthenticated();
+    if (_authManager == null) return;
+    final isAuthenticated = await _authManager!.isAuthenticated();
     setState(() {
       _isFirstLogin = !isAuthenticated;
     });
@@ -90,7 +108,7 @@ class _LoginScreenState extends State<LoginScreen> {
           return;
         }
 
-        final result = await _authManager.handleFirstLogin(apiKey);
+        final result = await _authManager!.handleFirstLogin(apiKey);
         if (result.success) {
           _showStatus(
             'PIN сгенерирован: ${result.message}. Баланс: ${result.balance}',
@@ -109,7 +127,7 @@ class _LoginScreenState extends State<LoginScreen> {
         // Повторный вход: PIN или API ключ
         if (pin.isNotEmpty && pin.length == 4) {
           // Попытка входа по PIN
-          final result = await _authManager.handlePinLogin(pin);
+          final result = await _authManager!.handlePinLogin(pin);
           if (result.success) {
             if (mounted) {
               widget.onLoginSuccess?.call();
@@ -121,7 +139,7 @@ class _LoginScreenState extends State<LoginScreen> {
           }
         } else if (apiKey.isNotEmpty) {
           // Попытка входа по API ключу
-          final result = await _authManager.handleApiKeyLogin(apiKey);
+          final result = await _authManager!.handleApiKeyLogin(apiKey);
           if (result.success) {
             _showStatus(
               'Вход выполнен. ${result.message}. Баланс: ${result.balance}',
@@ -182,7 +200,7 @@ class _LoginScreenState extends State<LoginScreen> {
     });
 
     try {
-      final success = await _authManager.handleReset();
+      final success = await _authManager!.handleReset();
       if (success) {
         setState(() {
           _isFirstLogin = true;

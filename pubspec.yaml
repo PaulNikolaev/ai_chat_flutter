@@ -16,6 +16,7 @@ dependencies:
   
   # База данных SQLite
   sqflite: ^2.3.0
+  sqflite_common_ffi: ^2.3.0
   path: ^1.8.3
   
   # Переменные окружения
@@ -44,3 +45,7 @@ dev_dependencies:
 
 flutter:
   uses-material-design: true
+  
+  # Assets
+  assets:
+    - .env

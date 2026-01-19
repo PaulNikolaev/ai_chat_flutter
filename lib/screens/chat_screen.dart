@@ -256,7 +256,16 @@ class _ChatScreenState extends State<ChatScreen> {
           );
         }
       } else {
-        throw Exception('Failed to clear history');
+        _logger?.error('Failed to clear history: clearHistory returned false');
+        if (mounted) {
+          ScaffoldMessenger.of(context).showSnackBar(
+            const SnackBar(
+              content: Text('Ошибка при очистке истории: не удалось удалить записи из базы данных'),
+              backgroundColor: AppStyles.errorColor,
+              duration: Duration(seconds: 5),
+            ),
+          );
+        }
       }
     } catch (e, stackTrace) {
       _logger?.error(
@@ -541,10 +550,12 @@ class _ChatScreenState extends State<ChatScreen> {
       return;
     }
 
-    setState(() {
-      _isLoading = true;
-      _messageController.clear();
-    });
+    if (mounted) {
+      setState(() {
+        _isLoading = true;
+        _messageController.clear();
+      });
+    }
 
     // Добавляем сообщение пользователя
     final userMessage = _MessageItem(
@@ -552,9 +563,11 @@ class _ChatScreenState extends State<ChatScreen> {
       isUser: true,
       timestamp: DateTime.now(),
     );
-    setState(() {
-      _messages.add(userMessage);
-    });
+    if (mounted) {
+      setState(() {
+        _messages.add(userMessage);
+      });
+    }
     _scrollToBottom();
 
     try {
@@ -611,17 +624,19 @@ class _ChatScreenState extends State<ChatScreen> {
       }
 
       // Добавляем ответ AI
-      final aiMessage = _MessageItem(
-        text: result.text,
-        isUser: false,
-        timestamp: now,
-        model: selectedModel,
-      );
-      setState(() {
-        _messages.add(aiMessage);
-        _isLoading = false;
-      });
-      _scrollToBottom();
+      if (mounted) {
+        final aiMessage = _MessageItem(
+          text: result.text,
+          isUser: false,
+          timestamp: now,
+          model: selectedModel,
+        );
+        setState(() {
+          _messages.add(aiMessage);
+          _isLoading = false;
+        });
+        _scrollToBottom();
+      }
     } catch (e, stackTrace) {
       _logger?.error(
         'Failed to send message',
@@ -629,11 +644,10 @@ class _ChatScreenState extends State<ChatScreen> {
         stackTrace: stackTrace,
       );
       // Показываем ошибку
-      setState(() {
-        _isLoading = false;
-      });
-
       if (mounted) {
+        setState(() {
+          _isLoading = false;
+        });
         ScaffoldMessenger.of(context).showSnackBar(
           SnackBar(
             content: Text('Ошибка отправки сообщения: $e'),

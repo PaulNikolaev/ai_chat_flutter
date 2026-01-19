@@ -1,4 +1,6 @@
+import 'dart:io';
 import 'package:sqflite/sqflite.dart';
+import 'package:sqflite_common_ffi/sqflite_ffi.dart';
 import 'package:path/path.dart';
 
 /// Версия базы данных для управления миграциями.
@@ -34,8 +36,16 @@ class DatabaseHelper {
   ///
   /// Создает файл базы данных, если его нет, и выполняет миграции.
   Future<Database> _initDatabase() async {
-    final dbPath = await getDatabasesPath();
-    final path = join(dbPath, _databaseName);
+    String path;
+    
+    // Для десктопных платформ используем getDatabasesPath из sqflite_common_ffi
+    if (Platform.isWindows || Platform.isLinux || Platform.isMacOS) {
+      final dbPath = await getDatabasesPath();
+      path = join(dbPath, _databaseName);
+    } else {
+      // Для мобильных платформ используем стандартный путь
+      path = join(await getDatabasesPath(), _databaseName);
+    }
 
     return await openDatabase(
       path,
@@ -170,8 +180,15 @@ class DatabaseHelper {
   ///
   /// **Внимание:** Удаляет все данные!
   Future<void> deleteDatabase() async {
-    final dbPath = await getDatabasesPath();
-    final path = join(dbPath, _databaseName);
+    String path;
+    
+    if (Platform.isWindows || Platform.isLinux || Platform.isMacOS) {
+      final dbPath = await getDatabasesPath();
+      path = join(dbPath, _databaseName);
+    } else {
+      path = join(await getDatabasesPath(), _databaseName);
+    }
+    
     await databaseFactory.deleteDatabase(path);
     _database = null;
   }

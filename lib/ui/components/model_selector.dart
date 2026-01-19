@@ -138,6 +138,7 @@ class _ModelSelectorState extends State<ModelSelector> {
         SizedBox(
           width: effectiveWidth,
           child: DropdownButtonFormField<String>(
+            isExpanded: true,
             initialValue: _selectedModelId ?? (widget.models.isNotEmpty ? widget.models.first.id : null),
             decoration: InputDecoration(
               filled: true,
@@ -197,10 +198,14 @@ class _ModelSelectorState extends State<ModelSelector> {
             selectedItemBuilder: (context) {
               // Показываем только название в выбранном элементе
               return _filteredModels.map((model) {
-                return Text(
-                  model.displayName,
-                  style: AppStyles.primaryTextStyle,
-                  overflow: TextOverflow.ellipsis,
+                return SizedBox(
+                  width: double.infinity,
+                  child: Text(
+                    model.displayName,
+                    style: AppStyles.primaryTextStyle,
+                    overflow: TextOverflow.ellipsis,
+                    maxLines: 1,
+                  ),
                 );
               }).toList();
             },
