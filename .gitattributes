@@ -1,0 +1,37 @@
+# Auto detect text files and perform LF normalization
+* text=auto
+
+# Dart/Flutter source files - use LF
+*.dart text eol=lf
+*.yaml text eol=lf
+*.yml text eol=lf
+*.json text eol=lf
+*.md text eol=lf
+*.txt text eol=lf
+
+# Python files - use LF
+*.py text eol=lf
+
+# Shell scripts - use LF
+*.sh text eol=lf
+
+# Batch files - use CRLF (Windows)
+*.bat text eol=crlf
+*.cmd text eol=crlf
+
+# Binary files
+*.png binary
+*.jpg binary
+*.jpeg binary
+*.gif binary
+*.ico binary
+*.apk binary
+*.aab binary
+*.so binary
+*.dll binary
+*.exe binary
+
+# Database files
+*.db binary
+*.sqlite binary
+*.sqlite3 binary

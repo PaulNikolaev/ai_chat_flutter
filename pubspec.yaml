@@ -10,6 +10,26 @@ environment:
 dependencies:
   flutter:
     sdk: flutter
+  
+  # HTTP запросы к API
+  http: ^1.1.0
+  
+  # База данных SQLite
+  sqflite: ^2.3.0
+  path: ^1.8.3
+  
+  # Переменные окружения
+  flutter_dotenv: ^5.1.0
+  
+  # Логирование
+  logger: ^2.0.2
+  
+  # Хранилище данных
+  shared_preferences: ^2.2.2
+  flutter_secure_storage: ^9.0.0
+  
+  # Платформо-зависимые утилиты
+  path_provider: ^2.1.1
 
 dev_dependencies:
   flutter_test:
