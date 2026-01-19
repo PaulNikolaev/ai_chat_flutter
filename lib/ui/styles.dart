@@ -60,11 +60,23 @@ class AppStyles {
   /// Большой радиус скругления
   static const double borderRadiusLarge = 10.0;
 
-  /// Высота кнопок
+  /// Высота кнопок (базовая)
   static const double buttonHeight = 40.0;
 
-  /// Высота полей ввода
+  /// Высота кнопок на мобильных устройствах (увеличена для удобства)
+  static const double buttonHeightMobile = 48.0;
+
+  /// Высота кнопок на планшетах
+  static const double buttonHeightTablet = 44.0;
+
+  /// Высота полей ввода (базовая)
   static const double inputHeight = 50.0;
+
+  /// Высота полей ввода на мобильных устройствах (увеличена для удобства)
+  static const double inputHeightMobile = 56.0;
+
+  /// Высота полей ввода на планшетах
+  static const double inputHeightTablet = 52.0;
 
   /// Высота поля поиска
   static const double searchFieldHeight = 45.0;
@@ -128,6 +140,63 @@ class AppStyles {
   /// На мобильных платформах возвращает null для автоматического размера.
   static double? getInputRowWidth() {
     return PlatformUtils.isMobile() ? null : inputRowWidth;
+  }
+
+  /// Получает адаптивную высоту кнопки на основе размера экрана.
+  ///
+  /// Возвращает увеличенную высоту для мобильных устройств и планшетов.
+  static double getButtonHeight(BuildContext context) {
+    final screenSize = PlatformUtils.getScreenSize(context);
+    switch (screenSize) {
+      case 'small':
+        return buttonHeightMobile;
+      case 'medium':
+        return buttonHeightTablet;
+      default:
+        return buttonHeight;
+    }
+  }
+
+  /// Получает адаптивную высоту поля ввода на основе размера экрана.
+  ///
+  /// Возвращает увеличенную высоту для мобильных устройств и планшетов.
+  static double getInputHeight(BuildContext context) {
+    final screenSize = PlatformUtils.getScreenSize(context);
+    switch (screenSize) {
+      case 'small':
+        return inputHeightMobile;
+      case 'medium':
+        return inputHeightTablet;
+      default:
+        return inputHeight;
+    }
+  }
+
+  /// Получает адаптивный отступ на основе размера экрана.
+  ///
+  /// Возвращает большие отступы для больших экранов и меньшие для мобильных.
+  static double getPadding(BuildContext context) {
+    final screenSize = PlatformUtils.getScreenSize(context);
+    switch (screenSize) {
+      case 'small':
+        return paddingSmall;
+      case 'medium':
+        return padding;
+      default:
+        return paddingLarge;
+    }
+  }
+
+  /// Получает максимальную ширину контента для планшетов.
+  ///
+  /// Используется для ограничения ширины контента на планшетах
+  /// для лучшей читаемости.
+  static double? getMaxContentWidth(BuildContext context) {
+    final screenSize = PlatformUtils.getScreenSize(context);
+    if (screenSize == 'medium') {
+      return 800.0; // Оптимальная ширина для планшетов
+    }
+    return null;
   }
 
   // ==================== Стили компонентов ====================

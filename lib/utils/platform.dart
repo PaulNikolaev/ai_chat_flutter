@@ -1,5 +1,6 @@
 import 'dart:io' show Platform;
 import 'package:flutter/foundation.dart' show kIsWeb;
+import 'package:flutter/material.dart';
 
 /// Утилиты для определения платформы, на которой запущено приложение.
 class PlatformUtils {
@@ -71,5 +72,52 @@ class PlatformUtils {
     if (Platform.isLinux) return 'linux';
     if (Platform.isMacOS) return 'macos';
     return 'unknown';
+  }
+
+  /// Определяет размер экрана на основе ширины.
+  ///
+  /// Возвращает:
+  /// - "small" для маленьких экранов (< 600px) - телефоны
+  /// - "medium" для средних экранов (600-1024px) - планшеты
+  /// - "large" для больших экранов (> 1024px) - десктопы
+  ///
+  /// Пример использования:
+  /// ```dart
+  /// final screenSize = PlatformUtils.getScreenSize(context);
+  /// if (screenSize == 'medium') {
+  ///   // Layout для планшета
+  /// }
+  /// ```
+  static String getScreenSize(BuildContext context) {
+    final width = MediaQuery.of(context).size.width;
+    if (width < 600) {
+      return 'small';
+    } else if (width < 1024) {
+      return 'medium';
+    } else {
+      return 'large';
+    }
+  }
+
+  /// Определяет, является ли экран планшетом.
+  ///
+  /// Возвращает `true`, если ширина экрана между 600 и 1024 пикселями.
+  static bool isTablet(BuildContext context) {
+    return getScreenSize(context) == 'medium';
+  }
+
+  /// Определяет ориентацию экрана.
+  ///
+  /// Возвращает:
+  /// - "portrait" для портретной ориентации
+  /// - "landscape" для альбомной ориентации
+  static String getOrientation(BuildContext context) {
+    final size = MediaQuery.of(context).size;
+    return size.width > size.height ? 'landscape' : 'portrait';
+  }
+
+  /// Определяет, находится ли экран в альбомной ориентации.
+  static bool isLandscape(BuildContext context) {
+    return getOrientation(context) == 'landscape';
   }
 }

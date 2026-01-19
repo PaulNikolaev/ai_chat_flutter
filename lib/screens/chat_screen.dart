@@ -648,7 +648,14 @@ class _ChatScreenState extends State<ChatScreen> {
   @override
   Widget build(BuildContext context) {
     final isMobile = PlatformUtils.isMobile();
+    final isTablet = PlatformUtils.isTablet(context);
+    final isLandscape = PlatformUtils.isLandscape(context);
+    final screenSize = PlatformUtils.getScreenSize(context);
     final theme = Theme.of(context);
+    final padding = AppStyles.getPadding(context);
+    final buttonHeight = AppStyles.getButtonHeight(context);
+    final inputHeight = AppStyles.getInputHeight(context);
+    final maxContentWidth = AppStyles.getMaxContentWidth(context);
 
     return Scaffold(
       backgroundColor: AppStyles.backgroundColor,
@@ -692,9 +699,7 @@ class _ChatScreenState extends State<ChatScreen> {
               }
             },
             child: Container(
-              padding: EdgeInsets.all(
-                PlatformUtils.isMobile() ? AppStyles.paddingSmall : AppStyles.padding,
-              ),
+              padding: EdgeInsets.all(padding),
               decoration: const BoxDecoration(
                 color: AppStyles.cardColor,
                 border: Border(
@@ -744,86 +749,97 @@ class _ChatScreenState extends State<ChatScreen> {
                           ),
                         ),
                       )
-                    : ListView.builder(
-                    controller: _scrollController,
-                    padding: EdgeInsets.all(
-                      isMobile ? AppStyles.paddingSmall : AppStyles.padding,
-                    ),
-                    // Оптимизация: кэшируем больше элементов для плавной прокрутки
-                    cacheExtent: 500,
-                    // Оптимизация: добавляем key для эффективного обновления
-                    itemCount: _messages.length + (_isLoading ? 1 : 0),
-                    itemBuilder: (context, index) {
-                      if (index == _messages.length) {
-                        // Индикатор загрузки
-                        return const Padding(
-                          padding: EdgeInsets.all(AppStyles.padding),
-                          child: Center(
-                            child: CircularProgressIndicator(),
-                          ),
-                        );
-                      }
-
-                      final message = _messages[index];
-                      // Оптимизация: используем RepaintBoundary для изоляции перерисовок
-                      return RepaintBoundary(
-                        key: ValueKey('message_${message.timestamp.millisecondsSinceEpoch}_$index'),
-                        child: Padding(
-                          padding: const EdgeInsets.only(
-                            bottom: AppStyles.paddingSmall,
-                          ),
-                          child: MessageBubble(
-                            text: message.text,
-                            isUser: message.isUser,
-                            timestamp: message.timestamp,
-                            model: message.model,
-                          ),
+                    : Center(
+                      child: ConstrainedBox(
+                        constraints: BoxConstraints(
+                          maxWidth: maxContentWidth ?? double.infinity,
                         ),
-                      );
-                    },
+                        child: ListView.builder(
+                          controller: _scrollController,
+                          padding: EdgeInsets.all(padding),
+                          // Оптимизация: кэшируем больше элементов для плавной прокрутки
+                          cacheExtent: 500,
+                          // Оптимизация: добавляем key для эффективного обновления
+                          itemCount: _messages.length + (_isLoading ? 1 : 0),
+                          itemBuilder: (context, index) {
+                            if (index == _messages.length) {
+                              // Индикатор загрузки
+                              return const Padding(
+                                padding: EdgeInsets.all(AppStyles.padding),
+                                child: Center(
+                                  child: CircularProgressIndicator(),
+                                ),
+                              );
+                            }
+
+                            final message = _messages[index];
+                            // Оптимизация: используем RepaintBoundary для изоляции перерисовок
+                            return RepaintBoundary(
+                              key: ValueKey('message_${message.timestamp.millisecondsSinceEpoch}_$index'),
+                              child: Padding(
+                                padding: const EdgeInsets.only(
+                                  bottom: AppStyles.paddingSmall,
+                                ),
+                                child: MessageBubble(
+                                  text: message.text,
+                                  isUser: message.isUser,
+                                  timestamp: message.timestamp,
+                                  model: message.model,
+                                ),
+                              ),
+                            );
+                          },
+                        ),
+                      ),
+                    ),
                   ),
-          ),
           // Область ввода сообщения
-          Container(
-            padding: EdgeInsets.all(
-              isMobile ? AppStyles.paddingSmall : AppStyles.padding,
-            ),
-            decoration: const BoxDecoration(
-              color: AppStyles.cardColor,
-              border: Border(
-                top: BorderSide(
-                  color: AppStyles.borderColor,
-                  width: 1,
-                ),
+          Center(
+            child: ConstrainedBox(
+              constraints: BoxConstraints(
+                maxWidth: maxContentWidth ?? double.infinity,
               ),
-            ),
-            child: isMobile
+              child: Container(
+                padding: EdgeInsets.all(padding),
+                decoration: const BoxDecoration(
+                  color: AppStyles.cardColor,
+                  border: Border(
+                    top: BorderSide(
+                      color: AppStyles.borderColor,
+                      width: 1,
+                    ),
+                  ),
+                ),
+                child: (isMobile || (isTablet && isLandscape))
                 ? // Мобильный layout: поле ввода и кнопка вертикально
                   Column(
                       mainAxisSize: MainAxisSize.min,
                       crossAxisAlignment: CrossAxisAlignment.stretch,
                       children: [
-                        TextField(
-                          controller: _messageController,
-                          decoration: InputDecoration(
-                            hintText: 'Введите сообщение здесь...',
-                            border: OutlineInputBorder(
-                              borderRadius: BorderRadius.circular(
-                                AppStyles.borderRadius,
+                        SizedBox(
+                          height: inputHeight,
+                          child: TextField(
+                            controller: _messageController,
+                            decoration: InputDecoration(
+                              hintText: 'Введите сообщение здесь...',
+                              border: OutlineInputBorder(
+                                borderRadius: BorderRadius.circular(
+                                  AppStyles.borderRadius,
+                                ),
+                              ),
+                              contentPadding: EdgeInsets.all(
+                                screenSize == 'small' ? AppStyles.paddingSmall : AppStyles.paddingSmall * 1.5,
                               ),
                             ),
-                            contentPadding: const EdgeInsets.all(
-                              AppStyles.paddingSmall,
-                            ),
+                            maxLines: null,
+                            textInputAction: TextInputAction.newline,
+                            style: AppStyles.primaryTextStyle,
+                            enabled: !_isLoading,
                           ),
-                          maxLines: null,
-                          textInputAction: TextInputAction.newline,
-                          style: AppStyles.primaryTextStyle,
-                          enabled: !_isLoading,
                         ),
                         const SizedBox(height: AppStyles.paddingSmall),
                         SizedBox(
-                          height: AppStyles.buttonHeight,
+                          height: buttonHeight,
                           child: ElevatedButton.icon(
                             onPressed: () {
                               final apiClient = widget.apiClient;
@@ -842,34 +858,37 @@ class _ChatScreenState extends State<ChatScreen> {
                         ),
                       ],
                     )
-                : // Десктопный layout: поле ввода и кнопка горизонтально
+                : // Десктопный/планшетный portrait layout: поле ввода и кнопка горизонтально
                   Row(
                       children: [
                         Expanded(
-                          child: TextField(
-                            controller: _messageController,
-                            decoration: InputDecoration(
-                              hintText: 'Введите сообщение здесь...',
-                              border: OutlineInputBorder(
-                                borderRadius: BorderRadius.circular(
-                                  AppStyles.borderRadius,
+                          child: SizedBox(
+                            height: inputHeight,
+                            child: TextField(
+                              controller: _messageController,
+                              decoration: InputDecoration(
+                                hintText: 'Введите сообщение здесь...',
+                                border: OutlineInputBorder(
+                                  borderRadius: BorderRadius.circular(
+                                    AppStyles.borderRadius,
+                                  ),
+                                ),
+                                contentPadding: EdgeInsets.all(
+                                  screenSize == 'small' ? AppStyles.paddingSmall : AppStyles.paddingSmall * 1.5,
                                 ),
                               ),
-                              contentPadding: const EdgeInsets.all(
-                                AppStyles.paddingSmall,
-                              ),
+                              maxLines: null,
+                              textInputAction: TextInputAction.newline,
+                              style: AppStyles.primaryTextStyle,
+                              enabled: !_isLoading,
+                              onSubmitted: (_) => _sendMessage(),
                             ),
-                            maxLines: null,
-                            textInputAction: TextInputAction.newline,
-                            style: AppStyles.primaryTextStyle,
-                            enabled: !_isLoading,
-                            onSubmitted: (_) => _sendMessage(),
                           ),
                         ),
                         const SizedBox(width: AppStyles.paddingSmall),
                         SizedBox(
-                          width: AppStyles.buttonWidth,
-                          height: AppStyles.buttonHeight,
+                          width: isTablet ? AppStyles.buttonWidth * 0.8 : AppStyles.buttonWidth,
+                          height: buttonHeight,
                           child: ElevatedButton.icon(
                             onPressed: () {
                               final apiClient = widget.apiClient;
@@ -888,6 +907,8 @@ class _ChatScreenState extends State<ChatScreen> {
                         ),
                       ],
                     ),
+              ),
+            ),
           ),
         ],
       ),

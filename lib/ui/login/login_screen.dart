@@ -207,20 +207,37 @@ class _LoginScreenState extends State<LoginScreen> {
   @override
   Widget build(BuildContext context) {
     final isMobile = PlatformUtils.isMobile();
-    final containerWidth = isMobile ? null : AppStyles.loginWindowWidth;
+    final isTablet = PlatformUtils.isTablet(context);
+    final isLandscape = PlatformUtils.isLandscape(context);
+    final padding = AppStyles.getPadding(context);
+    final buttonHeight = AppStyles.getButtonHeight(context);
+    final inputHeight = AppStyles.getInputHeight(context);
+    final maxContentWidth = AppStyles.getMaxContentWidth(context);
+    
+    // Адаптивная ширина контейнера
+    double? containerWidth;
+    if (isMobile) {
+      containerWidth = null; // Полная ширина на мобильных
+    } else if (isTablet) {
+      containerWidth = isLandscape ? 600.0 : 500.0; // Шире в landscape
+    } else {
+      containerWidth = AppStyles.loginWindowWidth; // Десктоп
+    }
 
     return Scaffold(
       backgroundColor: AppStyles.backgroundColor,
       body: Center(
         child: SingleChildScrollView(
-          padding: EdgeInsets.all(isMobile ? AppStyles.padding : AppStyles.paddingLarge),
-          child: Container(
-            width: containerWidth,
-            padding: EdgeInsets.all(
-              isMobile ? AppStyles.padding : AppStyles.paddingLarge,
+          padding: EdgeInsets.all(padding),
+          child: ConstrainedBox(
+            constraints: BoxConstraints(
+              maxWidth: maxContentWidth ?? double.infinity,
             ),
-            decoration: AppStyles.loginWindowDecoration,
-            child: Form(
+            child: Container(
+              width: containerWidth,
+              padding: EdgeInsets.all(padding * 1.5),
+              decoration: AppStyles.loginWindowDecoration,
+              child: Form(
               key: _formKey,
               child: Column(
                 mainAxisSize: MainAxisSize.min,
@@ -233,65 +250,74 @@ class _LoginScreenState extends State<LoginScreen> {
                   ),
                   const SizedBox(height: AppStyles.padding),
                   if (!_isFirstLogin) ...[
-                    TextFormField(
-                      controller: _pinController,
-                      decoration: const InputDecoration(
-                        labelText: 'PIN',
-                        hintText: 'Введите 4-значный PIN',
-                        prefixIcon: Icon(Icons.lock),
+                    SizedBox(
+                      height: inputHeight,
+                      child: TextFormField(
+                        controller: _pinController,
+                        decoration: const InputDecoration(
+                          labelText: 'PIN',
+                          hintText: 'Введите 4-значный PIN',
+                          prefixIcon: Icon(Icons.lock),
+                        ),
+                        keyboardType: TextInputType.number,
+                        maxLength: 4,
+                        obscureText: true,
+                        textInputAction: TextInputAction.next,
+                        style: AppStyles.primaryTextStyle,
+                        validator: (value) {
+                          if (!_isFirstLogin && value != null && value.isNotEmpty) {
+                            if (value.length != 4) {
+                              return 'PIN должен содержать 4 цифры';
+                            }
+                            if (!RegExp(r'^\d{4}$').hasMatch(value)) {
+                              return 'PIN должен содержать только цифры';
+                            }
+                          }
+                          return null;
+                        },
                       ),
-                      keyboardType: TextInputType.number,
-                      maxLength: 4,
-                      obscureText: true,
-                      textInputAction: TextInputAction.next,
-                      validator: (value) {
-                        if (!_isFirstLogin && value != null && value.isNotEmpty) {
-                          if (value.length != 4) {
-                            return 'PIN должен содержать 4 цифры';
-                          }
-                          if (!RegExp(r'^\d{4}$').hasMatch(value)) {
-                            return 'PIN должен содержать только цифры';
-                          }
-                        }
-                        return null;
-                      },
                     ),
                     const SizedBox(height: AppStyles.paddingSmall),
-                    Row(
+                    const Row(
                       children: [
-                        const Expanded(child: Divider(color: AppStyles.borderColor)),
+                        Expanded(child: Divider(color: AppStyles.borderColor)),
                         Padding(
-                          padding: const EdgeInsets.symmetric(
+                          padding: EdgeInsets.symmetric(
                             horizontal: AppStyles.paddingSmall,
                           ),
                           child: Text(
                             'Или',
-                            style: AppStyles.secondaryTextStyle.copyWith(
+                            style: TextStyle(
+                              color: AppStyles.textSecondary,
                               fontSize: AppStyles.fontSizeHint,
                             ),
                           ),
                         ),
-                        const Expanded(child: Divider(color: AppStyles.borderColor)),
+                        Expanded(child: Divider(color: AppStyles.borderColor)),
                       ],
                     ),
                     const SizedBox(height: AppStyles.paddingSmall),
                   ],
-                  TextFormField(
-                    controller: _apiKeyController,
-                    decoration: const InputDecoration(
-                      labelText: 'API Key',
-                      hintText: 'Введите ключ OpenRouter или VSEGPT API',
-                      prefixIcon: Icon(Icons.key),
+                  SizedBox(
+                    height: inputHeight,
+                    child: TextFormField(
+                      controller: _apiKeyController,
+                      decoration: const InputDecoration(
+                        labelText: 'API Key',
+                        hintText: 'Введите ключ OpenRouter или VSEGPT API',
+                        prefixIcon: Icon(Icons.key),
+                      ),
+                      obscureText: true,
+                      textInputAction: TextInputAction.done,
+                      style: AppStyles.primaryTextStyle,
+                      onFieldSubmitted: (_) => _handleLogin(),
+                      validator: (value) {
+                        if (_isFirstLogin && (value == null || value.isEmpty)) {
+                          return 'Введите API ключ';
+                        }
+                        return null;
+                      },
                     ),
-                    obscureText: true,
-                    textInputAction: TextInputAction.done,
-                    onFieldSubmitted: (_) => _handleLogin(),
-                    validator: (value) {
-                      if (_isFirstLogin && (value == null || value.isEmpty)) {
-                        return 'Введите API ключ';
-                      }
-                      return null;
-                    },
                   ),
                   if (_statusMessage != null) ...[
                     const SizedBox(height: AppStyles.paddingSmall),
@@ -322,33 +348,75 @@ class _LoginScreenState extends State<LoginScreen> {
                     ),
                   ],
                   const SizedBox(height: AppStyles.padding),
-                  Row(
-                    mainAxisAlignment: MainAxisAlignment.center,
-                    children: [
-                      ElevatedButton.icon(
-                        onPressed: _isLoading ? null : _handleLogin,
-                        icon: _isLoading
-                            ? const SizedBox(
-                                width: 16,
-                                height: 16,
-                                child: CircularProgressIndicator(strokeWidth: 2),
-                              )
-                            : const Icon(Icons.login),
-                        label: const Text('Войти'),
-                        style: AppStyles.sendButtonStyle,
-                      ),
-                      if (!_isFirstLogin) ...[
-                        const SizedBox(width: AppStyles.padding),
-                        TextButton.icon(
-                          onPressed: _isLoading ? null : _handleReset,
-                          icon: const Icon(Icons.restart_alt),
-                          label: const Text('Сбросить ключ'),
-                        ),
-                      ],
-                    ],
-                  ),
+                  (isMobile || (isTablet && isLandscape))
+                      ? // Вертикальный layout для мобильных и планшетов в landscape
+                        Column(
+                            mainAxisSize: MainAxisSize.min,
+                            crossAxisAlignment: CrossAxisAlignment.stretch,
+                            children: [
+                              SizedBox(
+                                height: buttonHeight,
+                                child: ElevatedButton.icon(
+                                  onPressed: _isLoading ? null : _handleLogin,
+                                  icon: _isLoading
+                                      ? const SizedBox(
+                                          width: 16,
+                                          height: 16,
+                                          child: CircularProgressIndicator(strokeWidth: 2),
+                                        )
+                                      : const Icon(Icons.login),
+                                  label: const Text('Войти'),
+                                  style: AppStyles.sendButtonStyle,
+                                ),
+                              ),
+                              if (!_isFirstLogin) ...[
+                                const SizedBox(height: AppStyles.paddingSmall),
+                                SizedBox(
+                                  height: buttonHeight,
+                                  child: TextButton.icon(
+                                    onPressed: _isLoading ? null : _handleReset,
+                                    icon: const Icon(Icons.restart_alt),
+                                    label: const Text('Сбросить ключ'),
+                                  ),
+                                ),
+                              ],
+                            ],
+                          )
+                      : // Горизонтальный layout для десктопов и планшетов в portrait
+                        Row(
+                            mainAxisAlignment: MainAxisAlignment.center,
+                            children: [
+                              SizedBox(
+                                height: buttonHeight,
+                                child: ElevatedButton.icon(
+                                  onPressed: _isLoading ? null : _handleLogin,
+                                  icon: _isLoading
+                                      ? const SizedBox(
+                                          width: 16,
+                                          height: 16,
+                                          child: CircularProgressIndicator(strokeWidth: 2),
+                                        )
+                                      : const Icon(Icons.login),
+                                  label: const Text('Войти'),
+                                  style: AppStyles.sendButtonStyle,
+                                ),
+                              ),
+                              if (!_isFirstLogin) ...[
+                                const SizedBox(width: AppStyles.padding),
+                                SizedBox(
+                                  height: buttonHeight,
+                                  child: TextButton.icon(
+                                    onPressed: _isLoading ? null : _handleReset,
+                                    icon: const Icon(Icons.restart_alt),
+                                    label: const Text('Сбросить ключ'),
+                                  ),
+                                ),
+                              ],
+                            ],
+                          ),
                 ],
               ),
+            ),
             ),
           ),
         ),
