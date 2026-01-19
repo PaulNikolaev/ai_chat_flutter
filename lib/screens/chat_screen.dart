@@ -7,8 +7,11 @@ import 'package:path_provider/path_provider.dart';
 import '../api/openrouter_client.dart';
 import '../ui/components/message_bubble.dart';
 import '../ui/styles.dart';
+import '../utils/analytics.dart';
 import '../utils/cache.dart';
+import '../utils/monitor.dart';
 import '../utils/platform.dart';
+import 'analytics_dialog.dart';
 
 /// Главный экран чата с историей сообщений и полем ввода.
 ///
@@ -67,6 +70,10 @@ class _ChatScreenState extends State<ChatScreen> {
   final List<_MessageItem> _messages = [];
   bool _isLoading = false;
   bool _isLoadingHistory = false;
+  
+  // Экземпляры для аналитики и мониторинга
+  final Analytics _analytics = Analytics();
+  final PerformanceMonitor _performanceMonitor = PerformanceMonitor();
 
   @override
   void initState() {
@@ -325,6 +332,23 @@ class _ChatScreenState extends State<ChatScreen> {
     }
   }
 
+  /// Показывает диалог аналитики с статистикой использования моделей и метриками производительности.
+  ///
+  /// Отображает баланс аккаунта, статистику использования моделей и метрики производительности.
+  /// Баланс автоматически обновляется каждые 30 секунд.
+  void _showAnalyticsDialog() {
+    showDialog(
+      context: context,
+      builder: (BuildContext context) {
+        return AnalyticsDialog(
+          apiClient: widget.apiClient,
+          analytics: _analytics,
+          performanceMonitor: _performanceMonitor,
+        );
+      },
+    );
+  }
+
   Future<void> _sendMessage() async {
     final apiClient = widget.apiClient;
     final selectedModel = widget.selectedModel;
@@ -425,7 +449,7 @@ class _ChatScreenState extends State<ChatScreen> {
           IconButton(
             icon: const Icon(Icons.analytics),
             tooltip: 'Аналитика',
-            onPressed: widget.onAnalytics,
+            onPressed: widget.onAnalytics ?? _showAnalyticsDialog,
           ),
           // Кнопка очистки истории
           IconButton(

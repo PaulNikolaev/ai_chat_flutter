@@ -1,0 +1,472 @@
+import 'package:flutter/material.dart';
+
+import '../api/openrouter_client.dart';
+import '../ui/styles.dart';
+import '../utils/analytics.dart';
+import '../utils/monitor.dart';
+import '../utils/platform.dart';
+
+/// Диалог отображения аналитики использования моделей и метрик производительности.
+///
+/// Показывает:
+/// - Статистику использования моделей (количество запросов, токены)
+/// - Баланс аккаунта с автообновлением
+/// - Метрики производительности (память, время работы)
+class AnalyticsDialog extends StatefulWidget {
+  /// API клиент для получения баланса.
+  final OpenRouterClient? apiClient;
+
+  /// Экземпляр аналитики для получения статистики.
+  final Analytics? analytics;
+
+  /// Экземпляр мониторинга производительности.
+  final PerformanceMonitor? performanceMonitor;
+
+  const AnalyticsDialog({
+    super.key,
+    this.apiClient,
+    this.analytics,
+    this.performanceMonitor,
+  });
+
+  @override
+  State<AnalyticsDialog> createState() => _AnalyticsDialogState();
+}
+
+class _AnalyticsDialogState extends State<AnalyticsDialog> {
+  String _balance = 'Loading...';
+  bool _isLoadingBalance = false;
+  Map<String, Map<String, int>> _modelStatistics = {};
+  bool _isLoadingStatistics = false;
+  Map<String, dynamic>? _performanceMetrics;
+  bool _isLoadingMetrics = false;
+
+  @override
+  void initState() {
+    super.initState();
+    _loadData();
+    // Автообновление баланса каждые 30 секунд
+    _startBalanceAutoRefresh();
+  }
+
+  @override
+  void dispose() {
+    super.dispose();
+  }
+
+  /// Загружает все данные для диалога.
+  Future<void> _loadData() async {
+    await Future.wait([
+      _loadBalance(),
+      _loadStatistics(),
+      _loadPerformanceMetrics(),
+    ]);
+  }
+
+  /// Загружает баланс аккаунта.
+  Future<void> _loadBalance({bool forceRefresh = false}) async {
+    final apiClient = widget.apiClient;
+    if (apiClient == null) {
+      setState(() {
+        _balance = 'N/A';
+        _isLoadingBalance = false;
+      });
+      return;
+    }
+
+    setState(() {
+      _isLoadingBalance = true;
+    });
+
+    try {
+      final balance = await apiClient.getBalance(forceRefresh: forceRefresh);
+      if (mounted) {
+        setState(() {
+          _balance = balance;
+          _isLoadingBalance = false;
+        });
+      }
+    } catch (e) {
+      if (mounted) {
+        setState(() {
+          _balance = 'Error';
+          _isLoadingBalance = false;
+        });
+      }
+    }
+  }
+
+  /// Загружает статистику использования моделей.
+  Future<void> _loadStatistics() async {
+    final analytics = widget.analytics ?? Analytics();
+    
+    setState(() {
+      _isLoadingStatistics = true;
+    });
+
+    try {
+      final statistics = await analytics.getModelStatistics();
+      if (mounted) {
+        setState(() {
+          _modelStatistics = statistics;
+          _isLoadingStatistics = false;
+        });
+      }
+    } catch (e) {
+      if (mounted) {
+        setState(() {
+          _modelStatistics = {};
+          _isLoadingStatistics = false;
+        });
+      }
+    }
+  }
+
+  /// Загружает метрики производительности.
+  Future<void> _loadPerformanceMetrics() async {
+    final monitor = widget.performanceMonitor ?? PerformanceMonitor();
+    
+    setState(() {
+      _isLoadingMetrics = true;
+    });
+
+    try {
+      final metrics = monitor.getMetricsSummary();
+      if (mounted) {
+        setState(() {
+          _performanceMetrics = metrics;
+          _isLoadingMetrics = false;
+        });
+      }
+    } catch (e) {
+      if (mounted) {
+        setState(() {
+          _performanceMetrics = null;
+          _isLoadingMetrics = false;
+        });
+      }
+    }
+  }
+
+  /// Запускает автообновление баланса каждые 30 секунд.
+  void _startBalanceAutoRefresh() {
+    Future.delayed(const Duration(seconds: 30), () {
+      if (mounted && widget.apiClient != null) {
+        _loadBalance(forceRefresh: true);
+        _startBalanceAutoRefresh(); // Рекурсивно планируем следующее обновление
+      }
+    });
+  }
+
+  /// Форматирует количество токенов для отображения.
+  String _formatTokens(int tokens) {
+    if (tokens >= 1000000) {
+      return '${(tokens / 1000000).toStringAsFixed(2)}M';
+    } else if (tokens >= 1000) {
+      return '${(tokens / 1000).toStringAsFixed(2)}K';
+    }
+    return tokens.toString();
+  }
+
+  /// Форматирует время работы для отображения.
+  String _formatUptime(int seconds) {
+    final duration = Duration(seconds: seconds);
+    final hours = duration.inHours;
+    final minutes = duration.inMinutes.remainder(60);
+    final secs = duration.inSeconds.remainder(60);
+
+    if (hours > 0) {
+      return '${hours}h ${minutes}m ${secs}s';
+    } else if (minutes > 0) {
+      return '${minutes}m ${secs}s';
+    }
+    return '${secs}s';
+  }
+
+  /// Форматирует память для отображения.
+  String _formatMemory(double? mb) {
+    if (mb == null) return 'N/A';
+    if (mb >= 1024) {
+      return '${(mb / 1024).toStringAsFixed(2)} GB';
+    }
+    return '${mb.toStringAsFixed(2)} MB';
+  }
+
+  @override
+  Widget build(BuildContext context) {
+    final isMobile = PlatformUtils.isMobile();
+    final theme = Theme.of(context);
+
+    return Dialog(
+      backgroundColor: AppStyles.cardColor,
+      shape: RoundedRectangleBorder(
+        borderRadius: BorderRadius.circular(AppStyles.borderRadiusLarge),
+      ),
+      child: Container(
+        width: isMobile ? double.infinity : 600,
+        constraints: BoxConstraints(
+          maxHeight: MediaQuery.of(context).size.height * 0.8,
+        ),
+        padding: const EdgeInsets.all(AppStyles.padding),
+        child: Column(
+          mainAxisSize: MainAxisSize.min,
+          crossAxisAlignment: CrossAxisAlignment.stretch,
+          children: [
+            // Заголовок
+            Row(
+              mainAxisAlignment: MainAxisAlignment.spaceBetween,
+              children: [
+                Text(
+                  'Analytics',
+                  style: theme.textTheme.headlineSmall?.copyWith(
+                    color: AppStyles.textPrimary,
+                    fontWeight: FontWeight.bold,
+                  ),
+                ),
+                IconButton(
+                  icon: const Icon(Icons.close),
+                  color: AppStyles.textSecondary,
+                  onPressed: () => Navigator.of(context).pop(),
+                ),
+              ],
+            ),
+            const SizedBox(height: AppStyles.padding),
+            
+            // Скроллируемая область с контентом
+            Flexible(
+              child: SingleChildScrollView(
+                child: Column(
+                  crossAxisAlignment: CrossAxisAlignment.stretch,
+                  children: [
+                    // Баланс
+                    _buildBalanceSection(),
+                    const SizedBox(height: AppStyles.padding),
+                    
+                    // Статистика моделей
+                    _buildModelStatisticsSection(),
+                    const SizedBox(height: AppStyles.padding),
+                    
+                    // Метрики производительности
+                    if (_performanceMetrics != null) ...[
+                      _buildPerformanceMetricsSection(),
+                      const SizedBox(height: AppStyles.padding),
+                    ],
+                  ],
+                ),
+              ),
+            ),
+            
+            // Кнопка обновления
+            const SizedBox(height: AppStyles.paddingSmall),
+            ElevatedButton.icon(
+              onPressed: _loadData,
+              icon: const Icon(Icons.refresh),
+              label: const Text('Refresh'),
+              style: AppStyles.getButtonStyle(),
+            ),
+          ],
+        ),
+      ),
+    );
+  }
+
+  /// Строит секцию баланса.
+  Widget _buildBalanceSection() {
+    return Container(
+      padding: const EdgeInsets.all(AppStyles.padding),
+      decoration: BoxDecoration(
+        color: AppStyles.surfaceColor,
+        borderRadius: BorderRadius.circular(AppStyles.borderRadius),
+        border: Border.all(color: AppStyles.borderColor),
+      ),
+      child: Column(
+        crossAxisAlignment: CrossAxisAlignment.start,
+        children: [
+          Row(
+            mainAxisAlignment: MainAxisAlignment.spaceBetween,
+            children: [
+              const Text(
+                'Account Balance',
+                style: TextStyle(
+                  fontSize: 16,
+                  fontWeight: FontWeight.bold,
+                  color: AppStyles.textPrimary,
+                ),
+              ),
+              if (_isLoadingBalance)
+                const SizedBox(
+                  width: 16,
+                  height: 16,
+                  child: CircularProgressIndicator(strokeWidth: 2),
+                ),
+            ],
+          ),
+          const SizedBox(height: AppStyles.paddingSmall),
+          Text(
+            _balance,
+            style: AppStyles.balanceTextStyle.copyWith(fontSize: 24),
+          ),
+        ],
+      ),
+    );
+  }
+
+  /// Строит секцию статистики моделей.
+  Widget _buildModelStatisticsSection() {
+    return Container(
+      padding: const EdgeInsets.all(AppStyles.padding),
+      decoration: BoxDecoration(
+        color: AppStyles.surfaceColor,
+        borderRadius: BorderRadius.circular(AppStyles.borderRadius),
+        border: Border.all(color: AppStyles.borderColor),
+      ),
+      child: Column(
+        crossAxisAlignment: CrossAxisAlignment.start,
+        children: [
+          Row(
+            mainAxisAlignment: MainAxisAlignment.spaceBetween,
+            children: [
+              const Text(
+                'Model Usage Statistics',
+                style: TextStyle(
+                  fontSize: 16,
+                  fontWeight: FontWeight.bold,
+                  color: AppStyles.textPrimary,
+                ),
+              ),
+              if (_isLoadingStatistics)
+                const SizedBox(
+                  width: 16,
+                  height: 16,
+                  child: CircularProgressIndicator(strokeWidth: 2),
+                ),
+            ],
+          ),
+          const SizedBox(height: AppStyles.paddingSmall),
+          if (_modelStatistics.isEmpty && !_isLoadingStatistics)
+            const Text(
+              'No statistics available',
+              style: TextStyle(color: AppStyles.textSecondary),
+            )
+          else
+            ..._modelStatistics.entries.map((entry) {
+              final model = entry.key;
+              final stats = entry.value;
+              final count = stats['count'] ?? 0;
+              final tokens = stats['tokens'] ?? 0;
+
+              return Padding(
+                padding: const EdgeInsets.only(bottom: AppStyles.paddingSmall),
+                child: Row(
+                  mainAxisAlignment: MainAxisAlignment.spaceBetween,
+                  children: [
+                    Expanded(
+                      child: Text(
+                        model,
+                        style: const TextStyle(
+                          color: AppStyles.textPrimary,
+                          fontSize: 14,
+                        ),
+                        overflow: TextOverflow.ellipsis,
+                      ),
+                    ),
+                    const SizedBox(width: AppStyles.paddingSmall),
+                    Text(
+                      '$count requests',
+                      style: const TextStyle(
+                        color: AppStyles.textSecondary,
+                        fontSize: 14,
+                      ),
+                    ),
+                    const SizedBox(width: AppStyles.paddingSmall),
+                    Text(
+                      '${_formatTokens(tokens)} tokens',
+                      style: const TextStyle(
+                        color: AppStyles.accentColor,
+                        fontSize: 14,
+                        fontWeight: FontWeight.bold,
+                      ),
+                    ),
+                  ],
+                ),
+              );
+            }),
+        ],
+      ),
+    );
+  }
+
+  /// Строит секцию метрик производительности.
+  Widget _buildPerformanceMetricsSection() {
+    final metrics = _performanceMetrics;
+    if (metrics == null) return const SizedBox.shrink();
+
+    final memoryMb = metrics['memoryRssMb'] as double?;
+    final uptimeSeconds = metrics['uptimeSeconds'] as int?;
+
+    return Container(
+      padding: const EdgeInsets.all(AppStyles.padding),
+      decoration: BoxDecoration(
+        color: AppStyles.surfaceColor,
+        borderRadius: BorderRadius.circular(AppStyles.borderRadius),
+        border: Border.all(color: AppStyles.borderColor),
+      ),
+      child: Column(
+        crossAxisAlignment: CrossAxisAlignment.start,
+        children: [
+          Row(
+            mainAxisAlignment: MainAxisAlignment.spaceBetween,
+            children: [
+              const Text(
+                'Performance Metrics',
+                style: TextStyle(
+                  fontSize: 16,
+                  fontWeight: FontWeight.bold,
+                  color: AppStyles.textPrimary,
+                ),
+              ),
+              if (_isLoadingMetrics)
+                const SizedBox(
+                  width: 16,
+                  height: 16,
+                  child: CircularProgressIndicator(strokeWidth: 2),
+                ),
+            ],
+          ),
+          const SizedBox(height: AppStyles.paddingSmall),
+          if (memoryMb != null)
+            _buildMetricRow('Memory Usage', _formatMemory(memoryMb)),
+          if (uptimeSeconds != null)
+            _buildMetricRow('Uptime', _formatUptime(uptimeSeconds)),
+        ],
+      ),
+    );
+  }
+
+  /// Строит строку метрики.
+  Widget _buildMetricRow(String label, String value) {
+    return Padding(
+      padding: const EdgeInsets.only(bottom: AppStyles.paddingSmall),
+      child: Row(
+        mainAxisAlignment: MainAxisAlignment.spaceBetween,
+        children: [
+          Text(
+            label,
+            style: const TextStyle(
+              color: AppStyles.textSecondary,
+              fontSize: 14,
+            ),
+          ),
+          Text(
+            value,
+            style: const TextStyle(
+              color: AppStyles.textPrimary,
+              fontSize: 14,
+              fontWeight: FontWeight.bold,
+            ),
+          ),
+        ],
+      ),
+    );
+  }
+}
