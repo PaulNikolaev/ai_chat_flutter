@@ -86,7 +86,7 @@ class _AnalyticsDialogState extends State<AnalyticsDialog> {
           _isLoadingBalance = false;
         });
       }
-    } catch (e, stackTrace) {
+    } catch (e) {
       if (mounted) {
         setState(() {
           _balance = 'Ошибка';
@@ -160,7 +160,7 @@ class _AnalyticsDialogState extends State<AnalyticsDialog> {
           }
         }
       }
-    } catch (e, stackTrace) {
+    } catch (e) {
       if (mounted) {
         ScaffoldMessenger.of(context).showSnackBar(
           SnackBar(

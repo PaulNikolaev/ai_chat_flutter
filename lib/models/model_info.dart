@@ -131,9 +131,9 @@ class ModelInfo {
     if (promptPrice != null && completionPrice != null) {
       return '${promptPrice!.toStringAsFixed(4)} / ${completionPrice!.toStringAsFixed(4)}';
     } else if (promptPrice != null) {
-      return '${promptPrice!.toStringAsFixed(4)}';
+      return promptPrice!.toStringAsFixed(4);
     } else if (completionPrice != null) {
-      return '${completionPrice!.toStringAsFixed(4)}';
+      return completionPrice!.toStringAsFixed(4);
     }
     
     return 'Цена не указана';

@@ -1,4 +1,3 @@
-import 'dart:developer' as developer;
 import 'auth_storage.dart';
 import 'auth_validator.dart';
 import '../config/env.dart';

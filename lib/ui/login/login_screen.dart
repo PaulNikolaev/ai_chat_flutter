@@ -158,7 +158,7 @@ class _LoginScreenState extends State<LoginScreen> {
           _showStatus('Введите PIN (4 цифры) или API ключ');
         }
       }
-    } catch (e, stackTrace) {
+    } catch (e) {
       _showStatus('Ошибка: $e');
     } finally {
       if (mounted) {
@@ -211,7 +211,7 @@ class _LoginScreenState extends State<LoginScreen> {
       } else {
         _showStatus('Ошибка сброса ключа');
       }
-    } catch (e, stackTrace) {
+    } catch (e) {
       _showStatus('Ошибка: $e');
     } finally {
       if (mounted) {

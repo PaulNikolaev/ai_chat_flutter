@@ -217,7 +217,7 @@ class OpenRouterClient {
       return deduplicatedModels;
     } on FormatException catch (e) {
       throw OpenRouterException('Invalid models response format: $e');
-    } catch (e, stackTrace) {
+    } catch (e) {
       throw OpenRouterException('Failed to parse models response: $e');
     }
   }
@@ -388,9 +388,9 @@ class OpenRouterClient {
     http.Response response;
     try {
       response = await _getWithRetry(uri);
-    } on http.ClientException catch (e) {
+    } on http.ClientException {
       return 'Error';
-    } catch (e) {
+    } catch (_) {
       return 'Error';
     }
 
@@ -449,7 +449,7 @@ class OpenRouterClient {
         _balanceUpdatedAt = DateTime.now();
         return formatted;
       }
-    } catch (e, stackTrace) {
+    } catch (e) {
       return 'Error';
     }
   }

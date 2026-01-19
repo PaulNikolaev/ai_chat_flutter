@@ -1,6 +1,5 @@
 import 'dart:async';
 import 'dart:convert';
-import 'dart:developer' as developer;
 import 'dart:math';
 import 'package:http/http.dart' as http;
 import 'package:crypto/crypto.dart';
@@ -109,7 +108,7 @@ class AuthValidator {
       } else {
         return await _validateOpenRouterKey(apiKey);
       }
-    } catch (e, stackTrace) {
+    } catch (e) {
       return ApiKeyValidationResult(
         isValid: false,
         message: 'Error validating key: $e',
@@ -204,7 +203,7 @@ class AuthValidator {
             balance: balance,
             provider: 'openrouter',
           );
-        } catch (e, stackTrace) {
+        } catch (e) {
           return ApiKeyValidationResult(
             isValid: false,
             message: 'Invalid response format from OpenRouter API: $e',
@@ -302,7 +301,7 @@ class AuthValidator {
         balance: 0.0,
         provider: 'openrouter',
       );
-    } catch (e, stackTrace) {
+    } catch (e) {
       return ApiKeyValidationResult(
         isValid: false,
         message: 'Error validating OpenRouter key: $e',
@@ -404,7 +403,7 @@ class AuthValidator {
               provider: 'vsegpt',
             );
           }
-        } catch (e, stackTrace) {
+        } catch (e) {
           // Ошибка парсинга JSON
           return ApiKeyValidationResult(
             isValid: false,
@@ -463,7 +462,7 @@ class AuthValidator {
         balance: 0.0,
         provider: 'vsegpt',
       );
-    } catch (e, stackTrace) {
+    } catch (e) {
       return ApiKeyValidationResult(
         isValid: false,
         message: 'Error validating VSEGPT key: $e',

@@ -166,8 +166,9 @@ class _ModelSelectorState extends State<ModelSelector> {
         SizedBox(
           width: effectiveWidth,
           child: DropdownButtonFormField<String>(
+            key: ValueKey(_selectedModelId),
             isExpanded: true,
-            value: _selectedModelId,
+            initialValue: _selectedModelId,
             decoration: InputDecoration(
               filled: true,
               fillColor: AppStyles.surfaceColor,
