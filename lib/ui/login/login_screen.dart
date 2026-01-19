@@ -220,7 +220,8 @@ class _LoginScreenState extends State<LoginScreen> {
             '✅ Успешная авторизация!\n\n'
             '🔐 Ваш PIN код: $pin\n'
             '💰 Баланс аккаунта: \$$balance\n\n'
-            'Сохраните PIN код в безопасном месте!',
+            '⚠️ Сохраните PIN код в безопасном месте!\n'
+            'Вы будете перенаправлены в приложение через 3 секунды...',
             isError: false,
           );
 
@@ -259,7 +260,8 @@ class _LoginScreenState extends State<LoginScreen> {
               _showStatus(
                 '✅ API ключ успешно обновлен!\n\n'
                 '💰 Баланс аккаунта: \$$balance\n\n'
-                'Ваш PIN код остался прежним.',
+                'Ваш PIN код остался прежним.\n'
+                'Вы будете перенаправлены в приложение через 2 секунды...',
                 isError: false,
               );
             } else {
@@ -267,12 +269,13 @@ class _LoginScreenState extends State<LoginScreen> {
               _showStatus(
                 '✅ Вход выполнен!\n\n'
                 '🔐 Ваш PIN код: ${result.message}\n'
-                '💰 Баланс аккаунта: \$$balance',
+                '💰 Баланс аккаунта: \$$balance\n\n'
+                'Вы будете перенаправлены в приложение через 2 секунды...',
                 isError: false,
               );
             }
 
-            // Ждем немного, затем переходим в приложение
+            // Автопереход: ждем немного, затем переходим в приложение
             await Future.delayed(const Duration(seconds: 2));
             if (mounted) {
               widget.onLoginSuccess?.call();
@@ -302,10 +305,55 @@ class _LoginScreenState extends State<LoginScreen> {
     final confirmed = await showDialog<bool>(
       context: context,
       builder: (context) => AlertDialog(
-        title: const Text('Подтверждение сброса'),
-        content: const Text(
-          'Вы уверены, что хотите сбросить ключ? '
-          'Все сохраненные данные аутентификации будут удалены.',
+        title: const Row(
+          children: [
+            Icon(
+              Icons.warning_amber_rounded,
+              color: AppStyles.warningColor,
+              size: 28,
+            ),
+            SizedBox(width: AppStyles.paddingSmall),
+            Expanded(
+              child: Text(
+                'Подтверждение сброса',
+                style: TextStyle(fontWeight: FontWeight.bold),
+              ),
+            ),
+          ],
+        ),
+        content: const Column(
+          mainAxisSize: MainAxisSize.min,
+          crossAxisAlignment: CrossAxisAlignment.start,
+          children: [
+            Text(
+              'Вы уверены, что хотите сбросить ключ?',
+              style: TextStyle(fontWeight: FontWeight.w600),
+            ),
+            SizedBox(height: AppStyles.paddingSmall),
+            Text(
+              '⚠️ Все сохраненные данные аутентификации будут удалены:',
+            ),
+            SizedBox(height: AppStyles.paddingSmall),
+            Padding(
+              padding: EdgeInsets.only(left: AppStyles.paddingSmall),
+              child: Column(
+                crossAxisAlignment: CrossAxisAlignment.start,
+                children: [
+                  Text('• API ключ'),
+                  Text('• PIN код'),
+                  Text('• Данные провайдера'),
+                ],
+              ),
+            ),
+            SizedBox(height: AppStyles.paddingSmall),
+            Text(
+              'После сброса вам потребуется ввести новый API ключ.',
+              style: TextStyle(
+                fontStyle: FontStyle.italic,
+                color: AppStyles.textSecondary,
+              ),
+            ),
+          ],
         ),
         actions: [
           TextButton(
@@ -314,7 +362,13 @@ class _LoginScreenState extends State<LoginScreen> {
           ),
           TextButton(
             onPressed: () => Navigator.of(context).pop(true),
-            child: const Text('Сбросить'),
+            style: TextButton.styleFrom(
+              foregroundColor: AppStyles.errorColor,
+            ),
+            child: const Text(
+              'Сбросить',
+              style: TextStyle(fontWeight: FontWeight.bold),
+            ),
           ),
         ],
       ),
@@ -414,11 +468,17 @@ class _LoginScreenState extends State<LoginScreen> {
                         style: AppStyles.primaryTextStyle,
                         validator: (value) {
                           if (!_isFirstLogin && value != null && value.isNotEmpty) {
+                            // Валидация формата PIN: должен быть ровно 4 цифры
                             if (value.length != 4) {
-                              return 'PIN должен содержать 4 цифры';
+                              return 'PIN должен содержать ровно 4 цифры (1000-9999)';
                             }
                             if (!RegExp(r'^\d{4}$').hasMatch(value)) {
                               return 'PIN должен содержать только цифры';
+                            }
+                            // Проверяем диапазон (1000-9999)
+                            final pinValue = int.tryParse(value);
+                            if (pinValue == null || pinValue < 1000 || pinValue > 9999) {
+                              return 'PIN должен быть числом от 1000 до 9999';
                             }
                           }
                           return null;
@@ -463,6 +523,20 @@ class _LoginScreenState extends State<LoginScreen> {
                       validator: (value) {
                         if (_isFirstLogin && (value == null || value.isEmpty)) {
                           return 'Введите API ключ';
+                        }
+                        // Валидация формата API ключа при вводе
+                        if (value != null && value.isNotEmpty) {
+                          final trimmed = value.trim();
+                          if (!trimmed.startsWith('sk-or-')) {
+                            return 'Ключ должен начинаться с "sk-or-v1-" (OpenRouter) или "sk-or-vv-" (VSEGPT)';
+                          }
+                          if (!trimmed.startsWith('sk-or-v1-') && !trimmed.startsWith('sk-or-vv-')) {
+                            return 'Неверный формат ключа. Используйте "sk-or-v1-..." или "sk-or-vv-..."';
+                          }
+                          // Минимальная длина ключа (примерно)
+                          if (trimmed.length < 20) {
+                            return 'API ключ слишком короткий. Проверьте правильность ввода';
+                          }
                         }
                         return null;
                       },
