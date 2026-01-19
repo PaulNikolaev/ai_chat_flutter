@@ -4,7 +4,7 @@ import 'package:sqflite_common_ffi/sqflite_ffi.dart';
 import 'package:path/path.dart';
 
 /// Версия базы данных для управления миграциями.
-const int _databaseVersion = 1;
+const int _databaseVersion = 2;
 
 /// Имя файла базы данных.
 const String _databaseName = 'chat_cache.db';
@@ -69,11 +69,21 @@ class DatabaseHelper {
   /// [oldVersion] - предыдущая версия БД.
   /// [newVersion] - новая версия БД.
   Future<void> _onUpgrade(Database db, int oldVersion, int newVersion) async {
-    // Здесь будут выполняться миграции при обновлении версии БД
-    // Пример:
-    // if (oldVersion < 2) {
-    //   await db.execute('ALTER TABLE messages ADD COLUMN new_field TEXT');
-    // }
+    // Миграция с версии 1 на версию 2: добавление поля provider в таблицу auth
+    if (oldVersion < 2) {
+      // Проверяем, существует ли колонка provider
+      final tableInfo = await db.rawQuery(
+        'PRAGMA table_info(auth)'
+      );
+      final hasProviderColumn = tableInfo.any((column) => column['name'] == 'provider');
+      
+      if (!hasProviderColumn) {
+        // Добавляем колонку provider с значением по умолчанию 'openrouter'
+        await db.execute('''
+          ALTER TABLE auth ADD COLUMN provider TEXT NOT NULL DEFAULT 'openrouter'
+        ''');
+      }
+    }
   }
 
   /// Создает таблицу `messages` для хранения сообщений чата.
@@ -150,6 +160,7 @@ class DatabaseHelper {
   /// - id: уникальный идентификатор (PRIMARY KEY AUTOINCREMENT)
   /// - api_key: API ключ (зашифрован)
   /// - pin_hash: хэш PIN кода
+  /// - provider: провайдер API ('openrouter' или 'vsegpt')
   /// - created_at: дата создания записи
   /// - last_used: дата последнего использования
   Future<void> _createAuthTable(Database db) async {
@@ -158,6 +169,7 @@ class DatabaseHelper {
         id INTEGER PRIMARY KEY AUTOINCREMENT,
         api_key TEXT NOT NULL,
         pin_hash TEXT NOT NULL,
+        provider TEXT NOT NULL DEFAULT 'openrouter',
         created_at TEXT NOT NULL DEFAULT (datetime('now')),
         last_used TEXT
       )
