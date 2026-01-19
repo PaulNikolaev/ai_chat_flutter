@@ -2,8 +2,9 @@ import 'dart:convert';
 import 'package:crypto/crypto.dart';
 import 'package:flutter_secure_storage/flutter_secure_storage.dart';
 import 'package:shared_preferences/shared_preferences.dart';
+import 'auth_repository.dart';
 
-/// Ключи для хранения данных аутентификации.
+/// Ключи для хранения данных аутентификации (для миграции из старых хранилищ).
 class _AuthKeys {
   static const String apiKey = 'api_key';
   static const String pinHash = 'pin_hash';
@@ -13,8 +14,8 @@ class _AuthKeys {
 /// Хранилище данных аутентификации.
 ///
 /// Использует:
-/// - `flutter_secure_storage` для безопасного хранения API ключа
-/// - `shared_preferences` для хранения хэша PIN кода
+/// - `AuthRepository` для работы с базой данных SQLite
+/// - Автоматическую миграцию данных из старых хранилищ (flutter_secure_storage и shared_preferences)
 ///
 /// Пример использования:
 /// ```dart
@@ -26,30 +27,92 @@ class _AuthKeys {
 /// );
 /// ```
 class AuthStorage {
-  /// Безопасное хранилище для API ключа.
-  final FlutterSecureStorage _secureStorage;
+  /// Репозиторий для работы с базой данных.
+  final AuthRepository _repository;
 
-  /// Предпочтения для хранения PIN хэша.
-  SharedPreferences? _prefs;
+  /// Безопасное хранилище для миграции старых данных (опционально).
+  final FlutterSecureStorage? _legacySecureStorage;
+
+  /// Предпочтения для миграции старых данных (опционально).
+  SharedPreferences? _legacyPrefs;
+
+  /// Флаг, указывающий, была ли выполнена миграция.
+  bool _migrationCompleted = false;
 
   /// Создает экземпляр [AuthStorage].
   AuthStorage({
+    AuthRepository? repository,
     FlutterSecureStorage? secureStorage,
-  }) : _secureStorage = secureStorage ?? const FlutterSecureStorage();
+  })  : _repository = repository ?? AuthRepository(),
+        _legacySecureStorage = secureStorage ?? const FlutterSecureStorage();
 
-  /// Инициализирует SharedPreferences (вызывается автоматически при первом использовании).
-  Future<void> _ensurePrefs() async {
-    _prefs ??= await SharedPreferences.getInstance();
+  /// Инициализирует SharedPreferences для миграции (вызывается автоматически при необходимости).
+  Future<void> _ensureLegacyPrefs() async {
+    _legacyPrefs ??= await SharedPreferences.getInstance();
+  }
+
+  /// Выполняет миграцию данных из старых хранилищ в базу данных.
+  ///
+  /// Проверяет наличие данных в flutter_secure_storage и shared_preferences,
+  /// и если они найдены, переносит их в БД через AuthRepository.
+  ///
+  /// Возвращает true, если миграция выполнена или не требуется, иначе false.
+  Future<bool> _migrateLegacyData() async {
+    if (_migrationCompleted) {
+      return true;
+    }
+
+    try {
+      // Проверяем, есть ли уже данные в БД
+      final hasDbData = await _repository.hasAuth();
+      if (hasDbData) {
+        _migrationCompleted = true;
+        return true;
+      }
+
+      // Проверяем наличие данных в старых хранилищах
+      await _ensureLegacyPrefs();
+      
+      final legacyApiKey = await _legacySecureStorage?.read(key: _AuthKeys.apiKey);
+      final legacyPinHash = _legacyPrefs?.getString(_AuthKeys.pinHash);
+      final legacyProvider = _legacyPrefs?.getString(_AuthKeys.provider);
+
+      // Если есть данные в старых хранилищах, мигрируем их
+      if (legacyApiKey != null && legacyPinHash != null && legacyProvider != null) {
+        final migrated = await _repository.saveAuth(
+          apiKey: legacyApiKey,
+          pinHash: legacyPinHash,
+          provider: legacyProvider,
+        );
+
+        if (migrated) {
+          // Очищаем старые хранилища после успешной миграции
+          await _legacySecureStorage?.delete(key: _AuthKeys.apiKey);
+          await _legacyPrefs?.remove(_AuthKeys.pinHash);
+          await _legacyPrefs?.remove(_AuthKeys.provider);
+        }
+
+        _migrationCompleted = true;
+        return migrated;
+      }
+
+      _migrationCompleted = true;
+      return true;
+    } catch (e) {
+      // В случае ошибки миграции продолжаем работу с БД
+      _migrationCompleted = true;
+      return false;
+    }
   }
 
   /// Сохраняет данные аутентификации.
   ///
-  /// API ключ сохраняется в безопасном хранилище,
-  /// PIN хэш сохраняется в SharedPreferences.
+  /// Данные сохраняются в базу данных через AuthRepository.
+  /// API ключ автоматически шифруется перед сохранением.
   ///
   /// Параметры:
-  /// - [apiKey]: API ключ для хранения (будет сохранен в безопасном хранилище).
-  /// - [pinHash]: Хэш PIN кода для хранения.
+  /// - [apiKey]: API ключ для хранения (будет зашифрован и сохранен в БД).
+  /// - [pinHash]: Хэш PIN кода для хранения (должен быть уже захеширован).
   /// - [provider]: Провайдер API ('openrouter' или 'vsegpt').
   ///
   /// Возвращает true, если данные сохранены успешно, иначе false.
@@ -59,21 +122,12 @@ class AuthStorage {
     required String provider,
   }) async {
     try {
-      await _ensurePrefs();
-      
-      // Сохраняем API ключ в безопасном хранилище
-      await _secureStorage.write(
-        key: _AuthKeys.apiKey,
-        value: apiKey,
+      await _migrateLegacyData();
+      return await _repository.saveAuth(
+        apiKey: apiKey,
+        pinHash: pinHash,
+        provider: provider,
       );
-
-      // Сохраняем PIN хэш в SharedPreferences
-      await _prefs!.setString(_AuthKeys.pinHash, pinHash);
-      
-      // Сохраняем провайдера
-      await _prefs!.setString(_AuthKeys.provider, provider);
-
-      return true;
     } catch (e) {
       return false;
     }
@@ -81,10 +135,11 @@ class AuthStorage {
 
   /// Получает сохраненный API ключ.
   ///
-  /// Возвращает API ключ или null, если он не найден.
+  /// Возвращает расшифрованный API ключ или null, если он не найден.
   Future<String?> getApiKey() async {
     try {
-      return await _secureStorage.read(key: _AuthKeys.apiKey);
+      await _migrateLegacyData();
+      return await _repository.getApiKey();
     } catch (e) {
       return null;
     }
@@ -95,8 +150,8 @@ class AuthStorage {
   /// Возвращает хэш PIN или null, если он не найден.
   Future<String?> getPinHash() async {
     try {
-      await _ensurePrefs();
-      return _prefs!.getString(_AuthKeys.pinHash);
+      await _migrateLegacyData();
+      return await _repository.getPinHash();
     } catch (e) {
       return null;
     }
@@ -107,8 +162,8 @@ class AuthStorage {
   /// Возвращает 'openrouter' или 'vsegpt', или null, если не найден.
   Future<String?> getProvider() async {
     try {
-      await _ensurePrefs();
-      return _prefs!.getString(_AuthKeys.provider);
+      await _migrateLegacyData();
+      return await _repository.getProvider();
     } catch (e) {
       return null;
     }
@@ -118,21 +173,11 @@ class AuthStorage {
   ///
   /// Возвращает Map с ключами 'api_key', 'pin_hash', 'provider'
   /// или null, если данные не найдены.
+  /// API ключ автоматически расшифровывается.
   Future<Map<String, String>?> getAuth() async {
     try {
-      final apiKey = await getApiKey();
-      final pinHash = await getPinHash();
-      final provider = await getProvider();
-
-      if (apiKey == null || pinHash == null || provider == null) {
-        return null;
-      }
-
-      return {
-        'api_key': apiKey,
-        'pin_hash': pinHash,
-        'provider': provider,
-      };
+      await _migrateLegacyData();
+      return await _repository.getAuth();
     } catch (e) {
       return null;
     }
@@ -148,17 +193,8 @@ class AuthStorage {
   /// Возвращает true, если PIN валиден, иначе false.
   Future<bool> verifyPin(String pin) async {
     try {
-      final storedHash = await getPinHash();
-      if (storedHash == null) {
-        return false;
-      }
-
-      // Хэшируем введенный PIN через SHA256
-      final bytes = utf8.encode(pin);
-      final digest = sha256.convert(bytes);
-      final inputHash = digest.toString();
-
-      return inputHash == storedHash;
+      await _migrateLegacyData();
+      return await _repository.verifyPin(pin);
     } catch (e) {
       return false;
     }
@@ -180,24 +216,24 @@ class AuthStorage {
 
   /// Очищает все данные аутентификации.
   ///
-  /// Удаляет API ключ из безопасного хранилища
-  /// и PIN хэш из SharedPreferences.
+  /// Удаляет данные из базы данных через AuthRepository.
+  /// Также очищает старые хранилища для полной очистки.
   ///
   /// Возвращает true, если данные очищены успешно, иначе false.
   Future<bool> clearAuth() async {
     try {
-      await _ensurePrefs();
+      await _migrateLegacyData();
       
-      // Удаляем API ключ из безопасного хранилища
-      await _secureStorage.delete(key: _AuthKeys.apiKey);
+      // Очищаем данные из БД
+      final dbCleared = await _repository.clearAuth();
       
-      // Удаляем PIN хэш из SharedPreferences
-      await _prefs!.remove(_AuthKeys.pinHash);
-      
-      // Удаляем провайдера
-      await _prefs!.remove(_AuthKeys.provider);
+      // Также очищаем старые хранилища на всякий случай
+      await _legacySecureStorage?.delete(key: _AuthKeys.apiKey);
+      await _ensureLegacyPrefs();
+      await _legacyPrefs?.remove(_AuthKeys.pinHash);
+      await _legacyPrefs?.remove(_AuthKeys.provider);
 
-      return true;
+      return dbCleared;
     } catch (e) {
       return false;
     }
@@ -208,9 +244,8 @@ class AuthStorage {
   /// Возвращает true, если есть сохраненный API ключ и PIN хэш, иначе false.
   Future<bool> hasAuth() async {
     try {
-      final apiKey = await getApiKey();
-      final pinHash = await getPinHash();
-      return apiKey != null && pinHash != null;
+      await _migrateLegacyData();
+      return await _repository.hasAuth();
     } catch (e) {
       return false;
     }
