@@ -3,9 +3,12 @@ import 'dart:io';
 import 'package:flutter/material.dart';
 import 'package:intl/intl.dart';
 import 'package:path_provider/path_provider.dart';
+import 'package:shared_preferences/shared_preferences.dart';
 
 import '../api/openrouter_client.dart';
+import '../models/model_info.dart';
 import '../ui/components/message_bubble.dart';
+import '../ui/components/model_selector.dart';
 import '../ui/styles.dart';
 import '../utils/analytics.dart';
 import '../utils/cache.dart';
@@ -75,10 +78,20 @@ class _ChatScreenState extends State<ChatScreen> {
   final Analytics _analytics = Analytics();
   final PerformanceMonitor _performanceMonitor = PerformanceMonitor();
 
+  // Состояние для моделей
+  List<ModelInfo> _models = [];
+  String? _selectedModelId;
+  bool _isLoadingModels = false;
+
+  // Ключ для сохранения выбранной модели
+  static const String _selectedModelKey = 'selected_model_id';
+
   @override
   void initState() {
     super.initState();
     _loadChatHistory();
+    _loadSelectedModel();
+    _loadModels();
   }
 
   @override
@@ -349,9 +362,114 @@ class _ChatScreenState extends State<ChatScreen> {
     );
   }
 
+  /// Загружает список моделей из API.
+  ///
+  /// Получает список доступных моделей от OpenRouter API и обновляет состояние.
+  /// Показывает ошибку, если загрузка не удалась.
+  Future<void> _loadModels() async {
+    final apiClient = widget.apiClient;
+    if (apiClient == null) {
+      return;
+    }
+
+    setState(() {
+      _isLoadingModels = true;
+    });
+
+    try {
+      final models = await apiClient.getModels();
+      if (mounted) {
+        setState(() {
+          _models = models;
+          _isLoadingModels = false;
+          
+          // Если модель не выбрана, выбираем первую доступную или сохраненную
+          if (_selectedModelId == null && models.isNotEmpty) {
+            _selectedModelId = models.first.id;
+            _saveSelectedModel(_selectedModelId!);
+          }
+        });
+      }
+    } catch (e) {
+      if (mounted) {
+        setState(() {
+          _isLoadingModels = false;
+        });
+
+        ScaffoldMessenger.of(context).showSnackBar(
+          SnackBar(
+            content: Text('Ошибка загрузки моделей: $e'),
+            backgroundColor: AppStyles.errorColor,
+            duration: const Duration(seconds: 5),
+          ),
+        );
+      }
+    }
+  }
+
+  /// Загружает сохраненную выбранную модель из настроек.
+  ///
+  /// Восстанавливает последнюю выбранную модель из SharedPreferences.
+  Future<void> _loadSelectedModel() async {
+    try {
+      final prefs = await SharedPreferences.getInstance();
+      final savedModelId = prefs.getString(_selectedModelKey);
+      
+      if (mounted && savedModelId != null && savedModelId.isNotEmpty) {
+        setState(() {
+          _selectedModelId = savedModelId;
+        });
+      } else if (widget.selectedModel != null) {
+        // Используем модель из параметров виджета, если она передана
+        setState(() {
+          _selectedModelId = widget.selectedModel;
+        });
+        if (_selectedModelId != null) {
+          await _saveSelectedModel(_selectedModelId!);
+        }
+      }
+    } catch (e) {
+      // Игнорируем ошибки загрузки настроек
+    }
+  }
+
+  /// Сохраняет выбранную модель в настройках.
+  ///
+  /// Сохраняет ID выбранной модели в SharedPreferences для восстановления при следующем запуске.
+  Future<void> _saveSelectedModel(String modelId) async {
+    try {
+      final prefs = await SharedPreferences.getInstance();
+      await prefs.setString(_selectedModelKey, modelId);
+    } catch (e) {
+      // Игнорируем ошибки сохранения настроек
+    }
+  }
+
+  /// Обрабатывает изменение выбранной модели.
+  ///
+  /// Обновляет состояние и сохраняет выбранную модель в настройках.
+  void _onModelChanged(String? modelId) {
+    if (modelId == null || modelId.isEmpty) {
+      return;
+    }
+
+    setState(() {
+      _selectedModelId = modelId;
+    });
+
+    _saveSelectedModel(modelId);
+  }
+
+  /// Получает текущую выбранную модель для использования.
+  ///
+  /// Возвращает ID выбранной модели или модель из параметров виджета.
+  String? get _currentModelId {
+    return _selectedModelId ?? widget.selectedModel;
+  }
+
   Future<void> _sendMessage() async {
     final apiClient = widget.apiClient;
-    final selectedModel = widget.selectedModel;
+    final selectedModel = _currentModelId;
     final canSend = !_isLoading && 
         apiClient != null && 
         selectedModel != null &&
@@ -467,6 +585,35 @@ class _ChatScreenState extends State<ChatScreen> {
       ),
       body: Column(
         children: [
+          // Селектор моделей
+          if (_models.isNotEmpty || _isLoadingModels)
+            Container(
+              padding: EdgeInsets.all(
+                PlatformUtils.isMobile() ? AppStyles.paddingSmall : AppStyles.padding,
+              ),
+              decoration: const BoxDecoration(
+                color: AppStyles.cardColor,
+                border: Border(
+                  bottom: BorderSide(
+                    color: AppStyles.borderColor,
+                    width: 1,
+                  ),
+                ),
+              ),
+              child: _isLoadingModels
+                  ? const Center(
+                      child: Padding(
+                        padding: EdgeInsets.all(AppStyles.paddingSmall),
+                        child: CircularProgressIndicator(),
+                      ),
+                    )
+                  : ModelSelector(
+                      models: _models,
+                      selectedModelId: _currentModelId,
+                      onChanged: _onModelChanged,
+                      width: PlatformUtils.isMobile() ? null : AppStyles.searchFieldWidth,
+                    ),
+            ),
           // Область истории чата
           Expanded(
             child: _isLoadingHistory
@@ -558,7 +705,7 @@ class _ChatScreenState extends State<ChatScreen> {
                           child: ElevatedButton.icon(
                             onPressed: () {
                               final apiClient = widget.apiClient;
-                              final selectedModel = widget.selectedModel;
+                              final selectedModel = _currentModelId;
                               if (!_isLoading && 
                                   apiClient != null && 
                                   selectedModel != null &&
@@ -604,7 +751,7 @@ class _ChatScreenState extends State<ChatScreen> {
                           child: ElevatedButton.icon(
                             onPressed: () {
                               final apiClient = widget.apiClient;
-                              final selectedModel = widget.selectedModel;
+                              final selectedModel = _currentModelId;
                               if (!_isLoading && 
                                   apiClient != null && 
                                   selectedModel != null &&
