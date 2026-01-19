@@ -163,6 +163,50 @@ class ChatCache {
     }
   }
 
+  /// Сохраняет несколько сообщений батчем для оптимизации производительности.
+  ///
+  /// Выполняет вставку нескольких сообщений в одной транзакции,
+  /// что значительно быстрее чем отдельные вставки.
+  ///
+  /// Параметры:
+  /// - [messages]: Список сообщений для сохранения.
+  ///
+  /// Возвращает список ID сохраненных сообщений.
+  Future<List<int>> saveMessagesBatch(List<Map<String, dynamic>> messages) async {
+    if (messages.isEmpty) return [];
+    
+    try {
+      final db = await _db;
+      final List<int> ids = [];
+      
+      // Используем транзакцию для батчинга
+      await db.transaction((txn) async {
+        final batch = txn.batch();
+        final timestamp = DateTime.now().toIso8601String();
+        
+        for (final message in messages) {
+          batch.insert(
+            'messages',
+            {
+              'model': message['model'] as String,
+              'user_message': message['userMessage'] as String,
+              'ai_response': message['aiResponse'] as String,
+              'timestamp': message['timestamp'] as String? ?? timestamp,
+              'tokens_used': message['tokensUsed'] as int,
+            },
+          );
+        }
+        
+        final result = await batch.commit(noResult: false);
+        ids.addAll((result as List).cast<int>());
+      });
+      
+      return ids;
+    } catch (e) {
+      return [];
+    }
+  }
+
   /// Сохраняет аналитическую запись в базу данных.
   ///
   /// Сохраняет метрики использования модели, включая время ответа,

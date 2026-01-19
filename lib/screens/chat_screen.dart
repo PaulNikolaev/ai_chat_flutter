@@ -94,7 +94,8 @@ class _ChatScreenState extends State<ChatScreen> {
     _initializeLogger();
     _loadChatHistory();
     _loadSelectedModel();
-    _loadModels();
+    // Ленивая загрузка моделей - загружаем только при первом открытии селектора
+    // _loadModels(); // Удалено - загрузка будет по требованию
   }
 
   /// Инициализирует логирование для экрана чата.
@@ -398,14 +399,20 @@ class _ChatScreenState extends State<ChatScreen> {
     );
   }
 
-  /// Загружает список моделей из API.
+  /// Загружает список моделей из API (ленивая загрузка).
   ///
   /// Получает список доступных моделей от OpenRouter API и обновляет состояние.
+  /// Загружает модели только если они еще не загружены (ленивая загрузка).
   /// Показывает ошибку, если загрузка не удалась.
-  Future<void> _loadModels() async {
+  Future<void> _loadModels({bool forceRefresh = false}) async {
     final apiClient = widget.apiClient;
     if (apiClient == null) {
       _logger?.warning('Cannot load models: API client is null');
+      return;
+    }
+
+    // Если модели уже загружены и не требуется обновление, пропускаем загрузку
+    if (!forceRefresh && _models.isNotEmpty && !_isLoadingModels) {
       return;
     }
 
@@ -415,7 +422,7 @@ class _ChatScreenState extends State<ChatScreen> {
 
     try {
       _logger?.debug('Loading models from API');
-      final models = await apiClient.getModels();
+      final models = await apiClient.getModels(forceRefresh: forceRefresh);
       if (mounted) {
         setState(() {
           _models = models;
@@ -676,9 +683,15 @@ class _ChatScreenState extends State<ChatScreen> {
       ),
       body: Column(
         children: [
-          // Селектор моделей
-          if (_models.isNotEmpty || _isLoadingModels)
-            Container(
+          // Селектор моделей (ленивая загрузка при первом открытии)
+          GestureDetector(
+            onTap: () {
+              // Загружаем модели при первом клике на селектор
+              if (_models.isEmpty && !_isLoadingModels) {
+                _loadModels();
+              }
+            },
+            child: Container(
               padding: EdgeInsets.all(
                 PlatformUtils.isMobile() ? AppStyles.paddingSmall : AppStyles.padding,
               ),
@@ -698,13 +711,24 @@ class _ChatScreenState extends State<ChatScreen> {
                         child: CircularProgressIndicator(),
                       ),
                     )
-                  : ModelSelector(
-                      models: _models,
-                      selectedModelId: _currentModelId,
-                      onChanged: _onModelChanged,
-                      width: PlatformUtils.isMobile() ? null : AppStyles.searchFieldWidth,
-                    ),
+                  : _models.isEmpty
+                      ? const Center(
+                          child: Padding(
+                            padding: EdgeInsets.all(AppStyles.paddingSmall),
+                            child: Text(
+                              'Нажмите для загрузки моделей',
+                              style: TextStyle(color: AppStyles.textSecondary),
+                            ),
+                          ),
+                        )
+                      : ModelSelector(
+                          models: _models,
+                          selectedModelId: _currentModelId,
+                          onChanged: _onModelChanged,
+                          width: PlatformUtils.isMobile() ? null : AppStyles.searchFieldWidth,
+                        ),
             ),
+          ),
           // Область истории чата
           Expanded(
             child: _isLoadingHistory
@@ -725,6 +749,9 @@ class _ChatScreenState extends State<ChatScreen> {
                     padding: EdgeInsets.all(
                       isMobile ? AppStyles.paddingSmall : AppStyles.padding,
                     ),
+                    // Оптимизация: кэшируем больше элементов для плавной прокрутки
+                    cacheExtent: 500,
+                    // Оптимизация: добавляем key для эффективного обновления
                     itemCount: _messages.length + (_isLoading ? 1 : 0),
                     itemBuilder: (context, index) {
                       if (index == _messages.length) {
@@ -738,15 +765,19 @@ class _ChatScreenState extends State<ChatScreen> {
                       }
 
                       final message = _messages[index];
-                      return Padding(
-                        padding: const EdgeInsets.only(
-                          bottom: AppStyles.paddingSmall,
-                        ),
-                        child: MessageBubble(
-                          text: message.text,
-                          isUser: message.isUser,
-                          timestamp: message.timestamp,
-                          model: message.model,
+                      // Оптимизация: используем RepaintBoundary для изоляции перерисовок
+                      return RepaintBoundary(
+                        key: ValueKey('message_${message.timestamp.millisecondsSinceEpoch}_$index'),
+                        child: Padding(
+                          padding: const EdgeInsets.only(
+                            bottom: AppStyles.paddingSmall,
+                          ),
+                          child: MessageBubble(
+                            text: message.text,
+                            isUser: message.isUser,
+                            timestamp: message.timestamp,
+                            model: message.model,
+                          ),
                         ),
                       );
                     },

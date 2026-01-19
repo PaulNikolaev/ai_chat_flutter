@@ -41,6 +41,7 @@ class MessageBubble extends StatelessWidget {
     final theme = Theme.of(context);
 
     return LayoutBuilder(
+      key: ValueKey('${text.hashCode}_$isUser'),
       builder: (context, constraints) {
         // На мобильных даём ширину до 90%, на десктопе — maxWidthFactor
         final maxWidth = constraints.maxWidth *
