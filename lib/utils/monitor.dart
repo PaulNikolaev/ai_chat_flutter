@@ -70,11 +70,9 @@ class PerformanceMonitor {
     // mobile/desktop. Если понадобится web, сделаем conditional imports.
     final int? rssBytes = PlatformUtils.isWeb() ? null : ProcessInfo.currentRss;
 
-    // CPU% без плагинов недоступен (кросс-платформенно).
-    final double? cpuPercent = null;
-
     return PerformanceMetrics(
-      cpuPercent: cpuPercent,
+      // CPU% без плагинов недоступен (кросс-платформенно).
+      cpuPercent: null,
       memoryRssBytes: rssBytes,
       uptime: uptime,
     );
