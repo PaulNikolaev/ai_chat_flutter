@@ -1,207 +1,91 @@
-# Приложение AI Chat
+# AI Chat - Flutter приложение
 
-Чат-приложение, использующее API OpenRouter для взаимодействия с различными моделями искусственного интеллекта.
+Чат-приложение на Flutter, использующее API OpenRouter для взаимодействия с различными моделями искусственного интеллекта.
 
 ## Поддержка платформ
 
-Приложение поддерживает сборку для следующих платформ:
+- **Desktop**: Windows, Linux, macOS
+- **Mobile**: Android, iOS
 
-- **Desktop**: Windows, Linux
-- **Mobile**: Android (APK)
+Подробные инструкции: [INSTALL.md](INSTALL.md), [DESKTOP_BUILD.md](DESKTOP_BUILD.md), [MOBILE_BUILD.md](MOBILE_BUILD.md)
 
-Подробные инструкции по сборке для каждой платформы см. в соответствующих руководствах:
-- [Сборка десктопного приложения](DESKTOP_BUILD.md) ([GitHub](https://github.com/PaulNikolaev/application_with_openrouter_ai/blob/main/DESKTOP_BUILD.md))
-- [Сборка мобильного приложения (Android APK)](MOBILE_BUILD.md) ([GitHub](https://github.com/PaulNikolaev/application_with_openrouter_ai/blob/main/MOBILE_BUILD.md))
+## Быстрый старт
 
-## Начало работы
+### Требования
+- Flutter SDK 3.0.0+
+- Git
 
-### Установка и настройка
+### Установка
 
-1. **Установка необходимого ПО**
-   - Установите [Git](https://git-scm.com/downloads)
-   - Установите [Python 3.9+](https://www.python.org/downloads/)
-   - Установите [Visual Studio Code](https://code.visualstudio.com/download)
-
-2. **Клонирование проекта**
+1. **Установите Flutter SDK**: https://docs.flutter.dev/get-started/install
+2. **Клонируйте проект**:
+   ```bash
+   git clone <repository-url>
+   cd AI_chat_flutter
    ```
-   # Клонируйте репозиторий
-   git clone https://github.com/PaulNikolaev/application_with_openrouter_ai.git
-   # Перейдите в директорию проекта
-   cd application_with_openrouter_ai
+3. **Установите зависимости**:
+   ```bash
+   flutter pub get
    ```
-
-3. **Настройка VSCode**
-   - Откройте VSCode
-   - Установите рекомендуемые расширения:
-     - Python (ms-python.python)
-     - Python Environment Manager
-     - Python Extension Pack
-   - Откройте проект: File -> Open Folder -> выберите папку application_with_openrouter_ai
-   - Выберите интерпретатор Python: 
-     1. Нажмите F1 или Ctrl+Shift+P
-     2. Введите "Python: Select Interpreter"
-     3. Выберите Python 3.9 или выше
-
-4. **Настройка виртуального окружения**
+4. **Создайте файл `.env`**:
+   ```env
+   OPENROUTER_API_KEY=ваш_api_ключ
+   OPENROUTER_BASE_URL=https://openrouter.ai/api/v1
+   MAX_TOKENS=1000
+   TEMPERATURE=0.7
    ```
-   # Создание виртуального окружения
-   python -m venv venv
-   
-   # Активация виртуального окружения
-   # Для Windows:
-   .\venv\Scripts\activate
-   # Для Linux/Mac:
-   source venv/bin/activate
+5. **Запустите приложение**:
+   ```bash
+   flutter run -d windows  # или android, ios, linux, macos
    ```
 
-5. **Настройка переменных окружения**
-   - Создайте файл `.env` в корневой директории проекта
-   - Добавьте в `.env` следующее содержимое:
-     ```
-     OPENROUTER_API_KEY=ваш_api_ключ
-     BASE_URL=https://openrouter.ai/api/v1
-     ```
-   - Замените `ваш_api_ключ` на ваш API ключ OpenRouter
+## Основные зависимости
 
-## Сборка приложения
+- **http** - HTTP запросы к API
+- **sqflite** / **sqflite_common_ffi** - База данных SQLite
+- **flutter_dotenv** - Переменные окружения
+- **logger** - Логирование
+- **shared_preferences** / **flutter_secure_storage** - Хранилище данных
+- **path_provider** - Пути к директориям
+- **intl** - Форматирование дат
+- **crypto** - Криптография
 
-Для сборки приложения сначала выполните базовую установку зависимостей (см. раздел "Установка и настройка" выше).
+## Основные возможности
 
-### Десктопное приложение
-
-Подробные инструкции по сборке для Windows и Linux см. в [DESKTOP_BUILD.md](DESKTOP_BUILD.md) ([GitHub](https://github.com/PaulNikolaev/application_with_openrouter_ai/blob/main/DESKTOP_BUILD.md)).
-
-**Быстрый старт:**
-```bash
-pip install -r requirements.txt
-python build.py
-```
-
-Результат сборки: `AIChat/AIChat.exe` (Windows) или `AIChat/aichat` (Linux)
-
-### Мобильное приложение (Android)
-
-Для сборки Android APK требуются дополнительные инструменты (Android SDK, JDK).
-
-Подробные инструкции по установке инструментов и сборке APK см. в [MOBILE_BUILD.md](MOBILE_BUILD.md) ([GitHub](https://github.com/PaulNikolaev/application_with_openrouter_ai/blob/main/MOBILE_BUILD.md)).
-
-**Быстрый старт:**
-```
-pip install -r requirements-mobile.txt
-python build_mobile.py
-```
-
-Результат сборки: `build/apk/*.apk` (новая версия Flet 0.80.2+) или `build/android/app/build/outputs/apk/release/app-release.apk` (старая версия)
-
-## Конфигурация
-
-Создайте файл `.env` в корневой директории со следующим содержимым:
-```
-OPENROUTER_API_KEY=ваш_api_ключ
-BASE_URL=https://openrouter.ai/api/v1
-DEBUG=False
-LOG_LEVEL=INFO
-MAX_TOKENS=1000
-TEMPERATURE=0.7
-```
+- Чат с более чем 339 моделями через OpenRouter API
+- Сохранение истории в SQLite
+- Экспорт диалогов в JSON
+- Аналитика использования моделей
+- Безопасное хранение API ключей
+- Адаптивный дизайн для всех платформ
 
 ## Структура проекта
 
 ```
-├── assets/                # Ресурсы приложения
-│   ├── icon.ico           # Иконка для десктопного приложения
-│   └── icon.png           # Иконка для мобильного приложения
-├── build/                 # Временные файлы сборки
-├── AIChat/                # Скомпилированные файлы десктопного приложения (после сборки)
-├── exports/               # Директория для экспортированных чатов
-├── logs/                  # Логи приложения
-├── src/                   # Исходный код
-│   ├── api/               # API интеграции
-│   │   ├── __init__.py
-│   │   └── openrouter.py  # Взаимодействие с OpenRouter API
-│   ├── auth/              # Аутентификация
-│   │   ├── __init__.py
-│   │   ├── manager.py     # Менеджер аутентификации
-│   │   ├── storage.py     # Хранилище данных аутентификации
-│   │   └── validator.py   # Валидация учетных данных
-│   ├── ui/                # Пользовательский интерфейс
-│   │   ├── __init__.py
-│   │   ├── components.py  # UI компоненты
-│   │   ├── login.py       # Окно авторизации
-│   │   └── styles.py      # Стили интерфейса
-│   ├── utils/             # Утилиты
-│   │   ├── __init__.py
-│   │   ├── analytics.py   # Аналитика использования
-│   │   ├── cache.py       # Кэширование
-│   │   ├── logger.py      # Система логирования
-│   │   ├── monitor.py     # Мониторинг системы
-│   │   └── platform.py    # Определение платформы
-│   └── app.py             # Основной класс приложения
-├── main.py                # Точка входа приложения
-├── .env.example           # Пример конфигурации
-├── .gitignore             # Исключения Git
-├── build.py               # Скрипт сборки десктопного приложения
-├── build_mobile.py        # Скрипт сборки мобильного приложения
-├── requirements.txt       # Зависимости для десктопного приложения
-├── requirements-mobile.txt # Зависимости для мобильного приложения
-├── INSTALL.md             # Инструкция по установке и настройке
-├── DESKTOP_BUILD.md       # Руководство по сборке десктопного приложения
-├── MOBILE_BUILD.md        # Руководство по сборке мобильного приложения
-└── README.md              # Документация
+lib/
+├── api/              # OpenRouter API клиент
+├── auth/             # Аутентификация
+├── config/           # Конфигурация
+├── models/           # Модели данных
+├── screens/          # Экраны приложения
+├── ui/               # UI компоненты
+├── utils/            # Утилиты (аналитика, кэш, БД, логирование)
+├── app.dart          # Основной класс
+└── main.dart         # Точка входа
 ```
 
-## Подробное описание функционала
+## Разработка
 
-### Основные возможности
+```bash
+flutter run           # Запуск
+flutter test          # Тесты
+flutter analyze       # Анализ кода
+flutter build windows --release  # Сборка
+```
 
-1. **Чат с AI моделями**
-   - Поддержка различных моделей через OpenRouter API
-   - Контекстные диалоги с сохранением истории
-   - Настраиваемые параметры генерации (температура, максимальное количество токенов)
+## Поддержка
 
-2. **Управление историей чатов**
-   - Автоматическое сохранение истории диалогов
-   - Возможность просмотра предыдущих бесед
-   - Экспорт диалогов в различные форматы
-
-3. **Аналитика использования**
-   - Отслеживание использования различных моделей
-   - Статистика по количеству запросов
-   - Мониторинг потребления токенов
-
-4. **Системные функции**
-   - Кэширование для оптимизации производительности
-   - Подробное логирование работы приложения
-   - Мониторинг системных ресурсов
-
-### Технические особенности
-
-- **Кэширование (utils/cache.py)**
-  - Локальное хранение истории чатов
-  - Оптимизация повторяющихся запросов
-  - Управление размером кэша
-
-- **Логирование (utils/logger.py)**
-  - Настраиваемые уровни логирования
-  - Ротация лог-файлов
-  - Детальная информация об ошибках
-
-- **Аналитика (utils/analytics.py)**
-  - Сбор статистики использования
-  - Анализ популярности моделей
-  - Отчеты по использованию ресурсов
-
-- **Мониторинг (utils/monitor.py)**
-  - Отслеживание производительности
-  - Контроль использования системных ресурсов
-  - Уведомления о критических событиях
-
-- **Пользовательский интерфейс (ui/)**
-  - Современный дизайн
-  - Настраиваемые темы оформления
-  - Адаптивный интерфейс
-
-- **API интеграция (api/)**
-  - Безопасное взаимодействие с OpenRouter
-  - Обработка ошибок и повторные попытки
-  - Поддержка различных моделей AI (более 215 моделей, в том числе более 20-ти бесплатных)
+При проблемах:
+1. `flutter pub get` - установка зависимостей
+2. `flutter doctor` - проверка окружения
+3. Проверьте логи в `logs/`

@@ -1,78 +1,68 @@
-# Инструкция по установке и сборке
+# Инструкция по установке
 
 ## Системные требования
 
-- Windows 10/11 или Linux
-- Python 3.7 или выше
-- pip (Python package manager)
-- Git (для клонирования репозитория)
-- Минимум 2 ГБ свободного места на диске
-- Стабильное интернет-соединение
+- **Flutter SDK** 3.0.0+
+- **Git**
+- Минимум 2 ГБ свободного места
 
-## Получение кода проекта
+### Дополнительно для разработки:
+- **Windows**: Visual Studio 2022 с "Desktop development with C++"
+- **Linux**: Clang, CMake, GTK+ libraries
+- **macOS**: Xcode 12+
+- **Android**: Android Studio, Android SDK, JDK 11+
+- **iOS** (только macOS): Xcode, CocoaPods
 
-### Клонирование репозитория
+## Установка Flutter SDK
 
-1. Установите Git, если он еще не установлен:
-   - Windows: https://git-scm.com/download/win
-   - Linux: `sudo apt-get install git` (Ubuntu/Debian) или используйте менеджер пакетов вашего дистрибутива
+### Windows/Linux/macOS
 
-2. Клонируйте репозиторий:
-```
-git clone <repository-url>
-cd application_with_openrouter_ai
-```
+1. Скачайте Flutter: https://docs.flutter.dev/get-started/install
+2. Распакуйте и добавьте в PATH:
+   - **Windows**: `<flutter_dir>\flutter\bin` в системный PATH
+   - **Linux/macOS**: `export PATH="$PATH:$HOME/development/flutter/bin"` в `~/.bashrc` или `~/.zshrc`
+3. Проверьте:
+   ```bash
+   flutter --version
+   flutter doctor
+   ```
 
-### Альтернативный способ
+## Установка проекта
 
-Если у вас есть архив с проектом:
-1. Распакуйте архив в желаемую директорию
-2. Откройте терминал в директории проекта
+1. **Клонируйте репозиторий**:
+   ```bash
+   git clone <repository-url>
+   cd AI_chat_flutter
+   ```
 
-## Установка зависимостей
+2. **Установите зависимости**:
+   ```bash
+   flutter pub get
+   ```
 
-1. Установите Python с официального сайта:
-   https://www.python.org/downloads/
+3. **Создайте `.env` файл**:
+   ```env
+   OPENROUTER_API_KEY=ваш_api_ключ
+   OPENROUTER_BASE_URL=https://openrouter.ai/api/v1
+   MAX_TOKENS=1000
+   TEMPERATURE=0.7
+   ```
 
-2. Убедитесь, что Python и pip установлены корректно:
-```
-python --version
-pip --version
-```
+4. **Запустите приложение**:
+   ```bash
+   flutter run -d windows  # или android, ios, linux, macos
+   ```
 
-3. Создайте виртуальное окружение (рекомендуется):
+## Решение проблем
 
-**Windows:**
-```
-python -m venv .venv
-.venv\Scripts\activate
-```
+- **Flutter не найден**: Добавьте в PATH и перезапустите терминал
+- **Ошибки зависимостей**: `flutter pub cache repair`
+- **Android SDK**: Установите Android Studio, настройте `ANDROID_HOME` и `JAVA_HOME`
+- **.env не загружается**: Проверьте, что файл в корне проекта и добавлен в `pubspec.yaml` assets
+- **База данных на Windows**: Убедитесь, что `sqflite_common_ffi` установлен
 
-**Linux:**
-```
-python3 -m venv .venv
-source .venv/bin/activate
-```
+## Дополнительные ресурсы
 
-4. Установите необходимые пакеты:
-```
-pip install -r requirements.txt
-```
-
-## Сборка приложения
-
-Подробные инструкции по сборке:
-
-- **Десктопное приложение**: См. [DESKTOP_BUILD.md](DESKTOP_BUILD.md)
-- **Мобильное приложение (Android APK)**: См. [MOBILE_BUILD.md](MOBILE_BUILD.md)
-
-## Примечания
-
-- При сборке PyInstaller создает временные папки `build/` и `dist/` в корне проекта
-- После успешной сборки временные папки можно удалить
-- При возникновении проблем:
-  1. Убедитесь что есть доступ в интернет
-  2. Проверьте наличие свободного места
-  3. Убедитесь что установлен PyInstaller: `pip install pyinstaller`
-  4. Попробуйте запустить сборку повторно
-  5. Проверьте вывод консоли на наличие ошибок
+- [Flutter Documentation](https://docs.flutter.dev/)
+- [DESKTOP_BUILD.md](DESKTOP_BUILD.md)
+- [MOBILE_BUILD.md](MOBILE_BUILD.md)

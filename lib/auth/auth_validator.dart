@@ -1,3 +1,4 @@
+import 'dart:async';
 import 'dart:convert';
 import 'dart:math';
 import 'package:http/http.dart' as http;
@@ -140,6 +141,7 @@ class AuthValidator {
           final balance = totalCredits - totalUsage;
           final balanceStr = balance.toStringAsFixed(2);
 
+          // Проверяем, что баланс неотрицательный (больше или равен нулю)
           return ApiKeyValidationResult(
             isValid: balance >= 0,
             message: balanceStr,
@@ -149,16 +151,61 @@ class AuthValidator {
         }
       }
 
-      return const ApiKeyValidationResult(
+      // Обработка различных HTTP статусов для лучшей диагностики
+      if (response.statusCode == 401) {
+        return const ApiKeyValidationResult(
+          isValid: false,
+          message: 'Invalid OpenRouter API key',
+          balance: 0.0,
+          provider: 'openrouter',
+        );
+      } else if (response.statusCode == 403) {
+        return const ApiKeyValidationResult(
+          isValid: false,
+          message: 'Insufficient permissions to check OpenRouter balance',
+          balance: 0.0,
+          provider: 'openrouter',
+        );
+      } else if (response.statusCode == 429) {
+        return const ApiKeyValidationResult(
+          isValid: false,
+          message: 'Rate limit exceeded. Please try again later',
+          balance: 0.0,
+          provider: 'openrouter',
+        );
+      } else if (response.statusCode >= 500 && response.statusCode < 600) {
+        return ApiKeyValidationResult(
+          isValid: false,
+          message: 'OpenRouter server error (HTTP ${response.statusCode}). Please try again later',
+          balance: 0.0,
+          provider: 'openrouter',
+        );
+      } else {
+        return ApiKeyValidationResult(
+          isValid: false,
+          message: 'Failed to validate OpenRouter key: HTTP ${response.statusCode}',
+          balance: 0.0,
+          provider: 'openrouter',
+        );
+      }
+    } on http.ClientException catch (e) {
+      return ApiKeyValidationResult(
         isValid: false,
-        message: 'Invalid API key or insufficient permissions',
+        message: 'Network error while validating OpenRouter key: $e',
+        balance: 0.0,
+        provider: 'openrouter',
+      );
+    } on TimeoutException catch (e) {
+      return ApiKeyValidationResult(
+        isValid: false,
+        message: 'Request timeout while validating OpenRouter key: $e',
         balance: 0.0,
         provider: 'openrouter',
       );
     } catch (e) {
       return ApiKeyValidationResult(
         isValid: false,
-        message: 'Error validating key: $e',
+        message: 'Error validating OpenRouter key: $e',
         balance: 0.0,
         provider: 'openrouter',
       );
@@ -169,6 +216,11 @@ class AuthValidator {
   ///
   /// Использует endpoint VSEGPT для проверки баланса.
   /// Если vsegptBaseUrl не задан, возвращает ошибку.
+  ///
+  /// Поддерживает различные форматы ответа API:
+  /// - Формат OpenRouter (data.total_credits, data.total_usage)
+  /// - Прямой формат (balance, credits)
+  /// - Вложенный формат (account.balance)
   Future<ApiKeyValidationResult> _validateVsegptKey(String apiKey) async {
     if (vsegptBaseUrl == null || vsegptBaseUrl!.isEmpty) {
       return const ApiKeyValidationResult(
@@ -179,47 +231,136 @@ class AuthValidator {
       );
     }
 
-    // VSEGPT может иметь другой endpoint для баланса
-    // Здесь используется базовый URL, но может потребоваться адаптация
-    final uri = Uri.parse(vsegptBaseUrl!);
+    // Формируем URI для проверки баланса
+    // Пробуем разные варианты endpoint в зависимости от base URL
+    Uri uri;
+    final baseUri = Uri.parse(vsegptBaseUrl!);
+    
+    // Если base URL уже содержит путь, используем его как есть
+    // Иначе добавляем стандартный endpoint /credits
+    if (baseUri.path.isNotEmpty && baseUri.path != '/') {
+      uri = baseUri.resolve('credits');
+    } else {
+      // Пробуем стандартные варианты endpoint
+      uri = baseUri.resolve('/api/v1/credits');
+    }
+
     final headers = {
       'Authorization': 'Bearer $apiKey',
       'Content-Type': 'application/json',
     };
 
     try {
-      // Для VSEGPT может потребоваться другой метод проверки
-      // Пока используем простую проверку доступности API
       final response = await _client
           .get(uri, headers: headers)
           .timeout(const Duration(seconds: 10));
 
-      // Если запрос успешен, считаем ключ валидным
-      // В реальной реализации здесь должна быть проверка баланса через VSEGPT API
-      if (response.statusCode == 200 || response.statusCode == 401) {
-        // 401 означает, что ключ неверный
-        if (response.statusCode == 401) {
-          return const ApiKeyValidationResult(
+      // Обработка различных HTTP статусов
+      if (response.statusCode == 200) {
+        try {
+          final decoded = jsonDecode(response.body) as Map<String, dynamic>;
+          
+          // Пытаемся извлечь баланс из различных форматов ответа
+          double? balance = _extractBalanceFromVsegptResponse(decoded);
+          
+          if (balance == null) {
+            // Если не удалось извлечь баланс, пробуем альтернативный endpoint
+            final altUri = baseUri.resolve('/credits');
+            if (altUri != uri) {
+              final altResponse = await _client
+                  .get(altUri, headers: headers)
+                  .timeout(const Duration(seconds: 10));
+              
+              if (altResponse.statusCode == 200) {
+                final altDecoded = jsonDecode(altResponse.body) as Map<String, dynamic>;
+                balance = _extractBalanceFromVsegptResponse(altDecoded);
+              }
+            }
+          }
+
+          if (balance != null) {
+            // Проверяем, что баланс неотрицательный (больше или равен нулю)
+            if (balance >= 0) {
+              return ApiKeyValidationResult(
+                isValid: true,
+                message: balance.toStringAsFixed(2),
+                balance: balance,
+                provider: 'vsegpt',
+              );
+            } else {
+              return ApiKeyValidationResult(
+                isValid: false,
+                message: 'VSEGPT API key has negative balance',
+                balance: balance,
+                provider: 'vsegpt',
+              );
+            }
+          } else {
+            // Если баланс не найден, но ответ успешен, считаем ключ валидным
+            // (для совместимости с API, которые не возвращают баланс)
+            return const ApiKeyValidationResult(
+              isValid: true,
+              message: 'Valid VSEGPT API key',
+              balance: 0.0,
+              provider: 'vsegpt',
+            );
+          }
+        } catch (e) {
+          // Ошибка парсинга JSON
+          return ApiKeyValidationResult(
             isValid: false,
-            message: 'Invalid VSEGPT API key',
+            message: 'Invalid response format from VSEGPT API: $e',
             balance: 0.0,
             provider: 'vsegpt',
           );
         }
-
-        // Для VSEGPT баланс может быть в другом формате
-        // Пока возвращаем успешную валидацию без конкретного баланса
+      } else if (response.statusCode == 401) {
         return const ApiKeyValidationResult(
-          isValid: true,
-          message: 'Valid VSEGPT API key',
+          isValid: false,
+          message: 'Invalid VSEGPT API key',
+          balance: 0.0,
+          provider: 'vsegpt',
+        );
+      } else if (response.statusCode == 403) {
+        return const ApiKeyValidationResult(
+          isValid: false,
+          message: 'Insufficient permissions to check VSEGPT balance',
+          balance: 0.0,
+          provider: 'vsegpt',
+        );
+      } else if (response.statusCode == 429) {
+        return const ApiKeyValidationResult(
+          isValid: false,
+          message: 'Rate limit exceeded. Please try again later',
+          balance: 0.0,
+          provider: 'vsegpt',
+        );
+      } else if (response.statusCode >= 500 && response.statusCode < 600) {
+        return ApiKeyValidationResult(
+          isValid: false,
+          message: 'VSEGPT server error (HTTP ${response.statusCode}). Please try again later',
+          balance: 0.0,
+          provider: 'vsegpt',
+        );
+      } else {
+        return ApiKeyValidationResult(
+          isValid: false,
+          message: 'Failed to validate VSEGPT key: HTTP ${response.statusCode}',
           balance: 0.0,
           provider: 'vsegpt',
         );
       }
-
-      return const ApiKeyValidationResult(
+    } on http.ClientException catch (e) {
+      return ApiKeyValidationResult(
         isValid: false,
-        message: 'Invalid VSEGPT API key or insufficient permissions',
+        message: 'Network error while validating VSEGPT key: $e',
+        balance: 0.0,
+        provider: 'vsegpt',
+      );
+    } on TimeoutException catch (e) {
+      return ApiKeyValidationResult(
+        isValid: false,
+        message: 'Request timeout while validating VSEGPT key: $e',
         balance: 0.0,
         provider: 'vsegpt',
       );
@@ -231,6 +372,57 @@ class AuthValidator {
         provider: 'vsegpt',
       );
     }
+  }
+
+  /// Извлекает баланс из ответа VSEGPT API.
+  ///
+  /// Поддерживает различные форматы ответа:
+  /// - OpenRouter формат: { "data": { "total_credits": X, "total_usage": Y } }
+  /// - Прямой формат: { "balance": X } или { "credits": X }
+  /// - Вложенный формат: { "account": { "balance": X } }
+  ///
+  /// Возвращает баланс или null, если не удалось извлечь.
+  double? _extractBalanceFromVsegptResponse(Map<String, dynamic> decoded) {
+    // Формат OpenRouter: data.total_credits - data.total_usage
+    final data = decoded['data'] as Map<String, dynamic>?;
+    if (data != null) {
+      final totalCredits = (data['total_credits'] as num?)?.toDouble();
+      final totalUsage = (data['total_usage'] as num?)?.toDouble();
+      if (totalCredits != null) {
+        return totalCredits - (totalUsage ?? 0.0);
+      }
+    }
+
+    // Прямой формат: balance
+    if (decoded.containsKey('balance')) {
+      final balance = (decoded['balance'] as num?)?.toDouble();
+      if (balance != null) return balance;
+    }
+
+    // Прямой формат: credits
+    if (decoded.containsKey('credits')) {
+      final credits = (decoded['credits'] as num?)?.toDouble();
+      if (credits != null) return credits;
+    }
+
+    // Вложенный формат: account.balance
+    final account = decoded['account'] as Map<String, dynamic>?;
+    if (account != null) {
+      final balance = (account['balance'] as num?)?.toDouble();
+      if (balance != null) return balance;
+      
+      final credits = (account['credits'] as num?)?.toDouble();
+      if (credits != null) return credits;
+    }
+
+    // Вложенный формат: result.balance
+    final result = decoded['result'] as Map<String, dynamic>?;
+    if (result != null) {
+      final balance = (result['balance'] as num?)?.toDouble();
+      if (balance != null) return balance;
+    }
+
+    return null;
   }
 
   /// Генерирует случайный 4-значный PIN код.

@@ -67,5 +67,4 @@ logs/
 exports/
 chat_cache.db
 
-# Migration plan
-MIGRATION_PLAN.md
+IMPLEMENTATION_PLAN.md
