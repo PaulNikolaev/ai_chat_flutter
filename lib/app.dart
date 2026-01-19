@@ -87,12 +87,33 @@ class _MyAppState extends State<MyApp> {
       
       if (isAuthenticated) {
         _logger?.info('User is authenticated, initializing API client');
-        // Получаем сохраненный API ключ и создаем клиент
+        // Получаем сохраненный API ключ и провайдера, создаем соответствующий клиент
         try {
           final apiKey = await _authManager!.getStoredApiKey();
+          final provider = await _authManager!.getStoredProvider();
+          
           if (apiKey.isNotEmpty) {
-            _apiClient = OpenRouterClient(apiKey: apiKey);
-            _logger?.info('API client initialized successfully');
+            // Создаем клиент в зависимости от провайдера
+            if (provider == 'vsegpt') {
+              // Для VSEGPT используем OpenRouterClient с VSEGPT base URL
+              // Если baseUrl уже содержит путь (например /v1/chat), используем его как есть
+              final vsegptBaseUrl = EnvConfig.vsegptBaseUrl.trim().isNotEmpty
+                  ? EnvConfig.vsegptBaseUrl.trim()
+                  : 'https://api.vsegpt.ru/v1/chat';
+              _apiClient = OpenRouterClient(
+                apiKey: apiKey,
+                baseUrl: vsegptBaseUrl,
+                provider: 'vsegpt',
+              );
+              _logger?.info('VSEGPT API client initialized successfully with baseUrl: $vsegptBaseUrl');
+            } else {
+              // Для OpenRouter используем стандартный клиент
+              _apiClient = OpenRouterClient(
+                apiKey: apiKey,
+                provider: 'openrouter',
+              );
+              _logger?.info('OpenRouter API client initialized successfully');
+            }
           } else {
             _logger?.warning('API key is empty, cannot initialize client');
           }
@@ -137,10 +158,32 @@ class _MyAppState extends State<MyApp> {
     try {
       _logger?.info('Login successful, initializing API client');
       final apiKey = await _authManager!.getStoredApiKey();
+      final provider = await _authManager!.getStoredProvider();
+      
       if (apiKey.isNotEmpty) {
         if (mounted) {
           setState(() {
-            _apiClient = OpenRouterClient(apiKey: apiKey);
+            // Создаем клиент в зависимости от провайдера
+            if (provider == 'vsegpt') {
+              // Для VSEGPT используем OpenRouterClient с VSEGPT base URL
+              // Если baseUrl уже содержит путь (например /v1/chat), используем его как есть
+              final vsegptBaseUrl = EnvConfig.vsegptBaseUrl.trim().isNotEmpty
+                  ? EnvConfig.vsegptBaseUrl.trim()
+                  : 'https://api.vsegpt.ru/v1/chat';
+              _apiClient = OpenRouterClient(
+                apiKey: apiKey,
+                baseUrl: vsegptBaseUrl,
+                provider: 'vsegpt',
+              );
+              _logger?.info('VSEGPT API client initialized after login with baseUrl: $vsegptBaseUrl');
+            } else {
+              // Для OpenRouter используем стандартный клиент
+              _apiClient = OpenRouterClient(
+                apiKey: apiKey,
+                provider: 'openrouter',
+              );
+              _logger?.info('OpenRouter API client initialized after login');
+            }
             _isAuthenticated = true;
           });
           _logger?.info('User logged in successfully');

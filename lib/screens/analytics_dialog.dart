@@ -65,8 +65,10 @@ class _AnalyticsDialogState extends State<AnalyticsDialog> {
 
   /// Загружает баланс аккаунта.
   Future<void> _loadBalance({bool forceRefresh = false}) async {
+    print('[ANALYTICS] Loading balance (forceRefresh: $forceRefresh)');
     final apiClient = widget.apiClient;
     if (apiClient == null) {
+      print('[ANALYTICS] ❌ API client is null');
       setState(() {
         _balance = 'Недоступно';
         _isLoadingBalance = false;
@@ -79,19 +81,107 @@ class _AnalyticsDialogState extends State<AnalyticsDialog> {
     });
 
     try {
+      print('[ANALYTICS] Calling getBalance...');
       final balance = await apiClient.getBalance(forceRefresh: forceRefresh);
+      print('[ANALYTICS] ✅ Balance loaded: $balance');
       if (mounted) {
         setState(() {
           _balance = balance;
           _isLoadingBalance = false;
         });
       }
-    } catch (e) {
+    } catch (e, stackTrace) {
+      print('[ANALYTICS] ❌ Error loading balance: $e');
+      print('[ANALYTICS] Stack trace: $stackTrace');
       if (mounted) {
         setState(() {
           _balance = 'Ошибка';
           _isLoadingBalance = false;
         });
+      }
+    }
+  }
+
+  /// Очищает все данные аналитики.
+  Future<void> _clearData() async {
+    // Показываем диалог подтверждения
+    final confirmed = await showDialog<bool>(
+      context: context,
+      builder: (context) => AlertDialog(
+        backgroundColor: AppStyles.cardColor,
+        title: const Text(
+          'Очистить аналитику?',
+          style: TextStyle(color: AppStyles.textPrimary),
+        ),
+        content: const Text(
+          'Все данные аналитики будут удалены. Это действие нельзя отменить.',
+          style: TextStyle(color: AppStyles.textSecondary),
+        ),
+        actions: [
+          TextButton(
+            onPressed: () => Navigator.of(context).pop(false),
+            child: const Text('Отмена'),
+          ),
+          TextButton(
+            onPressed: () => Navigator.of(context).pop(true),
+            style: TextButton.styleFrom(
+              foregroundColor: AppStyles.errorColor,
+            ),
+            child: const Text('Очистить'),
+          ),
+        ],
+      ),
+    );
+
+    if (confirmed != true) {
+      return;
+    }
+
+    try {
+      print('[ANALYTICS] Clearing analytics data...');
+      final analytics = widget.analytics;
+      if (analytics != null) {
+        final success = await analytics.clear();
+        if (success) {
+          print('[ANALYTICS] ✅ Analytics data cleared successfully');
+          // Показываем сообщение об успехе
+          if (mounted) {
+            ScaffoldMessenger.of(context).showSnackBar(
+              const SnackBar(
+                content: Text('Аналитика очищена'),
+                backgroundColor: AppStyles.successColor,
+                duration: Duration(seconds: 2),
+              ),
+            );
+            // Перезагружаем данные
+            _loadData();
+          }
+        } else {
+          print('[ANALYTICS] ❌ Failed to clear analytics data');
+          if (mounted) {
+            ScaffoldMessenger.of(context).showSnackBar(
+              const SnackBar(
+                content: Text('Ошибка при очистке аналитики'),
+                backgroundColor: AppStyles.errorColor,
+                duration: Duration(seconds: 2),
+              ),
+            );
+          }
+        }
+      } else {
+        print('[ANALYTICS] ❌ Analytics instance is null');
+      }
+    } catch (e, stackTrace) {
+      print('[ANALYTICS] ❌ Error clearing analytics: $e');
+      print('[ANALYTICS] Stack trace: $stackTrace');
+      if (mounted) {
+        ScaffoldMessenger.of(context).showSnackBar(
+          SnackBar(
+            content: Text('Ошибка: $e'),
+            backgroundColor: AppStyles.errorColor,
+            duration: const Duration(seconds: 3),
+          ),
+        );
       }
     }
   }
@@ -260,13 +350,38 @@ class _AnalyticsDialogState extends State<AnalyticsDialog> {
               ),
             ),
             
-            // Кнопка обновления
+            // Кнопки управления
             const SizedBox(height: AppStyles.paddingSmall),
-            ElevatedButton.icon(
-              onPressed: _loadData,
-              icon: const Icon(Icons.refresh),
-              label: const Text('Обновить'),
-              style: AppStyles.getButtonStyle(),
+            Row(
+              children: [
+                Expanded(
+                  child: ElevatedButton.icon(
+                    onPressed: _loadData,
+                    icon: const Icon(Icons.refresh),
+                    label: const Text('Обновить'),
+                    style: AppStyles.getButtonStyle(),
+                  ),
+                ),
+                const SizedBox(width: AppStyles.paddingSmall),
+                Expanded(
+                  child: ElevatedButton.icon(
+                    onPressed: _clearData,
+                    icon: const Icon(Icons.delete_outline),
+                    label: const Text('Очистить'),
+                    style: ElevatedButton.styleFrom(
+                      backgroundColor: AppStyles.errorColor,
+                      foregroundColor: Colors.white,
+                      padding: const EdgeInsets.symmetric(
+                        horizontal: AppStyles.padding,
+                        vertical: AppStyles.paddingSmall,
+                      ),
+                      shape: RoundedRectangleBorder(
+                        borderRadius: BorderRadius.circular(AppStyles.borderRadius),
+                      ),
+                    ),
+                  ),
+                ),
+              ],
             ),
           ],
         ),

@@ -46,7 +46,20 @@ class _ModelSelectorState extends State<ModelSelector> {
   void initState() {
     super.initState();
     _selectedModelId = widget.selectedModelId;
-    _filteredModels = widget.models;
+    // Удаляем дубликаты при инициализации
+    final uniqueModels = <String, ModelInfo>{};
+    for (final model in widget.models) {
+      if (model.id.isNotEmpty && !uniqueModels.containsKey(model.id)) {
+        uniqueModels[model.id] = model;
+      }
+    }
+    _filteredModels = uniqueModels.values.toList();
+    
+    // Устанавливаем начальное значение, если оно не задано или не существует
+    if (_selectedModelId == null || !_filteredModels.any((m) => m.id == _selectedModelId)) {
+      _selectedModelId = _filteredModels.isNotEmpty ? _filteredModels.first.id : null;
+    }
+    
     _searchController.addListener(_filterModels);
   }
 
@@ -72,15 +85,30 @@ class _ModelSelectorState extends State<ModelSelector> {
     final searchText = _searchController.text.toLowerCase().trim();
     
     setState(() {
+      List<ModelInfo> filtered;
       if (searchText.isEmpty) {
-        _filteredModels = widget.models;
+        filtered = widget.models;
       } else {
-        _filteredModels = widget.models.where((model) {
+        filtered = widget.models.where((model) {
           final nameMatch = model.name.toLowerCase().contains(searchText);
           final idMatch = model.id.toLowerCase().contains(searchText);
           final descriptionMatch = model.description?.toLowerCase().contains(searchText) ?? false;
           return nameMatch || idMatch || descriptionMatch;
         }).toList();
+      }
+      
+      // Удаляем дубликаты по id (на случай, если они все еще есть)
+      final uniqueModels = <String, ModelInfo>{};
+      for (final model in filtered) {
+        if (model.id.isNotEmpty && !uniqueModels.containsKey(model.id)) {
+          uniqueModels[model.id] = model;
+        }
+      }
+      _filteredModels = uniqueModels.values.toList();
+      
+      // Проверяем, что выбранная модель существует в отфильтрованном списке
+      if (_selectedModelId != null && !_filteredModels.any((m) => m.id == _selectedModelId)) {
+        _selectedModelId = _filteredModels.isNotEmpty ? _filteredModels.first.id : null;
       }
     });
   }
@@ -139,7 +167,7 @@ class _ModelSelectorState extends State<ModelSelector> {
           width: effectiveWidth,
           child: DropdownButtonFormField<String>(
             isExpanded: true,
-            initialValue: _selectedModelId ?? (widget.models.isNotEmpty ? widget.models.first.id : null),
+            value: _selectedModelId,
             decoration: InputDecoration(
               filled: true,
               fillColor: AppStyles.surfaceColor,

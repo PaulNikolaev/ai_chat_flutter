@@ -101,6 +101,44 @@ class ModelInfo {
   /// Возвращает полное название модели (id или name).
   String get displayName => name.isNotEmpty ? name : id;
 
+  /// Проверяет, является ли модель бесплатной.
+  ///
+  /// Модель считается бесплатной, если:
+  /// - Обе цены (prompt и completion) равны 0 или null
+  /// - Или в id есть суффикс `:free`
+  bool get isFree {
+    // Проверяем суффикс :free в id
+    if (id.contains(':free')) {
+      return true;
+    }
+    
+    // Проверяем цены
+    final promptIsFree = promptPrice == null || promptPrice == 0.0;
+    final completionIsFree = completionPrice == null || completionPrice == 0.0;
+    
+    return promptIsFree && completionIsFree;
+  }
+
+  /// Возвращает строковое представление цены модели.
+  ///
+  /// Возвращает "Бесплатно" если модель бесплатная,
+  /// иначе форматированную цену.
+  String get priceDisplay {
+    if (isFree) {
+      return 'Бесплатно';
+    }
+    
+    if (promptPrice != null && completionPrice != null) {
+      return '${promptPrice!.toStringAsFixed(4)} / ${completionPrice!.toStringAsFixed(4)}';
+    } else if (promptPrice != null) {
+      return '${promptPrice!.toStringAsFixed(4)}';
+    } else if (completionPrice != null) {
+      return '${completionPrice!.toStringAsFixed(4)}';
+    }
+    
+    return 'Цена не указана';
+  }
+
   @override
   String toString() {
     return 'ModelInfo(id: $id, name: $name, contextLength: $contextLength)';
