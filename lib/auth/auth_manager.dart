@@ -257,41 +257,73 @@ class AuthManager {
 
   /// Обрабатывает вход по PIN коду.
   ///
-  /// Проверяет PIN и получает сохраненный API ключ.
+  /// Выполняет полный цикл аутентификации по PIN:
+  /// 1. Проверяет формат PIN (должен быть 4-значным числом 1000-9999)
+  /// 2. Проверяет PIN через базу данных (сравнивает хэш введенного PIN с сохраненным)
+  /// 3. Извлекает API ключ из базы данных после успешной проверки PIN
+  ///
+  /// Проверка PIN выполняется через AuthStorage, который использует AuthRepository
+  /// для работы с базой данных. PIN хэшируется через SHA-256 и сравнивается
+  /// с сохраненным хэшем в таблице `auth`.
+  ///
+  /// API ключ извлекается из БД и автоматически расшифровывается перед возвратом.
   ///
   /// Параметры:
   /// - [pin]: PIN код для проверки.
   ///
   /// Возвращает [AuthResult] с результатом операции:
-  /// - При успехе: success=true, message=API ключ
+  /// - При успехе: success=true, message=расшифрованный API ключ
   /// - При ошибке: success=false, message=сообщение об ошибке
   Future<AuthResult> handlePinLogin(String pin) async {
-    // Проверяем формат PIN
+    // Шаг 1: Проверяем формат PIN перед проверкой в БД
+    // PIN должен быть 4-значным числом от 1000 до 9999
     if (!AuthValidator.validatePinFormat(pin)) {
       return const AuthResult(
         success: false,
-        message: 'PIN must be 4 digits (1000-9999)',
+        message: 'Invalid PIN format. PIN must be 4 digits (1000-9999).',
       );
     }
 
-    // Проверяем PIN
-    final isValid = await storage.verifyPin(pin);
+    // Шаг 2: Проверяем PIN через базу данных
+    // Метод verifyPin хэширует введенный PIN через SHA-256 и сравнивает
+    // с сохраненным хэшем в таблице auth через AuthRepository
+    bool isValid;
+    try {
+      isValid = await storage.verifyPin(pin);
+    } catch (e) {
+      return AuthResult(
+        success: false,
+        message: 'Error verifying PIN: $e. Please try again.',
+      );
+    }
+
     if (!isValid) {
       return const AuthResult(
         success: false,
-        message: 'Invalid PIN',
+        message: 'Invalid PIN. Please check your PIN and try again.',
       );
     }
 
-    // Получаем API ключ
-    final apiKey = await storage.getApiKey();
+    // Шаг 3: Извлекаем API ключ из базы данных после успешной проверки PIN
+    // API ключ автоматически расшифровывается при извлечении из БД
+    String? apiKey;
+    try {
+      apiKey = await storage.getApiKey();
+    } catch (e) {
+      return AuthResult(
+        success: false,
+        message: 'Error retrieving API key from database: $e. Please try again.',
+      );
+    }
+
     if (apiKey == null || apiKey.isEmpty) {
       return const AuthResult(
         success: false,
-        message: 'Authentication data not found',
+        message: 'Authentication data not found in database. Please log in with your API key again.',
       );
     }
 
+    // Возвращаем успешный результат с расшифрованным API ключом
     return AuthResult(
       success: true,
       message: apiKey,
