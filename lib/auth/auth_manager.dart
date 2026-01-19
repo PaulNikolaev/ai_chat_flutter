@@ -83,16 +83,102 @@ class AuthManager {
   /// - При успехе: success=true, message=сгенерированный PIN, balance=баланс
   /// - При ошибке: success=false, message=сообщение об ошибке
   Future<AuthResult> handleFirstLogin(String apiKey) async {
+    // Проверка формата ключа перед валидацией
+    final trimmedKey = apiKey.trim();
+    if (trimmedKey.isEmpty) {
+      return const AuthResult(
+        success: false,
+        message: 'API key cannot be empty. Please enter a valid API key.',
+      );
+    }
+
+    // Проверяем базовый формат ключа (должен начинаться с sk-or-)
+    if (!trimmedKey.startsWith('sk-or-')) {
+      return const AuthResult(
+        success: false,
+        message: 'Invalid API key format. Key must start with "sk-or-vv-" (VSEGPT) or "sk-or-v1-" (OpenRouter).',
+      );
+    }
+
     // Шаг 1: Валидируем API ключ
     // Метод validateApiKey автоматически определяет провайдера по префиксу ключа
     // и выполняет валидацию через соответствующий API endpoint
-    final validationResult = await validator.validateApiKey(apiKey);
-
-    // Проверяем результат валидации
-    if (!validationResult.isValid) {
+    ApiKeyValidationResult validationResult;
+    try {
+      validationResult = await validator.validateApiKey(apiKey);
+    } catch (e) {
+      // Обработка неожиданных ошибок при валидации
       return AuthResult(
         success: false,
-        message: validationResult.message,
+        message: 'Unexpected error during API key validation: $e. Please try again.',
+      );
+    }
+
+    // Обработка неверного формата ключа
+    if (!validationResult.isValid) {
+      final errorMessage = validationResult.message;
+      
+      // Проверяем, является ли это ошибкой формата ключа
+      if (validationResult.provider == 'unknown' || 
+          errorMessage.contains('Invalid API key format') ||
+          errorMessage.contains('must start with')) {
+        return const AuthResult(
+          success: false,
+          message: 'Invalid API key format. Key must start with "sk-or-vv-" (VSEGPT) or "sk-or-v1-" (OpenRouter).',
+        );
+      }
+      
+      // Обработка неверного ключа (401 Unauthorized)
+      if (errorMessage.contains('401') || 
+          errorMessage.contains('Unauthorized') ||
+          errorMessage.contains('Invalid') && errorMessage.contains('key')) {
+        return const AuthResult(
+          success: false,
+          message: 'Invalid API key. Please check that your key is correct and has not been revoked.',
+        );
+      }
+      
+      // Обработка сетевых ошибок
+      if (errorMessage.contains('Network error') ||
+          errorMessage.contains('network') ||
+          errorMessage.contains('Connection')) {
+        return const AuthResult(
+          success: false,
+          message: 'Network error: Unable to connect to the API server. Please check your internet connection and try again.',
+        );
+      }
+      
+      // Обработка таймаута
+      if (errorMessage.contains('timeout') || errorMessage.contains('Timeout')) {
+        return const AuthResult(
+          success: false,
+          message: 'Request timeout: The server did not respond in time. Please check your internet connection and try again.',
+        );
+      }
+      
+      // Обработка ошибок сервера (5xx)
+      if (errorMessage.contains('server error') ||
+          errorMessage.contains('500') ||
+          errorMessage.contains('502') ||
+          errorMessage.contains('503')) {
+        return const AuthResult(
+          success: false,
+          message: 'Server error: The API server is temporarily unavailable. Please try again later.',
+        );
+      }
+      
+      // Обработка rate limit (429)
+      if (errorMessage.contains('429') || errorMessage.contains('rate limit')) {
+        return const AuthResult(
+          success: false,
+          message: 'Rate limit exceeded: Too many requests. Please wait a moment and try again.',
+        );
+      }
+      
+      // Для всех остальных ошибок возвращаем оригинальное сообщение
+      return AuthResult(
+        success: false,
+        message: errorMessage,
       );
     }
 
@@ -111,8 +197,13 @@ class AuthManager {
     if (validationResult.balance < 0) {
       return AuthResult(
         success: false,
-        message: 'API key has negative balance. Current balance: ${validationResult.balance.toStringAsFixed(2)}',
+        message: 'Insufficient balance: Your account balance is negative (${validationResult.balance.toStringAsFixed(2)}). Please add funds to your account before continuing.',
       );
+    }
+    
+    // Информируем о нулевом балансе (но разрешаем подключение)
+    if (validationResult.balance == 0) {
+      // Это информационное сообщение, но не ошибка - продолжаем выполнение
     }
 
     // Шаг 3: Генерируем PIN код только при успешной валидации и неотрицательном балансе
@@ -134,16 +225,25 @@ class AuthManager {
     if (!saved) {
       return const AuthResult(
         success: false,
-        message: 'Failed to save authentication data to database',
+        message: 'Failed to save authentication data to database. Please check database permissions and try again.',
       );
     }
 
     // Дополнительная проверка: убеждаемся, что данные действительно сохранены в БД
-    final hasAuthData = await storage.hasAuth();
+    bool hasAuthData;
+    try {
+      hasAuthData = await storage.hasAuth();
+    } catch (e) {
+      return AuthResult(
+        success: false,
+        message: 'Error verifying saved authentication data: $e. Please try again.',
+      );
+    }
+    
     if (!hasAuthData) {
       return const AuthResult(
         success: false,
-        message: 'Authentication data was not saved correctly. Please try again',
+        message: 'Authentication data was not saved correctly. Please try again.',
       );
     }
 
