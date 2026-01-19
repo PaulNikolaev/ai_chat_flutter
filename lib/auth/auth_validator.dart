@@ -93,12 +93,8 @@ class AuthValidator {
   ///
   /// Возвращает [ApiKeyValidationResult] с результатом валидации.
   Future<ApiKeyValidationResult> validateApiKey(String apiKey) async {
-    developer.log('[VALIDATOR] Starting API key validation', name: 'AuthValidator');
-    developer.log('[VALIDATOR] Key prefix: ${apiKey.substring(0, apiKey.length > 15 ? 15 : apiKey.length)}...', name: 'AuthValidator');
-    
     final provider = detectProvider(apiKey);
     if (provider == null) {
-      developer.log('[VALIDATOR] ❌ Invalid API key format', name: 'AuthValidator');
       return const ApiKeyValidationResult(
         isValid: false,
         message: 'Invalid API key format. Key must start with sk-or-vv- (VSEGPT) or sk-or-v1- (OpenRouter)',
@@ -107,19 +103,13 @@ class AuthValidator {
       );
     }
 
-    developer.log('[VALIDATOR] Detected provider: $provider', name: 'AuthValidator');
-
     try {
       if (provider == 'vsegpt') {
-        developer.log('[VALIDATOR] Validating VSEGPT key...', name: 'AuthValidator');
         return await _validateVsegptKey(apiKey);
       } else {
-        developer.log('[VALIDATOR] Validating OpenRouter key...', name: 'AuthValidator');
         return await _validateOpenRouterKey(apiKey);
       }
     } catch (e, stackTrace) {
-      developer.log('[VALIDATOR] ❌ Exception during validation: $e', name: 'AuthValidator');
-      developer.log('[VALIDATOR] Stack trace: $stackTrace', name: 'AuthValidator');
       return ApiKeyValidationResult(
         isValid: false,
         message: 'Error validating key: $e',
@@ -132,7 +122,6 @@ class AuthValidator {
   /// Валидирует OpenRouter API ключ через проверку баланса.
   Future<ApiKeyValidationResult> _validateOpenRouterKey(String apiKey) async {
     final uri = Uri.parse('$openRouterBaseUrl/credits');
-    developer.log('[VALIDATOR] OpenRouter URL: $uri', name: 'AuthValidator');
     
     final headers = {
       'Authorization': 'Bearer $apiKey',
@@ -140,81 +129,166 @@ class AuthValidator {
     };
 
     try {
-      developer.log('[VALIDATOR] Sending request to OpenRouter...', name: 'AuthValidator');
       final response = await _client
           .get(uri, headers: headers)
           .timeout(const Duration(seconds: 10));
-      
-      developer.log('[VALIDATOR] OpenRouter response status: ${response.statusCode}', name: 'AuthValidator');
 
       if (response.statusCode == 200) {
-        final decoded = jsonDecode(response.body) as Map<String, dynamic>;
-        final data = decoded['data'] as Map<String, dynamic>?;
+        try {
+          final dynamic decoded = jsonDecode(response.body);
+          if (decoded is! Map<String, dynamic>) {
+            return const ApiKeyValidationResult(
+              isValid: false,
+              message: 'Invalid response format from OpenRouter API',
+              balance: 0.0,
+              provider: 'openrouter',
+            );
+          }
 
-        if (data != null) {
-          final totalCredits = (data['total_credits'] as num?)?.toDouble() ?? 0.0;
-          final totalUsage = (data['total_usage'] as num?)?.toDouble() ?? 0.0;
+          final data = decoded['data'] as Map<String, dynamic>?;
+
+          if (data == null) {
+            // Пытаемся извлечь сообщение об ошибке, если есть
+            String errorMessage = 'Missing data field in OpenRouter API response';
+            if (decoded.containsKey('error')) {
+              final error = decoded['error'];
+              if (error is Map<String, dynamic> && error.containsKey('message')) {
+                errorMessage = error['message'] as String;
+              } else if (error is String) {
+                errorMessage = error;
+              }
+            } else if (decoded.containsKey('message')) {
+              errorMessage = decoded['message'] as String;
+            }
+            
+            return ApiKeyValidationResult(
+              isValid: false,
+              message: errorMessage,
+              balance: 0.0,
+              provider: 'openrouter',
+            );
+          }
+
+          // Извлекаем баланс с проверкой на null и валидность типов
+          final totalCreditsValue = data['total_credits'];
+          final totalUsageValue = data['total_usage'];
+          
+          double totalCredits = 0.0;
+          double totalUsage = 0.0;
+          
+          if (totalCreditsValue != null) {
+            if (totalCreditsValue is num) {
+              totalCredits = totalCreditsValue.toDouble();
+            } else if (totalCreditsValue is String) {
+              totalCredits = double.tryParse(totalCreditsValue) ?? 0.0;
+            }
+          }
+          
+          if (totalUsageValue != null) {
+            if (totalUsageValue is num) {
+              totalUsage = totalUsageValue.toDouble();
+            } else if (totalUsageValue is String) {
+              totalUsage = double.tryParse(totalUsageValue) ?? 0.0;
+            }
+          }
+          
           final balance = totalCredits - totalUsage;
           final balanceStr = balance.toStringAsFixed(2);
 
           // Проверяем, что баланс неотрицательный (больше или равен нулю)
+          final isValid = balance >= 0;
+
           return ApiKeyValidationResult(
-            isValid: balance >= 0,
+            isValid: isValid,
             message: balanceStr,
             balance: balance,
+            provider: 'openrouter',
+          );
+        } catch (e, stackTrace) {
+          return ApiKeyValidationResult(
+            isValid: false,
+            message: 'Invalid response format from OpenRouter API: $e',
+            balance: 0.0,
             provider: 'openrouter',
           );
         }
       }
 
       // Обработка различных HTTP статусов для лучшей диагностики
+      // Пытаемся извлечь сообщение об ошибке из ответа
+      String errorMessage = 'Failed to validate OpenRouter key: HTTP ${response.statusCode}';
+      try {
+        final decoded = jsonDecode(response.body) as Map<String, dynamic>?;
+        if (decoded != null) {
+          if (decoded.containsKey('error')) {
+            final error = decoded['error'];
+            if (error is Map<String, dynamic> && error.containsKey('message')) {
+              errorMessage = error['message'] as String;
+            } else if (error is String) {
+              errorMessage = error;
+            }
+          } else if (decoded.containsKey('message')) {
+            errorMessage = decoded['message'] as String;
+          }
+        }
+      } catch (e) {
+        // Если не удалось распарсить, используем стандартное сообщение
+      }
+
       if (response.statusCode == 401) {
-        developer.log('[VALIDATOR] ❌ OpenRouter: Invalid API key (401)', name: 'AuthValidator');
-        developer.log('[VALIDATOR] Response body: ${response.body}', name: 'AuthValidator');
-        return const ApiKeyValidationResult(
+        return ApiKeyValidationResult(
           isValid: false,
-          message: 'Invalid OpenRouter API key',
+          message: errorMessage.contains('401') || errorMessage.contains('Unauthorized') 
+              ? errorMessage 
+              : 'Invalid OpenRouter API key. ${errorMessage.isNotEmpty ? "Details: $errorMessage" : ""}',
           balance: 0.0,
           provider: 'openrouter',
         );
       } else if (response.statusCode == 403) {
-        developer.log('[VALIDATOR] ❌ OpenRouter: Insufficient permissions (403)', name: 'AuthValidator');
-        developer.log('[VALIDATOR] Response body: ${response.body}', name: 'AuthValidator');
-        return const ApiKeyValidationResult(
+        return ApiKeyValidationResult(
           isValid: false,
-          message: 'Insufficient permissions to check OpenRouter balance',
+          message: errorMessage.contains('403') || errorMessage.contains('Forbidden')
+              ? errorMessage
+              : 'Insufficient permissions to check OpenRouter balance. ${errorMessage.isNotEmpty ? "Details: $errorMessage" : ""}',
           balance: 0.0,
           provider: 'openrouter',
         );
       } else if (response.statusCode == 429) {
-        developer.log('[VALIDATOR] ❌ OpenRouter: Rate limit exceeded (429)', name: 'AuthValidator');
-        return const ApiKeyValidationResult(
+        return ApiKeyValidationResult(
           isValid: false,
-          message: 'Rate limit exceeded. Please try again later',
+          message: errorMessage.contains('429') || errorMessage.contains('rate limit')
+              ? errorMessage
+              : 'Rate limit exceeded. Please try again later. ${errorMessage.isNotEmpty ? "Details: $errorMessage" : ""}',
+          balance: 0.0,
+          provider: 'openrouter',
+        );
+      } else if (response.statusCode == 404) {
+        return ApiKeyValidationResult(
+          isValid: false,
+          message: errorMessage.contains('404') || errorMessage.contains('Not Found')
+              ? errorMessage
+              : 'OpenRouter API endpoint not found. Please check your base URL configuration. ${errorMessage.isNotEmpty ? "Details: $errorMessage" : ""}',
           balance: 0.0,
           provider: 'openrouter',
         );
       } else if (response.statusCode >= 500 && response.statusCode < 600) {
-        developer.log('[VALIDATOR] ❌ OpenRouter: Server error (${response.statusCode})', name: 'AuthValidator');
-        developer.log('[VALIDATOR] Response body: ${response.body}', name: 'AuthValidator');
         return ApiKeyValidationResult(
           isValid: false,
-          message: 'OpenRouter server error (HTTP ${response.statusCode}). Please try again later',
+          message: errorMessage.contains('500') || errorMessage.contains('server error')
+              ? errorMessage
+              : 'OpenRouter server error (HTTP ${response.statusCode}). Please try again later. ${errorMessage.isNotEmpty ? "Details: $errorMessage" : ""}',
           balance: 0.0,
           provider: 'openrouter',
         );
       } else {
-        developer.log('[VALIDATOR] ❌ OpenRouter: Unexpected status code (${response.statusCode})', name: 'AuthValidator');
-        developer.log('[VALIDATOR] Response body: ${response.body}', name: 'AuthValidator');
         return ApiKeyValidationResult(
           isValid: false,
-          message: 'Failed to validate OpenRouter key: HTTP ${response.statusCode}',
+          message: errorMessage,
           balance: 0.0,
           provider: 'openrouter',
         );
       }
     } on http.ClientException catch (e) {
-      developer.log('[VALIDATOR] ❌ OpenRouter: Network error: $e', name: 'AuthValidator');
       return ApiKeyValidationResult(
         isValid: false,
         message: 'Network error while validating OpenRouter key: $e',
@@ -222,7 +296,6 @@ class AuthValidator {
         provider: 'openrouter',
       );
     } on TimeoutException catch (e) {
-      developer.log('[VALIDATOR] ❌ OpenRouter: Request timeout: $e', name: 'AuthValidator');
       return ApiKeyValidationResult(
         isValid: false,
         message: 'Request timeout while validating OpenRouter key: $e',
@@ -230,8 +303,6 @@ class AuthValidator {
         provider: 'openrouter',
       );
     } catch (e, stackTrace) {
-      developer.log('[VALIDATOR] ❌ OpenRouter: Unexpected error: $e', name: 'AuthValidator');
-      developer.log('[VALIDATOR] Stack trace: $stackTrace', name: 'AuthValidator');
       return ApiKeyValidationResult(
         isValid: false,
         message: 'Error validating OpenRouter key: $e',
@@ -265,10 +336,6 @@ class AuthValidator {
     Uri uri;
     final baseUri = Uri.parse(vsegptBaseUrl!);
     
-    developer.log('[VALIDATOR] VSEGPT base URL: $vsegptBaseUrl', name: 'AuthValidator');
-    developer.log('[VALIDATOR] Parsed base URI: $baseUri', name: 'AuthValidator');
-    developer.log('[VALIDATOR] Base URI path: "${baseUri.path}"', name: 'AuthValidator');
-    
     // Формируем правильный endpoint для баланса
     // VSEGPT API использует /v1/balance для проверки баланса
     // Если базовый URL уже содержит путь (например /v1/chat), заменяем его на /v1/balance
@@ -285,11 +352,9 @@ class AuthValidator {
         port: port,
         path: '/v1/balance',
       );
-      developer.log('[VALIDATOR] Using /v1/balance endpoint (replaced path): $uri', name: 'AuthValidator');
     } else {
       // Иначе добавляем /v1/balance
       uri = baseUri.resolve('/v1/balance');
-      developer.log('[VALIDATOR] Using /v1/balance endpoint (added path): $uri', name: 'AuthValidator');
     }
 
     final headers = {
@@ -297,44 +362,24 @@ class AuthValidator {
       'Content-Type': 'application/json',
     };
 
-    developer.log('[VALIDATOR] Request headers: Authorization=Bearer ${apiKey.substring(0, apiKey.length > 15 ? 15 : apiKey.length)}...', name: 'AuthValidator');
-
     try {
-      developer.log('[VALIDATOR] Sending GET request to: $uri', name: 'AuthValidator');
       final response = await _client
           .get(uri, headers: headers)
           .timeout(const Duration(seconds: 10));
-      
-      developer.log('[VALIDATOR] VSEGPT response status: ${response.statusCode}', name: 'AuthValidator');
-      developer.log('[VALIDATOR] VSEGPT response headers: ${response.headers}', name: 'AuthValidator');
 
       // Обработка различных HTTP статусов
       if (response.statusCode == 200) {
         try {
-          developer.log('[VALIDATOR] Parsing VSEGPT response...', name: 'AuthValidator');
-          developer.log('[VALIDATOR] VSEGPT response body: ${response.body.substring(0, response.body.length > 200 ? 200 : response.body.length)}...', name: 'AuthValidator');
-          
           final decoded = jsonDecode(response.body) as Map<String, dynamic>;
           
           // Пытаемся извлечь баланс из различных форматов ответа
-          developer.log('[VALIDATOR] Full decoded response: $decoded', name: 'AuthValidator');
           double? balance = _extractBalanceFromVsegptResponse(decoded);
-          developer.log('[VALIDATOR] Extracted balance from primary endpoint: $balance', name: 'AuthValidator');
-          
-          if (balance == null) {
-            // Если не удалось извлечь баланс, логируем предупреждение
-            developer.log('[VALIDATOR] ⚠️ Could not extract balance from response, but status is 200', name: 'AuthValidator');
-            developer.log('[VALIDATOR] Response keys: ${decoded.keys.toList()}', name: 'AuthValidator');
-          }
 
           if (balance != null) {
             // Проверяем, что баланс неотрицательный (больше или равен нулю)
             final isValid = balance >= 0;
-            developer.log('[VALIDATOR] VSEGPT balance: $balance, isValid: $isValid', name: 'AuthValidator');
-            developer.log('[VALIDATOR] Balance type: ${balance.runtimeType}', name: 'AuthValidator');
             
             if (isValid) {
-              developer.log('[VALIDATOR] ✅ VSEGPT validation successful', name: 'AuthValidator');
               return ApiKeyValidationResult(
                 isValid: true,
                 message: balance.toStringAsFixed(2),
@@ -342,7 +387,6 @@ class AuthValidator {
                 provider: 'vsegpt',
               );
             } else {
-              developer.log('[VALIDATOR] ❌ VSEGPT validation failed: negative balance', name: 'AuthValidator');
               return ApiKeyValidationResult(
                 isValid: false,
                 message: 'VSEGPT API key has negative balance',
@@ -353,7 +397,6 @@ class AuthValidator {
           } else {
             // Если баланс не найден, но ответ успешен, считаем ключ валидным
             // (для совместимости с API, которые не возвращают баланс)
-            developer.log('[VALIDATOR] ⚠️ VSEGPT balance not found in response, considering key valid', name: 'AuthValidator');
             return const ApiKeyValidationResult(
               isValid: true,
               message: 'Valid VSEGPT API key',
@@ -363,9 +406,6 @@ class AuthValidator {
           }
         } catch (e, stackTrace) {
           // Ошибка парсинга JSON
-          developer.log('[VALIDATOR] ❌ Error parsing VSEGPT response: $e', name: 'AuthValidator');
-          developer.log('[VALIDATOR] Stack trace: $stackTrace', name: 'AuthValidator');
-          developer.log('[VALIDATOR] Response body: ${response.body}', name: 'AuthValidator');
           return ApiKeyValidationResult(
             isValid: false,
             message: 'Invalid response format from VSEGPT API: $e',
@@ -374,8 +414,6 @@ class AuthValidator {
           );
         }
       } else if (response.statusCode == 401) {
-        developer.log('[VALIDATOR] ❌ VSEGPT: Invalid API key (401)', name: 'AuthValidator');
-        developer.log('[VALIDATOR] Response body: ${response.body}', name: 'AuthValidator');
         return const ApiKeyValidationResult(
           isValid: false,
           message: 'Invalid VSEGPT API key',
@@ -383,8 +421,6 @@ class AuthValidator {
           provider: 'vsegpt',
         );
       } else if (response.statusCode == 403) {
-        developer.log('[VALIDATOR] ❌ VSEGPT: Insufficient permissions (403)', name: 'AuthValidator');
-        developer.log('[VALIDATOR] Response body: ${response.body}', name: 'AuthValidator');
         return const ApiKeyValidationResult(
           isValid: false,
           message: 'Insufficient permissions to check VSEGPT balance',
@@ -392,7 +428,6 @@ class AuthValidator {
           provider: 'vsegpt',
         );
       } else if (response.statusCode == 429) {
-        developer.log('[VALIDATOR] ❌ VSEGPT: Rate limit exceeded (429)', name: 'AuthValidator');
         return const ApiKeyValidationResult(
           isValid: false,
           message: 'Rate limit exceeded. Please try again later',
@@ -400,8 +435,6 @@ class AuthValidator {
           provider: 'vsegpt',
         );
       } else if (response.statusCode >= 500 && response.statusCode < 600) {
-        developer.log('[VALIDATOR] ❌ VSEGPT: Server error (${response.statusCode})', name: 'AuthValidator');
-        developer.log('[VALIDATOR] Response body: ${response.body}', name: 'AuthValidator');
         return ApiKeyValidationResult(
           isValid: false,
           message: 'VSEGPT server error (HTTP ${response.statusCode}). Please try again later',
@@ -409,18 +442,6 @@ class AuthValidator {
           provider: 'vsegpt',
         );
       } else {
-        developer.log('[VALIDATOR] ❌ VSEGPT: Unexpected status code (${response.statusCode})', name: 'AuthValidator');
-        developer.log('[VALIDATOR] Requested URL: $uri', name: 'AuthValidator');
-        developer.log('[VALIDATOR] Response body: ${response.body}', name: 'AuthValidator');
-        developer.log('[VALIDATOR] Response headers: ${response.headers}', name: 'AuthValidator');
-        
-        // Для 404 логируем детальную информацию
-        if (response.statusCode == 404) {
-          developer.log('[VALIDATOR] ⚠️ 404 error - endpoint not found', name: 'AuthValidator');
-          developer.log('[VALIDATOR] Expected endpoint: /v1/balance', name: 'AuthValidator');
-          developer.log('[VALIDATOR] Please check VSEGPT_BASE_URL in .env file', name: 'AuthValidator');
-        }
-        
         return ApiKeyValidationResult(
           isValid: false,
           message: 'Failed to validate VSEGPT key: HTTP ${response.statusCode}. Tried URL: $uri',
@@ -429,7 +450,6 @@ class AuthValidator {
         );
       }
     } on http.ClientException catch (e) {
-      developer.log('[VALIDATOR] ❌ VSEGPT: Network error: $e', name: 'AuthValidator');
       return ApiKeyValidationResult(
         isValid: false,
         message: 'Network error while validating VSEGPT key: $e',
@@ -437,7 +457,6 @@ class AuthValidator {
         provider: 'vsegpt',
       );
     } on TimeoutException catch (e) {
-      developer.log('[VALIDATOR] ❌ VSEGPT: Request timeout: $e', name: 'AuthValidator');
       return ApiKeyValidationResult(
         isValid: false,
         message: 'Request timeout while validating VSEGPT key: $e',
@@ -445,8 +464,6 @@ class AuthValidator {
         provider: 'vsegpt',
       );
     } catch (e, stackTrace) {
-      developer.log('[VALIDATOR] ❌ VSEGPT: Unexpected error: $e', name: 'AuthValidator');
-      developer.log('[VALIDATOR] Stack trace: $stackTrace', name: 'AuthValidator');
       return ApiKeyValidationResult(
         isValid: false,
         message: 'Error validating VSEGPT key: $e',
@@ -466,7 +483,6 @@ class AuthValidator {
   ///
   /// Возвращает баланс или null, если не удалось извлечь.
   double? _extractBalanceFromVsegptResponse(Map<String, dynamic> decoded) {
-    developer.log('[VALIDATOR] Extracting balance from response: $decoded', name: 'AuthValidator');
     // Формат OpenRouter: data.total_credits - data.total_usage
     final data = decoded['data'] as Map<String, dynamic>?;
     if (data != null) {

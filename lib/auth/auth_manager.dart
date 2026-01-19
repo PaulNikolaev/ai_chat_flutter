@@ -70,43 +70,27 @@ class AuthManager {
   /// - При успехе: success=true, message=сгенерированный PIN, balance=баланс
   /// - При ошибке: success=false, message=сообщение об ошибке
   Future<AuthResult> handleFirstLogin(String apiKey) async {
-    developer.log('[AUTH] Starting first login validation', name: 'AuthManager');
-    developer.log('[AUTH] API Key prefix: ${apiKey.substring(0, apiKey.length > 10 ? 10 : apiKey.length)}...', name: 'AuthManager');
-    
     // Валидируем API ключ
     final validationResult = await validator.validateApiKey(apiKey);
 
     if (!validationResult.isValid) {
-      developer.log('[AUTH] ❌ Validation failed: ${validationResult.message}', name: 'AuthManager');
-      developer.log('[AUTH] Provider: ${validationResult.provider}, Balance: ${validationResult.balance}', name: 'AuthManager');
       return AuthResult(
         success: false,
         message: validationResult.message,
       );
     }
 
-    developer.log('[AUTH] ✅ Validation successful', name: 'AuthManager');
-    developer.log('[AUTH] Provider: ${validationResult.provider}, Balance: ${validationResult.balance}', name: 'AuthManager');
-
     // Проверяем, что баланс неотрицательный (разрешаем баланс >= 0, включая 0)
-    developer.log('[AUTH] Balance from validation: ${validationResult.balance}', name: 'AuthManager');
-    developer.log('[AUTH] Balance message: ${validationResult.message}', name: 'AuthManager');
-    
     if (validationResult.balance < 0) {
-      developer.log('[AUTH] ❌ Balance check failed: balance = ${validationResult.balance}', name: 'AuthManager');
-      developer.log('[AUTH] Validation result details: isValid=${validationResult.isValid}, provider=${validationResult.provider}', name: 'AuthManager');
       return AuthResult(
         success: false,
         message: 'API key has negative balance. Current balance: ${validationResult.balance}',
       );
     }
-    
-    developer.log('[AUTH] ✅ Balance check passed: balance = ${validationResult.balance}', name: 'AuthManager');
 
     // Генерируем PIN
     final pin = AuthValidator.generatePin();
     final pinHash = AuthValidator.hashPin(pin);
-    developer.log('[AUTH] PIN generated: $pin', name: 'AuthManager');
 
     // Сохраняем данные аутентификации
     final saved = await storage.saveAuth(
@@ -116,16 +100,12 @@ class AuthManager {
     );
 
     if (!saved) {
-      developer.log('[AUTH] ❌ Failed to save authentication data', name: 'AuthManager');
       return const AuthResult(
         success: false,
         message: 'Failed to save authentication data',
       );
     }
 
-    developer.log('[AUTH] ✅ First login completed successfully', name: 'AuthManager');
-    developer.log('[AUTH] Provider: ${validationResult.provider}, Balance: ${validationResult.message}', name: 'AuthManager');
-    
     return AuthResult(
       success: true,
       message: pin,

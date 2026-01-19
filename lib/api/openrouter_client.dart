@@ -172,11 +172,6 @@ class OpenRouterClient {
       }
       
       // Логируем структуру ответа для диагностики
-      if (provider == 'vsegpt') {
-        print('[API] VSEGPT models response structure: ${decoded.keys.toList()}');
-        print('[API] VSEGPT models response sample: ${response.body.substring(0, response.body.length > 500 ? 500 : response.body.length)}');
-      }
-      
       // VSEGPT может возвращать модели в другом формате
       dynamic data;
       if (provider == 'vsegpt') {
@@ -205,7 +200,6 @@ class OpenRouterClient {
       
       for (final model in models) {
         if (model.id.isEmpty) {
-          print('[API] Warning: Model with empty id found: ${model.name}');
           continue;
         }
         
@@ -213,49 +207,10 @@ class OpenRouterClient {
           uniqueModels[model.id] = model;
         } else {
           duplicateIds.add(model.id);
-          print('[API] Duplicate model found: id=${model.id}, name=${model.name}');
         }
       }
       
       final deduplicatedModels = uniqueModels.values.toList();
-
-      if (duplicateIds.isNotEmpty) {
-        print('[API] Found ${duplicateIds.length} duplicate model IDs: ${duplicateIds.take(10).toList()}');
-      }
-      print('[API] Total models parsed: ${models.length}, unique models: ${deduplicatedModels.length}');
-      
-      // Логируем информацию о моделях в зависимости от провайдера
-      if (provider == 'vsegpt') {
-        print('[API] VSEGPT models loaded: ${deduplicatedModels.length} models');
-        // Логируем первые 10 моделей для отладки
-        print('[API] VSEGPT available models (first 10):');
-        for (final model in deduplicatedModels.take(10)) {
-          print('[API]   - ${model.id} (${model.name})');
-        }
-        
-        // Логируем бесплатные модели VSEGPT
-        final freeModels = deduplicatedModels.where((m) => m.isFree).toList();
-        print('[API] VSEGPT free models count: ${freeModels.length}');
-        if (freeModels.isNotEmpty) {
-          print('[API] VSEGPT free models (first 10):');
-          for (final model in freeModels.take(10)) {
-            print('[API]   ✅ ${model.id} (${model.name})');
-          }
-        }
-      } else {
-        // Логируем бесплатные модели для OpenRouter
-        final freeModels = deduplicatedModels.where((m) => m.isFree).toList();
-        print('[API] Free models count: ${freeModels.length}');
-        if (freeModels.isNotEmpty) {
-          print('[API] Free models (first 20):');
-          for (final model in freeModels.take(20)) {
-            print('[API]   - ${model.id} (${model.name})');
-          }
-          if (freeModels.length > 20) {
-            print('[API]   ... and ${freeModels.length - 20} more free models');
-          }
-        }
-      }
 
       _modelCache = deduplicatedModels;
 
@@ -263,9 +218,6 @@ class OpenRouterClient {
     } on FormatException catch (e) {
       throw OpenRouterException('Invalid models response format: $e');
     } catch (e, stackTrace) {
-      print('[API] Error parsing models: $e');
-      print('[API] Stack trace: $stackTrace');
-      print('[API] Response body: ${response.body.substring(0, response.body.length > 1000 ? 1000 : response.body.length)}');
       throw OpenRouterException('Failed to parse models response: $e');
     }
   }
@@ -285,14 +237,9 @@ class OpenRouterClient {
     if (provider == 'vsegpt') {
       // Для VSEGPT используем /v1/chat/completions
       final baseUri = Uri.parse(baseUrl);
-      print('[API] VSEGPT baseUrl: $baseUrl');
-      print('[API] VSEGPT parsed baseUri: $baseUri');
-      print('[API] VSEGPT baseUri path: "${baseUri.path}"');
-      
       // Если baseUrl уже содержит полный путь /v1/chat/completions, используем его как есть
       if (baseUri.path == '/v1/chat/completions' || baseUri.path.endsWith('/v1/chat/completions')) {
         uri = baseUri;
-        print('[API] Using baseUrl as-is (already contains /v1/chat/completions): $uri');
       } else if (baseUri.path.contains('/v1/')) {
         // Если содержит /v1/, заменяем весь путь на /v1/chat/completions
         // Например: https://api.vsegpt.ru/v1/chat -> https://api.vsegpt.ru/v1/chat/completions
@@ -302,16 +249,13 @@ class OpenRouterClient {
           port: baseUri.hasPort ? baseUri.port : null,
           path: '/v1/chat/completions',
         );
-        print('[API] Replaced path to /v1/chat/completions: $uri');
       } else {
         // Иначе добавляем /v1/chat/completions
         uri = baseUri.resolve('/v1/chat/completions');
-        print('[API] Added /v1/chat/completions path: $uri');
       }
     } else {
       // Для OpenRouter используем стандартный /chat/completions
       uri = Uri.parse('$baseUrl/chat/completions');
-      print('[API] OpenRouter endpoint: $uri');
     }
 
     final body = <String, dynamic>{
@@ -328,23 +272,14 @@ class OpenRouterClient {
 
     http.Response response;
     try {
-      print('[API] Sending message to: $uri');
-      print('[API] Model: $model');
       response = await _postWithRetry(uri, body: body);
     } on http.ClientException catch (e) {
-      print('[API] ❌ Network error: $e');
       throw OpenRouterException('Network error while sending message: $e');
     } catch (e) {
-      print('[API] ❌ Unexpected error: $e');
       throw OpenRouterException('Unexpected error while sending message: $e');
     }
 
     if (response.statusCode != 200) {
-      print('[API] ❌ Failed to send message: HTTP ${response.statusCode}');
-      print('[API] Request URL: $uri');
-      print('[API] Request body: $body');
-      print('[API] Response body: ${response.body}');
-      
       // Пытаемся извлечь сообщение об ошибке из ответа
       String errorMessage = 'Failed to send message: HTTP ${response.statusCode}';
       try {
@@ -364,7 +299,6 @@ class OpenRouterClient {
         }
       } catch (e) {
         // Если не удалось распарсить, используем стандартное сообщение
-        print('[API] Could not parse error response: $e');
       }
       
       // Для VSEGPT добавляем дополнительную информацию об ошибке 404
@@ -373,7 +307,6 @@ class OpenRouterClient {
         errorMessage = 'Модель "$modelId" недоступна в VSEGPT. '
             'Пожалуйста, выберите другую модель из списка доступных. '
             'Ошибка: $errorMessage';
-        print('[API] ⚠️ Model "$modelId" not available in VSEGPT');
       }
       
       throw OpenRouterException(errorMessage);
@@ -437,9 +370,6 @@ class OpenRouterClient {
     if (provider == 'vsegpt') {
       // Для VSEGPT используем /v1/balance
       final baseUri = Uri.parse(baseUrl);
-      print('[API] VSEGPT getBalance baseUrl: $baseUrl');
-      print('[API] VSEGPT getBalance baseUri path: "${baseUri.path}"');
-      
       if (baseUri.path.contains('/v1/')) {
         uri = Uri(
           scheme: baseUri.scheme,
@@ -450,34 +380,27 @@ class OpenRouterClient {
       } else {
         uri = baseUri.resolve('/v1/balance');
       }
-      print('[API] VSEGPT getBalance endpoint: $uri');
     } else {
       // Для OpenRouter используем стандартный /credits
       uri = Uri.parse('$baseUrl/credits');
-      print('[API] OpenRouter getBalance endpoint: $uri');
     }
 
     http.Response response;
     try {
       response = await _getWithRetry(uri);
     } on http.ClientException catch (e) {
-      print('[API] ❌ Network error getting balance: $e');
       return 'Error';
     } catch (e) {
-      print('[API] ❌ Error getting balance: $e');
       return 'Error';
     }
 
     if (response.statusCode != 200) {
-      print('[API] ❌ Failed to get balance: HTTP ${response.statusCode}');
-      print('[API] Response body: ${response.body}');
       return 'Error';
     }
 
     try {
       final dynamic decoded = jsonDecode(response.body);
       if (decoded is! Map<String, dynamic>) {
-        print('[API] ❌ Invalid balance response format');
         return 'Error';
       }
 
@@ -506,7 +429,6 @@ class OpenRouterClient {
           }
         }
         
-        print('[API] VSEGPT balance extracted: $balance');
         final formatted = balance.toStringAsFixed(2);
         _cachedBalance = formatted;
         _balanceUpdatedAt = DateTime.now();
@@ -515,7 +437,6 @@ class OpenRouterClient {
         // Для OpenRouter используем стандартный формат
         final data = decoded['data'] as Map<String, dynamic>?;
         if (data == null) {
-          print('[API] ❌ OpenRouter balance response missing data field');
           return 'Error';
         }
 
@@ -529,8 +450,6 @@ class OpenRouterClient {
         return formatted;
       }
     } catch (e, stackTrace) {
-      print('[API] ❌ Error parsing balance response: $e');
-      print('[API] Stack trace: $stackTrace');
       return 'Error';
     }
   }
@@ -666,8 +585,6 @@ class OpenRouterClient {
         return ModelInfo.fromJson(json);
       }
     } catch (e) {
-      print('[API] Error parsing model: $e');
-      print('[API] Model JSON: $json');
       // Возвращаем базовую модель с минимальными данными
       return ModelInfo(
         id: json['id']?.toString() ?? json['model']?.toString() ?? 'unknown',

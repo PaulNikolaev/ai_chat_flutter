@@ -65,10 +65,8 @@ class _AnalyticsDialogState extends State<AnalyticsDialog> {
 
   /// Загружает баланс аккаунта.
   Future<void> _loadBalance({bool forceRefresh = false}) async {
-    print('[ANALYTICS] Loading balance (forceRefresh: $forceRefresh)');
     final apiClient = widget.apiClient;
     if (apiClient == null) {
-      print('[ANALYTICS] ❌ API client is null');
       setState(() {
         _balance = 'Недоступно';
         _isLoadingBalance = false;
@@ -81,9 +79,7 @@ class _AnalyticsDialogState extends State<AnalyticsDialog> {
     });
 
     try {
-      print('[ANALYTICS] Calling getBalance...');
       final balance = await apiClient.getBalance(forceRefresh: forceRefresh);
-      print('[ANALYTICS] ✅ Balance loaded: $balance');
       if (mounted) {
         setState(() {
           _balance = balance;
@@ -91,8 +87,6 @@ class _AnalyticsDialogState extends State<AnalyticsDialog> {
         });
       }
     } catch (e, stackTrace) {
-      print('[ANALYTICS] ❌ Error loading balance: $e');
-      print('[ANALYTICS] Stack trace: $stackTrace');
       if (mounted) {
         setState(() {
           _balance = 'Ошибка';
@@ -138,12 +132,10 @@ class _AnalyticsDialogState extends State<AnalyticsDialog> {
     }
 
     try {
-      print('[ANALYTICS] Clearing analytics data...');
       final analytics = widget.analytics;
       if (analytics != null) {
         final success = await analytics.clear();
         if (success) {
-          print('[ANALYTICS] ✅ Analytics data cleared successfully');
           // Показываем сообщение об успехе
           if (mounted) {
             ScaffoldMessenger.of(context).showSnackBar(
@@ -157,7 +149,6 @@ class _AnalyticsDialogState extends State<AnalyticsDialog> {
             _loadData();
           }
         } else {
-          print('[ANALYTICS] ❌ Failed to clear analytics data');
           if (mounted) {
             ScaffoldMessenger.of(context).showSnackBar(
               const SnackBar(
@@ -168,12 +159,8 @@ class _AnalyticsDialogState extends State<AnalyticsDialog> {
             );
           }
         }
-      } else {
-        print('[ANALYTICS] ❌ Analytics instance is null');
       }
     } catch (e, stackTrace) {
-      print('[ANALYTICS] ❌ Error clearing analytics: $e');
-      print('[ANALYTICS] Stack trace: $stackTrace');
       if (mounted) {
         ScaffoldMessenger.of(context).showSnackBar(
           SnackBar(

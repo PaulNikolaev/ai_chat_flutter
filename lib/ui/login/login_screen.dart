@@ -110,8 +110,6 @@ class _LoginScreenState extends State<LoginScreen> {
 
         final result = await _authManager!.handleFirstLogin(apiKey);
         if (result.success) {
-          print('[LOGIN] ✅ First login successful');
-          print('[LOGIN] PIN: ${result.message}, Balance: ${result.balance}');
           _showStatus(
             'PIN сгенерирован: ${result.message}. Баланс: ${result.balance}',
             isError: false,
@@ -123,7 +121,6 @@ class _LoginScreenState extends State<LoginScreen> {
             widget.onLoginSuccess?.call();
           }
         } else {
-          print('[LOGIN] ❌ First login failed: ${result.message}');
           _showStatus(result.message);
         }
       } else {
@@ -162,8 +159,6 @@ class _LoginScreenState extends State<LoginScreen> {
         }
       }
     } catch (e, stackTrace) {
-      print('[LOGIN] ❌ Exception during login: $e');
-      print('[LOGIN] Stack trace: $stackTrace');
       _showStatus('Ошибка: $e');
     } finally {
       if (mounted) {
@@ -217,8 +212,6 @@ class _LoginScreenState extends State<LoginScreen> {
         _showStatus('Ошибка сброса ключа');
       }
     } catch (e, stackTrace) {
-      print('[LOGIN] ❌ Exception during reset: $e');
-      print('[LOGIN] Stack trace: $stackTrace');
       _showStatus('Ошибка: $e');
     } finally {
       if (mounted) {
