@@ -33,6 +33,29 @@ class OpenRouterClient {
     required http.Client httpClient,
   }) : _client = httpClient;
 
+  /// Создает экземпляр [OpenRouterClient] с указанными параметрами.
+  ///
+  /// Параметры:
+  /// - [apiKey]: API ключ для аутентификации.
+  /// - [baseUrl]: Базовый URL API (по умолчанию используется из EnvConfig).
+  /// - [httpClient]: HTTP клиент (опционально, создается новый если не указан).
+  factory OpenRouterClient({
+    required String apiKey,
+    String? baseUrl,
+    http.Client? httpClient,
+  }) {
+    final effectiveBaseUrl = baseUrl ??
+        (EnvConfig.openRouterBaseUrl.trim().isNotEmpty
+            ? EnvConfig.openRouterBaseUrl.trim()
+            : 'https://openrouter.ai/api/v1');
+
+    return OpenRouterClient._(
+      baseUrl: effectiveBaseUrl,
+      apiKey: apiKey.trim(),
+      httpClient: httpClient ?? http.Client(),
+    );
+  }
+
   /// Фабричный конструктор, инициализирующий клиент из `.env`.
   ///
   /// Использует `EnvConfig` для загрузки и валидации конфигурации.

@@ -1,5 +1,7 @@
 import 'package:flutter/material.dart';
 
+import '../api/openrouter_client.dart';
+import '../ui/components/message_bubble.dart';
 import '../ui/styles.dart';
 import '../utils/platform.dart';
 
@@ -8,6 +10,12 @@ import '../utils/platform.dart';
 /// Предоставляет базовую структуру UI с AppBar, областью истории чата
 /// и полем ввода сообщения. Поддерживает адаптивный layout для мобильных/десктопных устройств.
 class ChatScreen extends StatefulWidget {
+  /// API клиент для отправки сообщений.
+  final OpenRouterClient? apiClient;
+
+  /// Выбранная модель для использования.
+  final String? selectedModel;
+
   /// Callback при нажатии кнопки сохранения.
   final VoidCallback? onSave;
 
@@ -22,6 +30,8 @@ class ChatScreen extends StatefulWidget {
 
   const ChatScreen({
     super.key,
+    this.apiClient,
+    this.selectedModel,
     this.onSave,
     this.onAnalytics,
     this.onClear,
@@ -32,16 +42,114 @@ class ChatScreen extends StatefulWidget {
   State<ChatScreen> createState() => _ChatScreenState();
 }
 
+class _MessageItem {
+  final String text;
+  final bool isUser;
+  final DateTime timestamp;
+  final String? model;
+
+  _MessageItem({
+    required this.text,
+    required this.isUser,
+    required this.timestamp,
+    this.model,
+  });
+}
+
 class _ChatScreenState extends State<ChatScreen> {
   final _messageController = TextEditingController();
   final _scrollController = ScrollController();
-  final List<Map<String, dynamic>> _messages = [];
+  final List<_MessageItem> _messages = [];
+  bool _isLoading = false;
 
   @override
   void dispose() {
     _messageController.dispose();
     _scrollController.dispose();
     super.dispose();
+  }
+
+  void _scrollToBottom() {
+    if (_scrollController.hasClients) {
+      WidgetsBinding.instance.addPostFrameCallback((_) {
+        if (_scrollController.hasClients) {
+          _scrollController.animateTo(
+            _scrollController.position.maxScrollExtent,
+            duration: const Duration(milliseconds: 300),
+            curve: Curves.easeOut,
+          );
+        }
+      });
+    }
+  }
+
+  Future<void> _sendMessage() async {
+    final apiClient = widget.apiClient;
+    final selectedModel = widget.selectedModel;
+    final canSend = !_isLoading && 
+        apiClient != null && 
+        selectedModel != null &&
+        selectedModel.isNotEmpty;
+    if (!canSend) {
+      return;
+    }
+
+    final messageText = _messageController.text.trim();
+    if (messageText.isEmpty) {
+      return;
+    }
+
+    setState(() {
+      _isLoading = true;
+      _messageController.clear();
+    });
+
+    // Добавляем сообщение пользователя
+    final userMessage = _MessageItem(
+      text: messageText,
+      isUser: true,
+      timestamp: DateTime.now(),
+    );
+    setState(() {
+      _messages.add(userMessage);
+    });
+    _scrollToBottom();
+
+    try {
+      // Отправляем запрос к API
+      final result = await apiClient.sendMessage(
+        message: messageText,
+        model: selectedModel,
+      );
+
+      // Добавляем ответ AI
+      final aiMessage = _MessageItem(
+        text: result.text,
+        isUser: false,
+        timestamp: DateTime.now(),
+        model: selectedModel,
+      );
+      setState(() {
+        _messages.add(aiMessage);
+        _isLoading = false;
+      });
+      _scrollToBottom();
+    } catch (e) {
+      // Показываем ошибку
+      setState(() {
+        _isLoading = false;
+      });
+
+      if (mounted) {
+        ScaffoldMessenger.of(context).showSnackBar(
+          SnackBar(
+            content: Text('Ошибка отправки сообщения: $e'),
+            backgroundColor: AppStyles.errorColor,
+            duration: const Duration(seconds: 5),
+          ),
+        );
+      }
+    }
   }
 
   @override
@@ -84,7 +192,7 @@ class _ChatScreenState extends State<ChatScreen> {
         children: [
           // Область истории чата
           Expanded(
-            child: _messages.isEmpty
+            child: _messages.isEmpty && !_isLoading
                 ? Center(
                     child: Text(
                       'Начните диалог, отправив сообщение',
@@ -98,16 +206,28 @@ class _ChatScreenState extends State<ChatScreen> {
                     padding: EdgeInsets.all(
                       isMobile ? AppStyles.paddingSmall : AppStyles.padding,
                     ),
-                    itemCount: _messages.length,
+                    itemCount: _messages.length + (_isLoading ? 1 : 0),
                     itemBuilder: (context, index) {
+                      if (index == _messages.length) {
+                        // Индикатор загрузки
+                        return const Padding(
+                          padding: EdgeInsets.all(AppStyles.padding),
+                          child: Center(
+                            child: CircularProgressIndicator(),
+                          ),
+                        );
+                      }
+
                       final message = _messages[index];
                       return Padding(
                         padding: const EdgeInsets.only(
                           bottom: AppStyles.paddingSmall,
                         ),
-                        child: Text(
-                          message['text'] ?? '',
-                          style: theme.textTheme.bodyMedium,
+                        child: MessageBubble(
+                          text: message.text,
+                          isUser: message.isUser,
+                          timestamp: message.timestamp,
+                          model: message.model,
                         ),
                       );
                     },
@@ -149,12 +269,22 @@ class _ChatScreenState extends State<ChatScreen> {
                           maxLines: null,
                           textInputAction: TextInputAction.newline,
                           style: AppStyles.primaryTextStyle,
+                          enabled: !_isLoading,
                         ),
                         const SizedBox(height: AppStyles.paddingSmall),
                         SizedBox(
                           height: AppStyles.buttonHeight,
                           child: ElevatedButton.icon(
-                            onPressed: null,
+                            onPressed: () {
+                              final apiClient = widget.apiClient;
+                              final selectedModel = widget.selectedModel;
+                              if (!_isLoading && 
+                                  apiClient != null && 
+                                  selectedModel != null &&
+                                  selectedModel.isNotEmpty) {
+                                _sendMessage();
+                              }
+                            },
                             icon: const Icon(Icons.send),
                             label: const Text('Отправка'),
                             style: AppStyles.sendButtonStyle,
@@ -182,6 +312,8 @@ class _ChatScreenState extends State<ChatScreen> {
                             maxLines: null,
                             textInputAction: TextInputAction.newline,
                             style: AppStyles.primaryTextStyle,
+                            enabled: !_isLoading,
+                            onSubmitted: (_) => _sendMessage(),
                           ),
                         ),
                         const SizedBox(width: AppStyles.paddingSmall),
@@ -189,7 +321,16 @@ class _ChatScreenState extends State<ChatScreen> {
                           width: AppStyles.buttonWidth,
                           height: AppStyles.buttonHeight,
                           child: ElevatedButton.icon(
-                            onPressed: null,
+                            onPressed: () {
+                              final apiClient = widget.apiClient;
+                              final selectedModel = widget.selectedModel;
+                              if (!_isLoading && 
+                                  apiClient != null && 
+                                  selectedModel != null &&
+                                  selectedModel.isNotEmpty) {
+                                _sendMessage();
+                              }
+                            },
                             icon: const Icon(Icons.send),
                             label: const Text('Отправка'),
                             style: AppStyles.sendButtonStyle,
