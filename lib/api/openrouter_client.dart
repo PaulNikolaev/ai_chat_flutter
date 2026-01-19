@@ -20,6 +20,13 @@ class OpenRouterClient {
 
   final http.Client _client;
 
+  /// Кэш списка моделей.
+  List<ModelInfo>? _modelCache;
+
+  /// Кэш баланса.
+  String? _cachedBalance;
+  DateTime? _balanceUpdatedAt;
+
   OpenRouterClient._({
     required this.baseUrl,
     required this.apiKey,
@@ -65,12 +72,19 @@ class OpenRouterClient {
   /// Получает список доступных моделей из OpenRouter API.
   ///
   /// Возвращает список [ModelInfo]. В случае ошибки выбрасывает [OpenRouterException].
-  Future<List<ModelInfo>> getModels() async {
+  ///
+  /// Использует простой кэш: при повторных вызовах возвращает ранее загруженный
+  /// список моделей, если не запрошено [forceRefresh].
+  Future<List<ModelInfo>> getModels({bool forceRefresh = false}) async {
+    if (!forceRefresh && _modelCache != null) {
+      return _modelCache!;
+    }
+
     final uri = Uri.parse('$baseUrl/models');
 
     http.Response response;
     try {
-      response = await _client.get(uri, headers: _defaultHeaders);
+      response = await _getWithRetry(uri);
     } on http.ClientException catch (e) {
       throw OpenRouterException('Network error while fetching models: $e');
     } catch (e) {
@@ -93,10 +107,14 @@ class OpenRouterClient {
         throw const FormatException('Response does not contain a data list');
       }
 
-      return data
+      final models = data
           .whereType<Map<String, dynamic>>()
           .map(ModelInfo.fromJson)
           .toList();
+
+      _modelCache = models;
+
+      return models;
     } on FormatException catch (e) {
       throw OpenRouterException('Invalid models response format: $e');
     } catch (e) {
@@ -177,6 +195,97 @@ class OpenRouterClient {
       throw OpenRouterException('Invalid chat completion response format: $e');
     } catch (e) {
       throw OpenRouterException('Failed to parse chat completion response: $e');
+    }
+  }
+
+  /// Получает текущий баланс аккаунта OpenRouter.
+  ///
+  /// Возвращает строку вида `'$X.XX'` или `'Error'` в случае ошибки.
+  /// Значение кэшируется; для принудительного обновления используйте [forceRefresh].
+  Future<String> getBalance({bool forceRefresh = false}) async {
+    if (!forceRefresh &&
+        _cachedBalance != null &&
+        _balanceUpdatedAt != null &&
+        DateTime.now().difference(_balanceUpdatedAt!) <
+            const Duration(minutes: 1)) {
+      return _cachedBalance!;
+    }
+
+    final uri = Uri.parse('$baseUrl/credits');
+
+    http.Response response;
+    try {
+      response = await _getWithRetry(uri);
+    } on http.ClientException {
+      return 'Error';
+    } catch (_) {
+      return 'Error';
+    }
+
+    if (response.statusCode != 200) {
+      return 'Error';
+    }
+
+    try {
+      final dynamic decoded = jsonDecode(response.body);
+      if (decoded is! Map<String, dynamic>) {
+        return 'Error';
+      }
+
+      final data = decoded['data'] as Map<String, dynamic>?;
+      if (data == null) return 'Error';
+
+      final totalCredits = (data['total_credits'] as num?)?.toDouble() ?? 0.0;
+      final totalUsage = (data['total_usage'] as num?)?.toDouble() ?? 0.0;
+      final balance = totalCredits - totalUsage;
+
+      final formatted = '\$${balance.toStringAsFixed(2)}';
+      _cachedBalance = formatted;
+      _balanceUpdatedAt = DateTime.now();
+
+      return formatted;
+    } catch (_) {
+      return 'Error';
+    }
+  }
+
+  /// Выполняет GET запрос с простой retry логикой и обработкой rate limits.
+  Future<http.Response> _getWithRetry(
+    Uri uri, {
+    int maxRetries = 3,
+  }) async {
+    int attempt = 0;
+    while (true) {
+      attempt += 1;
+      try {
+        final response = await _client.get(uri, headers: _defaultHeaders);
+
+        // Обработка rate limits (429) и 5xx ошибок.
+        if (response.statusCode == 429 ||
+            (response.statusCode >= 500 && response.statusCode < 600)) {
+          if (attempt >= maxRetries) {
+            return response;
+          }
+
+          // Если сервер вернул Retry-After, уважаем его.
+          final retryAfterHeader = response.headers['retry-after'];
+          Duration delay;
+          if (retryAfterHeader != null) {
+            final seconds = int.tryParse(retryAfterHeader);
+            delay = Duration(seconds: seconds ?? 1);
+          } else {
+            delay = Duration(milliseconds: 300 * attempt);
+          }
+
+          await Future<void>.delayed(delay);
+          continue;
+        }
+
+        return response;
+      } on http.ClientException {
+        if (attempt >= maxRetries) rethrow;
+        await Future<void>.delayed(Duration(milliseconds: 300 * attempt));
+      }
     }
   }
 
