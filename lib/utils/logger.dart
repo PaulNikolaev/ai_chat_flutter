@@ -198,7 +198,14 @@ class AppLogger {
   /// ```
   void setLevel(LogLevel level) {
     _currentLevel = level;
-    _logger.level = _convertLogLevel(level);
+    _logger = Logger(
+      level: _convertLogLevel(level),
+      output: _CustomLogOutput(
+        fileSink: _fileSink,
+        fileLoggingEnabled: _fileLoggingEnabled,
+      ),
+      printer: _CustomLogPrinter(),
+    );
   }
 
   /// Логирует информационное сообщение.
