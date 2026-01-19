@@ -30,6 +30,9 @@ dependencies:
   
   # Платформо-зависимые утилиты
   path_provider: ^2.1.1
+  
+  # Форматирование дат и времени
+  intl: ^0.19.0
 
 dev_dependencies:
   flutter_test:
