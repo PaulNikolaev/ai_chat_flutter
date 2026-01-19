@@ -61,7 +61,7 @@ class PlatformUtils {
   /// Пример использования:
   /// ```dart
   /// final platform = PlatformUtils.getPlatform();
-  /// print('Текущая платформа: $platform');
+  /// debugPrint('Текущая платформа: $platform');
   /// ```
   static String getPlatform() {
     if (kIsWeb) return 'web';

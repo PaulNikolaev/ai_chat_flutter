@@ -1,4 +1,5 @@
 import 'dart:io' show Directory, File, FileMode, IOSink;
+import 'package:flutter/foundation.dart' show debugPrint;
 import 'package:logger/logger.dart';
 import 'package:path_provider/path_provider.dart';
 import 'package:intl/intl.dart';
@@ -293,7 +294,7 @@ class _CustomLogOutput extends LogOutput {
   void output(OutputEvent event) {
     // Вывод в консоль (всегда)
     for (final line in event.lines) {
-      print(line);
+      debugPrint(line);
     }
 
     // Вывод в файл (если включен)
