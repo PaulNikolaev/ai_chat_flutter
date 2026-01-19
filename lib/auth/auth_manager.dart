@@ -59,8 +59,22 @@ class AuthManager {
 
   /// Обрабатывает первый вход с валидацией API ключа.
   ///
-  /// Валидирует API ключ, проверяет баланс, генерирует PIN и сохраняет
-  /// данные аутентификации.
+  /// Выполняет полный цикл аутентификации:
+  /// 1. Валидирует API ключ через соответствующий провайдер (OpenRouter или VSEGPT)
+  /// 2. Проверяет баланс аккаунта (должен быть >= 0)
+  /// 3. Генерирует 4-значный PIN код
+  /// 4. Сохраняет данные в базу данных через AuthStorage
+  ///
+  /// Валидация ключа выполняется для обоих провайдеров:
+  /// - OpenRouter: ключи начинаются с 'sk-or-v1-...'
+  /// - VSEGPT: ключи начинаются с 'sk-or-vv-...'
+  ///
+  /// Проверка баланса выполняется через соответствующий API endpoint:
+  /// - OpenRouter: /api/v1/credits
+  /// - VSEGPT: /v1/balance
+  ///
+  /// PIN генерируется только при успешной валидации и неотрицательном балансе (>= 0).
+  /// Данные сохраняются в БД только после успешной валидации и проверки баланса.
   ///
   /// Параметры:
   /// - [apiKey]: API ключ для валидации и сохранения.
@@ -69,9 +83,12 @@ class AuthManager {
   /// - При успехе: success=true, message=сгенерированный PIN, balance=баланс
   /// - При ошибке: success=false, message=сообщение об ошибке
   Future<AuthResult> handleFirstLogin(String apiKey) async {
-    // Валидируем API ключ
+    // Шаг 1: Валидируем API ключ
+    // Метод validateApiKey автоматически определяет провайдера по префиксу ключа
+    // и выполняет валидацию через соответствующий API endpoint
     final validationResult = await validator.validateApiKey(apiKey);
 
+    // Проверяем результат валидации
     if (!validationResult.isValid) {
       return AuthResult(
         success: false,
@@ -79,32 +96,58 @@ class AuthManager {
       );
     }
 
-    // Проверяем, что баланс неотрицательный (разрешаем баланс >= 0, включая 0)
-    if (validationResult.balance < 0) {
-      return AuthResult(
+    // Проверяем, что провайдер определен корректно
+    if (validationResult.provider != 'openrouter' && 
+        validationResult.provider != 'vsegpt') {
+      return const AuthResult(
         success: false,
-        message: 'API key has negative balance. Current balance: ${validationResult.balance}',
+        message: 'Invalid provider detected. Supported providers: openrouter, vsegpt',
       );
     }
 
-    // Генерируем PIN
+    // Шаг 2: Проверяем баланс аккаунта
+    // Баланс должен быть неотрицательным (>= 0), включая нулевой баланс
+    // Это позволяет подключаться даже с нулевым балансом для тестирования
+    if (validationResult.balance < 0) {
+      return AuthResult(
+        success: false,
+        message: 'API key has negative balance. Current balance: ${validationResult.balance.toStringAsFixed(2)}',
+      );
+    }
+
+    // Шаг 3: Генерируем PIN код только при успешной валидации и неотрицательном балансе
+    // PIN генерируется как случайное 4-значное число от 1000 до 9999
     final pin = AuthValidator.generatePin();
+    // Хэшируем PIN перед сохранением в БД
     final pinHash = AuthValidator.hashPin(pin);
 
-    // Сохраняем данные аутентификации
+    // Шаг 4: Сохраняем данные аутентификации в базу данных
+    // Данные сохраняются через AuthStorage, который использует AuthRepository
+    // API ключ автоматически шифруется перед сохранением в БД
     final saved = await storage.saveAuth(
       apiKey: apiKey,
       pinHash: pinHash,
       provider: validationResult.provider,
     );
 
+    // Проверяем, что данные успешно сохранены
     if (!saved) {
       return const AuthResult(
         success: false,
-        message: 'Failed to save authentication data',
+        message: 'Failed to save authentication data to database',
       );
     }
 
+    // Дополнительная проверка: убеждаемся, что данные действительно сохранены в БД
+    final hasAuthData = await storage.hasAuth();
+    if (!hasAuthData) {
+      return const AuthResult(
+        success: false,
+        message: 'Authentication data was not saved correctly. Please try again',
+      );
+    }
+
+    // Возвращаем успешный результат с сгенерированным PIN и балансом
     return AuthResult(
       success: true,
       message: pin,
