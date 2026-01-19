@@ -230,12 +230,13 @@ class AuthRepository {
   ///
   /// Удаляет все записи из таблицы `auth`.
   ///
-  /// Возвращает true, если данные очищены успешно, иначе false.
+  /// Возвращает true, если операция выполнена успешно (включая случай, когда данных нет), иначе false.
   Future<bool> clearAuth() async {
     try {
       final db = await _db;
-      final result = await db.delete('auth');
-      return result > 0;
+      await db.delete('auth');
+      // Возвращаем true, даже если записей не было (цель - очистить данные, и она достигнута)
+      return true;
     } catch (e) {
       return false;
     }

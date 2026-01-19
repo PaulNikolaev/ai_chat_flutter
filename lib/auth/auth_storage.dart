@@ -222,16 +222,25 @@ class AuthStorage {
   /// Возвращает true, если данные очищены успешно, иначе false.
   Future<bool> clearAuth() async {
     try {
-      await _migrateLegacyData();
+      // Выполняем миграцию, если нужно (может выбросить исключение)
+      try {
+        await _migrateLegacyData();
+      } catch (_) {
+        // Игнорируем ошибки миграции при очистке
+      }
       
       // Очищаем данные из БД
       final dbCleared = await _repository.clearAuth();
       
       // Также очищаем старые хранилища на всякий случай
-      await _legacySecureStorage?.delete(key: _AuthKeys.apiKey);
-      await _ensureLegacyPrefs();
-      await _legacyPrefs?.remove(_AuthKeys.pinHash);
-      await _legacyPrefs?.remove(_AuthKeys.provider);
+      try {
+        await _legacySecureStorage?.delete(key: _AuthKeys.apiKey);
+        await _ensureLegacyPrefs();
+        await _legacyPrefs?.remove(_AuthKeys.pinHash);
+        await _legacyPrefs?.remove(_AuthKeys.provider);
+      } catch (_) {
+        // Игнорируем ошибки очистки старых хранилищ
+      }
 
       return dbCleared;
     } catch (e) {
