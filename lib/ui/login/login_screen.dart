@@ -151,6 +151,37 @@ class _LoginScreenState extends State<LoginScreen> {
     return '❌ $errorMessage';
   }
 
+  /// Форматирует сообщение об ошибке для входа по PIN.
+  String _formatPinErrorMessage(String errorMessage) {
+    if (errorMessage.contains('Invalid PIN format') ||
+        errorMessage.contains('4 digits')) {
+      return '❌ Неверный формат PIN\n\n'
+          'PIN должен содержать ровно 4 цифры (1000-9999).';
+    }
+    
+    if (errorMessage.contains('Invalid PIN') ||
+        errorMessage.contains('неверный')) {
+      return '❌ Неверный PIN код\n\n'
+          'Проверьте правильность введенного PIN и попробуйте снова.';
+    }
+    
+    if (errorMessage.contains('Error verifying PIN') ||
+        errorMessage.contains('Error retrieving')) {
+      return '❌ Ошибка при проверке данных\n\n'
+          'Не удалось проверить PIN код.\n'
+          'Попробуйте снова или используйте API ключ для входа.';
+    }
+    
+    if (errorMessage.contains('Authentication data not found') ||
+        errorMessage.contains('not found')) {
+      return '❌ Данные аутентификации не найдены\n\n'
+          'Войдите с помощью API ключа для восстановления доступа.';
+    }
+    
+    // Для остальных ошибок возвращаем оригинальное сообщение
+    return '❌ $errorMessage';
+  }
+
   Future<void> _handleLogin() async {
     if (_isLoading) return;
 
@@ -208,33 +239,50 @@ class _LoginScreenState extends State<LoginScreen> {
           // Попытка входа по PIN
           final result = await _authManager!.handlePinLogin(pin);
           if (result.success) {
+            // Успешный вход по PIN
             if (mounted) {
               widget.onLoginSuccess?.call();
             }
             return;
           } else {
-            _showStatus('Неверный PIN');
+            // Показываем понятное сообщение об ошибке PIN
+            _showStatus(_formatPinErrorMessage(result.message));
             return;
           }
         } else if (apiKey.isNotEmpty) {
-          // Попытка входа по API ключу
+          // Попытка входа по API ключу (обновление ключа)
           final result = await _authManager!.handleApiKeyLogin(apiKey);
           if (result.success) {
-            _showStatus(
-              'Вход выполнен. ${result.message}. Баланс: ${result.balance}',
-              isError: false,
-            );
+            // Успешное обновление ключа
+            final balance = result.balance.isNotEmpty ? result.balance : '0.00';
+            if (result.message.contains('updated')) {
+              _showStatus(
+                '✅ API ключ успешно обновлен!\n\n'
+                '💰 Баланс аккаунта: \$$balance\n\n'
+                'Ваш PIN код остался прежним.',
+                isError: false,
+              );
+            } else {
+              // Новый PIN был сгенерирован (если почему-то PIN отсутствовал)
+              _showStatus(
+                '✅ Вход выполнен!\n\n'
+                '🔐 Ваш PIN код: ${result.message}\n'
+                '💰 Баланс аккаунта: \$$balance',
+                isError: false,
+              );
+            }
 
             // Ждем немного, затем переходим в приложение
-            await Future.delayed(const Duration(seconds: 1));
+            await Future.delayed(const Duration(seconds: 2));
             if (mounted) {
               widget.onLoginSuccess?.call();
             }
           } else {
-            _showStatus(result.message);
+            // Показываем понятное сообщение об ошибке
+            _showStatus(_formatErrorMessage(result.message));
           }
         } else {
-          _showStatus('Введите PIN (4 цифры) или API ключ');
+          _showStatus('❌ Введите PIN (4 цифры) или API ключ для входа');
         }
       }
     } catch (e) {
@@ -346,7 +394,10 @@ class _LoginScreenState extends State<LoginScreen> {
                     textAlign: TextAlign.center,
                   ),
                   const SizedBox(height: AppStyles.padding),
+                  // Повторный вход: отображаем поля для PIN и API ключа
                   if (!_isFirstLogin) ...[
+                    // Поле для ввода PIN кода
+                    // PIN скрывается при вводе (obscureText: true) для безопасности
                     SizedBox(
                       height: inputHeight,
                       child: TextFormField(
@@ -358,7 +409,7 @@ class _LoginScreenState extends State<LoginScreen> {
                         ),
                         keyboardType: TextInputType.number,
                         maxLength: 4,
-                        obscureText: true,
+                        obscureText: true, // PIN скрывается при вводе для безопасности
                         textInputAction: TextInputAction.next,
                         style: AppStyles.primaryTextStyle,
                         validator: (value) {
@@ -375,6 +426,7 @@ class _LoginScreenState extends State<LoginScreen> {
                       ),
                     ),
                     const SizedBox(height: AppStyles.paddingSmall),
+                    // Разделитель между полями PIN и API ключа
                     const Row(
                       children: [
                         Expanded(child: Divider(color: AppStyles.borderColor)),
@@ -441,7 +493,7 @@ class _LoginScreenState extends State<LoginScreen> {
                               ? AppStyles.errorColor
                               : AppStyles.successColor,
                           fontSize: _isFirstLogin && !_isError
-                              ? AppStyles.fontSizeBody
+                              ? AppStyles.fontSizeDefault
                               : AppStyles.fontSizeHint,
                           fontWeight: _isFirstLogin && !_isError
                               ? FontWeight.w600
@@ -523,6 +575,7 @@ class _LoginScreenState extends State<LoginScreen> {
                                   style: AppStyles.sendButtonStyle,
                                 ),
                               ),
+                              // Кнопка "Сбросить ключ" отображается только при повторном входе
                               if (!_isFirstLogin) ...[
                                 const SizedBox(width: AppStyles.padding),
                                 SizedBox(
