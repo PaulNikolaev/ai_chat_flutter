@@ -332,46 +332,93 @@ class AuthManager {
 
   /// Обрабатывает вход по API ключу (можно использовать даже если данные уже существуют).
   ///
-  /// Валидирует API ключ, проверяет баланс и обновляет сохраненные учетные данные,
-  /// если данные аутентификации уже существуют.
+  /// Выполняет полный цикл аутентификации или обновления API ключа:
+  /// 1. Валидирует API ключ через соответствующий провайдер
+  /// 2. Проверяет баланс аккаунта (должен быть >= 0)
+  /// 3. Проверяет наличие существующих данных аутентификации
+  /// 4. Сохраняет существующий PIN при обновлении ключа (если данные уже есть)
+  /// 5. Генерирует новый PIN только для первого входа
+  /// 6. Сохраняет или обновляет данные в базе данных
+  ///
+  /// **Важно:** При обновлении существующего API ключа PIN сохраняется.
+  /// Это позволяет пользователю продолжать использовать тот же PIN код
+  /// после обновления ключа.
   ///
   /// Параметры:
-  /// - [apiKey]: API ключ для валидации.
+  /// - [apiKey]: API ключ для валидации и сохранения.
   ///
   /// Возвращает [AuthResult] с результатом операции:
-  /// - При успехе: success=true, message=сообщение об успехе или PIN (если первый вход), balance=баланс
+  /// - При успехе (обновление): success=true, message='API key updated successfully', balance=баланс
+  /// - При успехе (первый вход): success=true, message=сгенерированный PIN, balance=баланс
   /// - При ошибке: success=false, message=сообщение об ошибке
   Future<AuthResult> handleApiKeyLogin(String apiKey) async {
-    // Валидируем API ключ
-    final validationResult = await validator.validateApiKey(apiKey);
+    // Шаг 1: Валидируем API ключ
+    ApiKeyValidationResult validationResult;
+    try {
+      validationResult = await validator.validateApiKey(apiKey);
+    } catch (e) {
+      return AuthResult(
+        success: false,
+        message: 'Unexpected error during API key validation: $e. Please try again.',
+      );
+    }
 
     if (!validationResult.isValid) {
+      // Используем сообщение об ошибке из валидатора
       return AuthResult(
         success: false,
         message: validationResult.message,
       );
     }
 
-    // Проверяем, что баланс неотрицательный (разрешаем баланс >= 0, включая 0)
-    if (validationResult.balance < 0) {
-      return AuthResult(
+    // Проверяем, что провайдер определен корректно
+    if (validationResult.provider != 'openrouter' && 
+        validationResult.provider != 'vsegpt') {
+      return const AuthResult(
         success: false,
-        message: 'API key has negative balance. Current balance: ${validationResult.balance}',
+        message: 'Invalid provider detected. Supported providers: openrouter, vsegpt',
       );
     }
 
-    // Проверяем, существуют ли уже данные аутентификации
-    final hasExisting = await storage.hasAuth();
+    // Шаг 2: Проверяем баланс аккаунта
+    // Баланс должен быть неотрицательным (>= 0), включая нулевой баланс
+    if (validationResult.balance < 0) {
+      return AuthResult(
+        success: false,
+        message: 'Insufficient balance: Your account balance is negative (${validationResult.balance.toStringAsFixed(2)}). Please add funds to your account before continuing.',
+      );
+    }
+
+    // Шаг 3: Проверяем, существуют ли уже данные аутентификации
+    bool hasExisting;
+    try {
+      hasExisting = await storage.hasAuth();
+    } catch (e) {
+      return AuthResult(
+        success: false,
+        message: 'Error checking existing authentication data: $e. Please try again.',
+      );
+    }
 
     String pinHash;
     String? generatedPin;
 
     if (hasExisting) {
-      // Обновляем существующие данные с новым API ключом
-      // Сохраняем существующий PIN хэш или генерируем новый
-      final existingPinHash = await storage.getPinHash();
+      // Шаг 4: Обновляем существующие данные с новым API ключом
+      // Важно: Сохраняем существующий PIN хэш, чтобы пользователь мог
+      // продолжать использовать тот же PIN код после обновления ключа
+      String? existingPinHash;
+      try {
+        existingPinHash = await storage.getPinHash();
+      } catch (e) {
+        return AuthResult(
+          success: false,
+          message: 'Error retrieving existing PIN hash: $e. Please try again.',
+        );
+      }
+
       if (existingPinHash != null && existingPinHash.isNotEmpty) {
-        // Сохраняем существующий PIN
+        // Сохраняем существующий PIN при обновлении ключа
         pinHash = existingPinHash;
       } else {
         // Генерируем новый PIN, если почему-то отсутствует
@@ -379,33 +426,61 @@ class AuthManager {
         pinHash = AuthValidator.hashPin(generatedPin);
       }
     } else {
-      // Генерируем новый PIN для первого входа
+      // Шаг 5: Генерируем новый PIN для первого входа
       generatedPin = AuthValidator.generatePin();
       pinHash = AuthValidator.hashPin(generatedPin);
     }
 
-    // Сохраняем или обновляем данные аутентификации
-    final saved = await storage.saveAuth(
-      apiKey: apiKey,
-      pinHash: pinHash,
-      provider: validationResult.provider,
-    );
+    // Шаг 6: Сохраняем или обновляем данные аутентификации в базе данных
+    // API ключ автоматически шифруется перед сохранением в БД
+    bool saved;
+    try {
+      saved = await storage.saveAuth(
+        apiKey: apiKey,
+        pinHash: pinHash,
+        provider: validationResult.provider,
+      );
+    } catch (e) {
+      return AuthResult(
+        success: false,
+        message: 'Error saving authentication data to database: $e. Please try again.',
+      );
+    }
 
     if (!saved) {
       return const AuthResult(
         success: false,
-        message: 'Failed to save authentication data',
+        message: 'Failed to save authentication data to database. Please check database permissions and try again.',
       );
     }
 
+    // Дополнительная проверка: убеждаемся, что данные действительно сохранены
+    bool hasAuthData;
+    try {
+      hasAuthData = await storage.hasAuth();
+    } catch (e) {
+      // Если проверка не удалась, считаем операцию успешной
+      // (данные могли быть сохранены, но проверка не удалась)
+      hasAuthData = true;
+    }
+
+    if (!hasAuthData) {
+      return const AuthResult(
+        success: false,
+        message: 'Authentication data was not saved correctly. Please try again.',
+      );
+    }
+
+    // Возвращаем результат в зависимости от того, были ли существующие данные
     if (hasExisting) {
+      // При обновлении ключа PIN сохраняется, поэтому не возвращаем его
       return AuthResult(
         success: true,
         message: 'API key updated successfully',
         balance: validationResult.message,
       );
     } else {
-      // Возвращаем сгенерированный PIN для первого входа
+      // При первом входе возвращаем сгенерированный PIN
       return AuthResult(
         success: true,
         message: generatedPin ?? '',
