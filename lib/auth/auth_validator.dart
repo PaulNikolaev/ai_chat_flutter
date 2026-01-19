@@ -31,22 +31,64 @@ class ApiKeyValidationResult {
 /// Предоставляет методы для валидации API ключей, генерации PIN кодов,
 /// и хэширования/проверки PIN кодов.
 ///
-/// Пример использования:
+/// **Основные функции:**
+/// - Валидация API ключей через соответствующие API endpoints
+/// - Проверка баланса аккаунта (должен быть >= 0)
+/// - Генерация случайных 4-значных PIN кодов (1000-9999)
+/// - Хэширование PIN кодов через SHA-256
+/// - Проверка формата PIN кодов
+///
+/// **Поддерживаемые провайдеры:**
+/// - **OpenRouter**: использует endpoint `/credits` для проверки баланса
+///   - Ключи начинаются с `sk-or-v1-...`
+///   - Баланс вычисляется как `total_credits - total_usage`
+/// - **VSEGPT**: использует endpoint `/v1/balance` для проверки баланса
+///   - Ключи начинаются с `sk-or-vv-...`
+///   - Поддерживает различные форматы ответа API
+///
+/// **Обработка ошибок:**
+/// - Сетевые ошибки (таймауты, отсутствие соединения)
+/// - HTTP ошибки (401, 403, 404, 429, 5xx)
+/// - Ошибки парсинга ответов API
+/// - Неверные форматы ключей
+///
+/// **Пример использования:**
 /// ```dart
 /// final validator = AuthValidator();
+/// 
+/// // Валидация API ключа
 /// final result = await validator.validateApiKey('sk-or-v1-...');
 /// if (result.isValid) {
 ///   print('Баланс: ${result.message}');
+///   print('Провайдер: ${result.provider}');
+/// } else {
+///   print('Ошибка: ${result.message}');
 /// }
+/// 
+/// // Генерация PIN
+/// final pin = AuthValidator.generatePin();
+/// final pinHash = AuthValidator.hashPin(pin);
+/// 
+/// // Проверка формата PIN
+/// final isValid = AuthValidator.validatePinFormat('1234');
 /// ```
 class AuthValidator {
   /// Базовый URL для OpenRouter API.
+  ///
+  /// Используется для валидации OpenRouter API ключей.
+  /// По умолчанию: 'https://openrouter.ai/api/v1'.
   final String openRouterBaseUrl;
 
   /// Базовый URL для VSEGPT API.
+  ///
+  /// Используется для валидации VSEGPT API ключей.
+  /// Если не указан, валидация VSEGPT ключей будет недоступна.
   final String? vsegptBaseUrl;
 
-  /// HTTP клиент для запросов.
+  /// HTTP клиент для выполнения запросов к API.
+  ///
+  /// Используется для всех HTTP запросов к провайдерам.
+  /// Должен быть закрыт через метод [dispose()] после использования.
   final http.Client _client;
 
   /// Создает экземпляр [AuthValidator].
@@ -55,7 +97,9 @@ class AuthValidator {
   /// - [openRouterBaseUrl]: Базовый URL для OpenRouter API.
   ///   По умолчанию: 'https://openrouter.ai/api/v1'.
   /// - [vsegptBaseUrl]: Базовый URL для VSEGPT API (опционально).
+  ///   Если не указан, валидация VSEGPT ключей будет недоступна.
   /// - [httpClient]: HTTP клиент для запросов (опционально).
+  ///   Если не указан, создается новый экземпляр http.Client().
   AuthValidator({
     String? openRouterBaseUrl,
     this.vsegptBaseUrl,
