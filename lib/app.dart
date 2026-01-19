@@ -5,7 +5,9 @@ import 'auth/auth_manager.dart';
 import 'config/env.dart';
 import 'screens/chat_screen.dart';
 import 'ui/login/login_screen.dart';
+import 'ui/styles.dart';
 import 'ui/theme.dart';
+import 'utils/logger.dart';
 
 /// Главный класс приложения с управлением состоянием и навигацией.
 ///
@@ -26,6 +28,7 @@ class _MyAppState extends State<MyApp> {
   OpenRouterClient? _apiClient;
   bool _isAuthenticated = false;
   bool _isLoading = true;
+  AppLogger? _logger;
 
   @override
   void initState() {
@@ -33,30 +36,70 @@ class _MyAppState extends State<MyApp> {
     _initializeApp();
   }
 
+  @override
+  void dispose() {
+    _logger?.info('Application shutting down');
+    super.dispose();
+  }
+
   /// Инициализирует приложение: загружает конфигурацию и проверяет аутентификацию.
   Future<void> _initializeApp() async {
     try {
-      // Загружаем конфигурацию окружения
-      await EnvConfig.load();
-    } catch (e) {
-      // Игнорируем ошибки загрузки .env, если он не обязателен
-    }
+      // Инициализируем логирование
+      _logger = await AppLogger.create();
+      _logger?.info('Application starting...');
 
-    // Проверяем аутентификацию
-    await _checkAuthentication();
+      // Загружаем конфигурацию окружения
+      try {
+        await EnvConfig.load();
+        _logger?.info('Environment configuration loaded');
+      } catch (e) {
+        _logger?.warning('Failed to load .env file: $e');
+        // Игнорируем ошибки загрузки .env, если он не обязателен
+      }
+
+      // Проверяем аутентификацию
+      await _checkAuthentication();
+    } catch (e, stackTrace) {
+      _logger?.error(
+        'Fatal error during application initialization',
+        error: e,
+        stackTrace: stackTrace,
+      );
+      if (mounted) {
+        setState(() {
+          _isLoading = false;
+        });
+      }
+    }
   }
 
   /// Проверяет статус аутентификации и инициализирует API клиент при необходимости.
   Future<void> _checkAuthentication() async {
     try {
+      _logger?.debug('Checking authentication status...');
       final isAuthenticated = await _authManager.isAuthenticated();
       
       if (isAuthenticated) {
+        _logger?.info('User is authenticated, initializing API client');
         // Получаем сохраненный API ключ и создаем клиент
-        final apiKey = await _authManager.getStoredApiKey();
-        if (apiKey.isNotEmpty) {
-          _apiClient = OpenRouterClient(apiKey: apiKey);
+        try {
+          final apiKey = await _authManager.getStoredApiKey();
+          if (apiKey.isNotEmpty) {
+            _apiClient = OpenRouterClient(apiKey: apiKey);
+            _logger?.info('API client initialized successfully');
+          } else {
+            _logger?.warning('API key is empty, cannot initialize client');
+          }
+        } catch (e, stackTrace) {
+          _logger?.error(
+            'Failed to initialize API client',
+            error: e,
+            stackTrace: stackTrace,
+          );
         }
+      } else {
+        _logger?.info('User is not authenticated, showing login screen');
       }
 
       if (mounted) {
@@ -65,7 +108,12 @@ class _MyAppState extends State<MyApp> {
           _isLoading = false;
         });
       }
-    } catch (e) {
+    } catch (e, stackTrace) {
+      _logger?.error(
+        'Error during authentication check',
+        error: e,
+        stackTrace: stackTrace,
+      );
       if (mounted) {
         setState(() {
           _isAuthenticated = false;
@@ -80,6 +128,7 @@ class _MyAppState extends State<MyApp> {
   /// Создает API клиент из сохраненного ключа и переходит к экрану чата.
   Future<void> _handleLoginSuccess() async {
     try {
+      _logger?.info('Login successful, initializing API client');
       final apiKey = await _authManager.getStoredApiKey();
       if (apiKey.isNotEmpty) {
         if (mounted) {
@@ -87,15 +136,32 @@ class _MyAppState extends State<MyApp> {
             _apiClient = OpenRouterClient(apiKey: apiKey);
             _isAuthenticated = true;
           });
+          _logger?.info('User logged in successfully');
+        }
+      } else {
+        _logger?.warning('API key is empty after login');
+        if (mounted) {
+          ScaffoldMessenger.of(context).showSnackBar(
+            const SnackBar(
+              content: Text('Ошибка: API ключ не найден'),
+              backgroundColor: AppStyles.errorColor,
+            ),
+          );
         }
       }
-    } catch (e) {
+    } catch (e, stackTrace) {
+      _logger?.error(
+        'Error during login success handling',
+        error: e,
+        stackTrace: stackTrace,
+      );
       // Обработка ошибок при создании клиента
       if (mounted) {
         ScaffoldMessenger.of(context).showSnackBar(
           SnackBar(
             content: Text('Ошибка инициализации API клиента: $e'),
-            backgroundColor: Colors.red,
+            backgroundColor: AppStyles.errorColor,
+            duration: const Duration(seconds: 5),
           ),
         );
       }
@@ -106,11 +172,31 @@ class _MyAppState extends State<MyApp> {
   ///
   /// Очищает состояние аутентификации и возвращает к экрану логина.
   Future<void> _handleLogout() async {
-    if (mounted) {
-      setState(() {
-        _apiClient = null;
-        _isAuthenticated = false;
-      });
+    try {
+      _logger?.info('User logging out');
+      // Освобождаем ресурсы API клиента
+      _apiClient?.dispose();
+      
+      if (mounted) {
+        setState(() {
+          _apiClient = null;
+          _isAuthenticated = false;
+        });
+      }
+      _logger?.info('Logout completed');
+    } catch (e, stackTrace) {
+      _logger?.error(
+        'Error during logout',
+        error: e,
+        stackTrace: stackTrace,
+      );
+      // Все равно очищаем состояние даже при ошибке
+      if (mounted) {
+        setState(() {
+          _apiClient = null;
+          _isAuthenticated = false;
+        });
+      }
     }
   }
 

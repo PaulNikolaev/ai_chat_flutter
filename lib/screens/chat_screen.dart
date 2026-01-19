@@ -12,6 +12,7 @@ import '../ui/components/model_selector.dart';
 import '../ui/styles.dart';
 import '../utils/analytics.dart';
 import '../utils/cache.dart';
+import '../utils/logger.dart';
 import '../utils/monitor.dart';
 import '../utils/platform.dart';
 import 'analytics_dialog.dart';
@@ -77,6 +78,7 @@ class _ChatScreenState extends State<ChatScreen> {
   // Экземпляры для аналитики и мониторинга
   final Analytics _analytics = Analytics();
   final PerformanceMonitor _performanceMonitor = PerformanceMonitor();
+  AppLogger? _logger;
 
   // Состояние для моделей
   List<ModelInfo> _models = [];
@@ -89,9 +91,20 @@ class _ChatScreenState extends State<ChatScreen> {
   @override
   void initState() {
     super.initState();
+    _initializeLogger();
     _loadChatHistory();
     _loadSelectedModel();
     _loadModels();
+  }
+
+  /// Инициализирует логирование для экрана чата.
+  Future<void> _initializeLogger() async {
+    try {
+      _logger = await AppLogger.create();
+      _logger?.info('ChatScreen initialized');
+    } catch (e) {
+      // Игнорируем ошибки инициализации логирования
+    }
   }
 
   @override
@@ -111,6 +124,7 @@ class _ChatScreenState extends State<ChatScreen> {
     });
 
     try {
+      _logger?.debug('Loading chat history from cache');
       final history = await ChatCache.instance.getChatHistory(limit: 100);
       
       // Переворачиваем список, так как getChatHistory возвращает DESC (новейшие первыми),
@@ -142,9 +156,15 @@ class _ChatScreenState extends State<ChatScreen> {
         _isLoadingHistory = false;
       });
 
+      _logger?.info('Chat history loaded: ${loadedMessages.length} messages');
       // Автоскролл к последнему сообщению после загрузки истории
       _scrollToBottom();
-    } catch (e) {
+    } catch (e, stackTrace) {
+      _logger?.error(
+        'Failed to load chat history',
+        error: e,
+        stackTrace: stackTrace,
+      );
       setState(() {
         _isLoadingHistory = false;
       });
@@ -216,12 +236,14 @@ class _ChatScreenState extends State<ChatScreen> {
   /// Показывает сообщение об успехе или ошибке.
   Future<void> _clearHistory() async {
     try {
+      _logger?.info('Clearing chat history');
       final success = await ChatCache.instance.clearHistory();
 
       if (success) {
         setState(() {
           _messages.clear();
         });
+        _logger?.info('Chat history cleared successfully');
 
         if (mounted) {
           ScaffoldMessenger.of(context).showSnackBar(
@@ -235,7 +257,12 @@ class _ChatScreenState extends State<ChatScreen> {
       } else {
         throw Exception('Failed to clear history');
       }
-    } catch (e) {
+    } catch (e, stackTrace) {
+      _logger?.error(
+        'Failed to clear chat history',
+        error: e,
+        stackTrace: stackTrace,
+      );
       if (mounted) {
         ScaffoldMessenger.of(context).showSnackBar(
           SnackBar(
@@ -254,10 +281,12 @@ class _ChatScreenState extends State<ChatScreen> {
   /// в директорию экспорта. Показывает сообщение об успехе или ошибке.
   Future<void> _saveHistory() async {
     try {
+      _logger?.info('Exporting chat history to JSON');
       // Получаем JSON строку с историей
       final jsonString = await ChatCache.instance.exportHistoryToJson();
 
       if (jsonString == null || jsonString.isEmpty) {
+        _logger?.warning('Chat history is empty, nothing to export');
         if (mounted) {
           ScaffoldMessenger.of(context).showSnackBar(
             const SnackBar(
@@ -279,6 +308,7 @@ class _ChatScreenState extends State<ChatScreen> {
       // Убеждаемся, что директория существует
       if (!await exportDir.exists()) {
         await exportDir.create(recursive: true);
+        _logger?.debug('Created export directory: ${exportDir.path}');
       }
 
       // Создаем имя файла с текущей датой и временем
@@ -290,6 +320,7 @@ class _ChatScreenState extends State<ChatScreen> {
       // Сохраняем файл
       final file = File(filePath);
       await file.writeAsString(jsonString);
+      _logger?.info('Chat history exported to: $filePath');
 
       if (mounted) {
         ScaffoldMessenger.of(context).showSnackBar(
@@ -305,7 +336,12 @@ class _ChatScreenState extends State<ChatScreen> {
           ),
         );
       }
-    } catch (e) {
+    } catch (e, stackTrace) {
+      _logger?.error(
+        'Failed to export chat history',
+        error: e,
+        stackTrace: stackTrace,
+      );
       if (mounted) {
         ScaffoldMessenger.of(context).showSnackBar(
           SnackBar(
@@ -369,6 +405,7 @@ class _ChatScreenState extends State<ChatScreen> {
   Future<void> _loadModels() async {
     final apiClient = widget.apiClient;
     if (apiClient == null) {
+      _logger?.warning('Cannot load models: API client is null');
       return;
     }
 
@@ -377,6 +414,7 @@ class _ChatScreenState extends State<ChatScreen> {
     });
 
     try {
+      _logger?.debug('Loading models from API');
       final models = await apiClient.getModels();
       if (mounted) {
         setState(() {
@@ -387,10 +425,17 @@ class _ChatScreenState extends State<ChatScreen> {
           if (_selectedModelId == null && models.isNotEmpty) {
             _selectedModelId = models.first.id;
             _saveSelectedModel(_selectedModelId!);
+            _logger?.info('Default model selected: $_selectedModelId');
           }
         });
+        _logger?.info('Models loaded successfully: ${models.length} models');
       }
-    } catch (e) {
+    } catch (e, stackTrace) {
+      _logger?.error(
+        'Failed to load models',
+        error: e,
+        stackTrace: stackTrace,
+      );
       if (mounted) {
         setState(() {
           _isLoadingModels = false;
@@ -412,6 +457,7 @@ class _ChatScreenState extends State<ChatScreen> {
   /// Восстанавливает последнюю выбранную модель из SharedPreferences.
   Future<void> _loadSelectedModel() async {
     try {
+      _logger?.debug('Loading saved model preference');
       final prefs = await SharedPreferences.getInstance();
       final savedModelId = prefs.getString(_selectedModelKey);
       
@@ -419,6 +465,7 @@ class _ChatScreenState extends State<ChatScreen> {
         setState(() {
           _selectedModelId = savedModelId;
         });
+        _logger?.info('Loaded saved model: $savedModelId');
       } else if (widget.selectedModel != null) {
         // Используем модель из параметров виджета, если она передана
         setState(() {
@@ -429,6 +476,7 @@ class _ChatScreenState extends State<ChatScreen> {
         }
       }
     } catch (e) {
+      _logger?.warning('Failed to load saved model preference: $e');
       // Игнорируем ошибки загрузки настроек
     }
   }
@@ -440,7 +488,9 @@ class _ChatScreenState extends State<ChatScreen> {
     try {
       final prefs = await SharedPreferences.getInstance();
       await prefs.setString(_selectedModelKey, modelId);
+      _logger?.debug('Saved model preference: $modelId');
     } catch (e) {
+      _logger?.warning('Failed to save model preference: $e');
       // Игнорируем ошибки сохранения настроек
     }
   }
@@ -453,6 +503,7 @@ class _ChatScreenState extends State<ChatScreen> {
       return;
     }
 
+    _logger?.info('Model changed to: $modelId');
     setState(() {
       _selectedModelId = modelId;
     });
@@ -500,6 +551,9 @@ class _ChatScreenState extends State<ChatScreen> {
     _scrollToBottom();
 
     try {
+      _logger?.debug('Sending message to model: $selectedModel');
+      final startTime = DateTime.now();
+      
       // Отправляем запрос к API
       final result = await apiClient.sendMessage(
         message: messageText,
@@ -507,15 +561,47 @@ class _ChatScreenState extends State<ChatScreen> {
       );
 
       final now = DateTime.now();
+      final responseTime = now.difference(startTime).inMilliseconds / 1000.0;
       final tokensUsed = result.totalTokens ?? 0;
 
-      // Сохраняем сообщение в кэш
-      await ChatCache.instance.saveMessage(
-        model: selectedModel,
-        userMessage: messageText,
-        aiResponse: result.text,
-        tokensUsed: tokensUsed,
+      _logger?.info(
+        'Message sent successfully. Response time: ${responseTime.toStringAsFixed(2)}s, Tokens: $tokensUsed',
       );
+
+      // Отслеживаем метрики производительности и аналитику
+      try {
+        await _analytics.trackMessage(
+          model: selectedModel,
+          messageLength: messageText.length,
+          responseTime: responseTime,
+          tokensUsed: tokensUsed,
+        );
+      } catch (e, stackTrace) {
+        _logger?.error(
+          'Failed to track analytics',
+          error: e,
+          stackTrace: stackTrace,
+        );
+        // Продолжаем работу даже если аналитика не записалась
+      }
+
+      // Сохраняем сообщение в кэш
+      try {
+        await ChatCache.instance.saveMessage(
+          model: selectedModel,
+          userMessage: messageText,
+          aiResponse: result.text,
+          tokensUsed: tokensUsed,
+        );
+        _logger?.debug('Message saved to cache');
+      } catch (e, stackTrace) {
+        _logger?.error(
+          'Failed to save message to cache',
+          error: e,
+          stackTrace: stackTrace,
+        );
+        // Продолжаем работу даже если сохранение не удалось
+      }
 
       // Добавляем ответ AI
       final aiMessage = _MessageItem(
@@ -529,7 +615,12 @@ class _ChatScreenState extends State<ChatScreen> {
         _isLoading = false;
       });
       _scrollToBottom();
-    } catch (e) {
+    } catch (e, stackTrace) {
+      _logger?.error(
+        'Failed to send message',
+        error: e,
+        stackTrace: stackTrace,
+      );
       // Показываем ошибку
       setState(() {
         _isLoading = false;
