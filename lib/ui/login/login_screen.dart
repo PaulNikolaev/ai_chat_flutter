@@ -84,6 +84,73 @@ class _LoginScreenState extends State<LoginScreen> {
     });
   }
 
+  /// Форматирует сообщение об ошибке для лучшего отображения пользователю.
+  String _formatErrorMessage(String errorMessage) {
+    // Улучшаем отображение различных типов ошибок
+    if (errorMessage.contains('Invalid API key format') || 
+        errorMessage.contains('must start with')) {
+      return '❌ Неверный формат API ключа\n\n'
+          'Ключ должен начинаться с:\n'
+          '• sk-or-v1-... (OpenRouter)\n'
+          '• sk-or-vv-... (VSEGPT)';
+    }
+    
+    if (errorMessage.contains('Invalid API key') || 
+        errorMessage.contains('Unauthorized') ||
+        errorMessage.contains('401')) {
+      return '❌ Неверный API ключ\n\n'
+          'Проверьте правильность ключа и убедитесь, что он не был отозван.';
+    }
+    
+    if (errorMessage.contains('Network error') ||
+        errorMessage.contains('network') ||
+        errorMessage.contains('Connection')) {
+      return '❌ Ошибка сети\n\n'
+          'Не удалось подключиться к серверу API.\n'
+          'Проверьте подключение к интернету и попробуйте снова.';
+    }
+    
+    if (errorMessage.contains('timeout') || 
+        errorMessage.contains('Timeout')) {
+      return '⏱️ Превышено время ожидания\n\n'
+          'Сервер не ответил вовремя.\n'
+          'Проверьте подключение к интернету и попробуйте снова.';
+    }
+    
+    if (errorMessage.contains('server error') ||
+        errorMessage.contains('500') ||
+        errorMessage.contains('502') ||
+        errorMessage.contains('503')) {
+      return '⚠️ Ошибка сервера\n\n'
+          'Сервер API временно недоступен.\n'
+          'Попробуйте позже.';
+    }
+    
+    if (errorMessage.contains('429') || 
+        errorMessage.contains('rate limit')) {
+      return '⏳ Превышен лимит запросов\n\n'
+          'Слишком много запросов к API.\n'
+          'Подождите немного и попробуйте снова.';
+    }
+    
+    if (errorMessage.contains('Insufficient balance') ||
+        errorMessage.contains('negative balance')) {
+      return '💳 Недостаточно средств\n\n'
+          'Баланс вашего аккаунта отрицательный.\n'
+          'Пополните баланс перед продолжением.';
+    }
+    
+    if (errorMessage.contains('Failed to save') ||
+        errorMessage.contains('database')) {
+      return '❌ Ошибка сохранения данных\n\n'
+          'Не удалось сохранить данные аутентификации.\n'
+          'Попробуйте снова.';
+    }
+    
+    // Для остальных ошибок возвращаем оригинальное сообщение
+    return '❌ $errorMessage';
+  }
+
   Future<void> _handleLogin() async {
     if (_isLoading) return;
 
@@ -104,24 +171,36 @@ class _LoginScreenState extends State<LoginScreen> {
       if (_isFirstLogin) {
         // Первый вход: только API ключ
         if (apiKey.isEmpty) {
-          _showStatus('Введите API ключ');
+          _showStatus('Пожалуйста, введите API ключ для первого входа');
+          setState(() {
+            _isLoading = false;
+          });
           return;
         }
 
+        // Валидация API ключа выполняется, показываем индикатор загрузки
         final result = await _authManager!.handleFirstLogin(apiKey);
         if (result.success) {
+          // Успешный вход: показываем PIN и баланс
+          final pin = result.message;
+          final balance = result.balance.isNotEmpty ? result.balance : '0.00';
+          
           _showStatus(
-            'PIN сгенерирован: ${result.message}. Баланс: ${result.balance}',
+            '✅ Успешная авторизация!\n\n'
+            '🔐 Ваш PIN код: $pin\n'
+            '💰 Баланс аккаунта: \$$balance\n\n'
+            'Сохраните PIN код в безопасном месте!',
             isError: false,
           );
 
-          // Ждем немного, затем переходим в приложение
-          await Future.delayed(const Duration(seconds: 2));
+          // Ждем немного, чтобы пользователь успел увидеть PIN
+          await Future.delayed(const Duration(seconds: 3));
           if (mounted) {
             widget.onLoginSuccess?.call();
           }
         } else {
-          _showStatus(result.message);
+          // Показываем понятное сообщение об ошибке
+          _showStatus(_formatErrorMessage(result.message));
         }
       } else {
         // Повторный вход: PIN или API ключ
@@ -340,7 +419,9 @@ class _LoginScreenState extends State<LoginScreen> {
                   if (_statusMessage != null) ...[
                     const SizedBox(height: AppStyles.paddingSmall),
                     Container(
-                      padding: const EdgeInsets.all(AppStyles.paddingSmall),
+                      padding: EdgeInsets.all(_isFirstLogin && !_isError 
+                          ? AppStyles.padding 
+                          : AppStyles.paddingSmall),
                       decoration: BoxDecoration(
                         color: _isError
                             ? AppStyles.errorColor.withValues(alpha: 0.1)
@@ -350,7 +431,7 @@ class _LoginScreenState extends State<LoginScreen> {
                           color: _isError
                               ? AppStyles.errorColor
                               : AppStyles.successColor,
-                          width: 1,
+                          width: _isFirstLogin && !_isError ? 2 : 1,
                         ),
                       ),
                       child: Text(
@@ -359,9 +440,32 @@ class _LoginScreenState extends State<LoginScreen> {
                           color: _isError
                               ? AppStyles.errorColor
                               : AppStyles.successColor,
-                          fontSize: AppStyles.fontSizeHint,
+                          fontSize: _isFirstLogin && !_isError
+                              ? AppStyles.fontSizeBody
+                              : AppStyles.fontSizeHint,
+                          fontWeight: _isFirstLogin && !_isError
+                              ? FontWeight.w600
+                              : FontWeight.normal,
                         ),
                         textAlign: TextAlign.center,
+                      ),
+                    ),
+                  ],
+                  if (_isLoading && _isFirstLogin) ...[
+                    const SizedBox(height: AppStyles.paddingSmall),
+                    const Center(
+                      child: Column(
+                        children: [
+                          CircularProgressIndicator(),
+                          SizedBox(height: AppStyles.paddingSmall),
+                          Text(
+                            'Проверка API ключа...',
+                            style: TextStyle(
+                              color: AppStyles.textSecondary,
+                              fontSize: AppStyles.fontSizeHint,
+                            ),
+                          ),
+                        ],
                       ),
                     ),
                   ],
