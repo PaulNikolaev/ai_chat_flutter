@@ -7,6 +7,7 @@ import 'screens/chat_screen.dart';
 import 'ui/login/login_screen.dart';
 import 'ui/styles.dart';
 import 'ui/theme.dart';
+import 'utils/database/database.dart';
 import 'utils/logger.dart';
 
 /// Главный класс приложения с управлением состоянием и навигацией.
@@ -39,7 +40,36 @@ class _MyAppState extends State<MyApp> {
   @override
   void dispose() {
     _logger?.info('Application shutting down');
+    // Запускаем асинхронное освобождение ресурсов
+    // Не ждем завершения, чтобы не блокировать dispose()
+    _disposeResources().catchError((e) {
+      debugPrint('Error disposing resources: $e');
+    });
     super.dispose();
+  }
+
+  /// Освобождает ресурсы приложения: закрывает БД, логгер и API клиент.
+  ///
+  /// Вызывается автоматически при dispose() виджета.
+  /// Гарантирует корректное освобождение всех ресурсов.
+  /// Выполняется асинхронно, чтобы не блокировать dispose().
+  Future<void> _disposeResources() async {
+    try {
+      // Закрываем API клиент (синхронно)
+      _apiClient?.dispose();
+      _apiClient = null;
+
+      // Закрываем базу данных (асинхронно)
+      await DatabaseHelper.instance.close();
+
+      // Закрываем логгер (освобождает файловые потоки, асинхронно)
+      await _logger?.dispose();
+      _logger = null;
+    } catch (e) {
+      // Игнорируем ошибки при освобождении ресурсов
+      // чтобы не прерывать процесс завершения приложения
+      debugPrint('Error disposing resources: $e');
+    }
   }
 
   /// Инициализирует приложение: загружает конфигурацию и проверяет аутентификацию.

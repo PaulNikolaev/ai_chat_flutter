@@ -50,6 +50,9 @@ class AuthRepository {
   /// Если запись уже существует, она будет обновлена.
   /// API ключ шифруется перед сохранением.
   ///
+  /// Оптимизировано: использует транзакцию и оптимизированный запрос
+  /// для уменьшения количества обращений к БД.
+  ///
   /// Параметры:
   /// - [apiKey]: API ключ для сохранения (будет зашифрован).
   /// - [pinHash]: Хэш PIN кода для сохранения.
@@ -66,41 +69,50 @@ class AuthRepository {
       
       // Шифруем API ключ перед сохранением
       final encryptedApiKey = _encryptApiKey(apiKey);
+      final now = DateTime.now().toIso8601String();
       
-      // Проверяем, существует ли уже запись
-      final existingRecords = await db.query(
-        'auth',
-        limit: 1,
-      );
+      // Используем транзакцию для атомарности операции
+      return await db.transaction((txn) async {
+        // Проверяем существование записи одним запросом
+        final existing = await txn.query(
+          'auth',
+          columns: ['id', 'created_at'],
+          limit: 1,
+        );
 
-      if (existingRecords.isNotEmpty) {
-        // Обновляем существующую запись
-        final result = await db.update(
-          'auth',
-          {
-            'api_key': encryptedApiKey,
-            'pin_hash': pinHash,
-            'provider': provider,
-            'last_used': DateTime.now().toIso8601String(),
-          },
-          where: 'id = ?',
-          whereArgs: [existingRecords.first['id']],
-        );
-        return result > 0;
-      } else {
-        // Создаем новую запись
-        final result = await db.insert(
-          'auth',
-          {
-            'api_key': encryptedApiKey,
-            'pin_hash': pinHash,
-            'provider': provider,
-            'created_at': DateTime.now().toIso8601String(),
-            'last_used': DateTime.now().toIso8601String(),
-          },
-        );
-        return result > 0;
-      }
+        if (existing.isNotEmpty) {
+          // Обновляем существующую запись, сохраняя created_at
+          final existingId = existing.first['id'] as int;
+          final existingCreatedAt = existing.first['created_at'] as String?;
+          
+          final result = await txn.update(
+            'auth',
+            {
+              'api_key': encryptedApiKey,
+              'pin_hash': pinHash,
+              'provider': provider,
+              'created_at': existingCreatedAt ?? now, // Сохраняем оригинальную дату создания
+              'last_used': now,
+            },
+            where: 'id = ?',
+            whereArgs: [existingId],
+          );
+          return result > 0;
+        } else {
+          // Создаем новую запись
+          final result = await txn.insert(
+            'auth',
+            {
+              'api_key': encryptedApiKey,
+              'pin_hash': pinHash,
+              'provider': provider,
+              'created_at': now,
+              'last_used': now,
+            },
+          );
+          return result > 0;
+        }
+      });
     } catch (e) {
       return false;
     }
@@ -152,11 +164,29 @@ class AuthRepository {
 
   /// Получает сохраненный API ключ.
   ///
+  /// Оптимизировано: выполняет прямой запрос к нужному полю вместо полного getAuth().
+  ///
   /// Возвращает расшифрованный API ключ или null, если он не найден.
   Future<String?> getApiKey() async {
     try {
-      final auth = await getAuth();
-      return auth?['api_key'];
+      final db = await _db;
+      final records = await db.query(
+        'auth',
+        columns: ['api_key'],
+        limit: 1,
+        orderBy: 'id DESC',
+      );
+
+      if (records.isEmpty) {
+        return null;
+      }
+
+      final encryptedApiKey = records.first['api_key'] as String?;
+      if (encryptedApiKey == null) {
+        return null;
+      }
+
+      return _decryptApiKey(encryptedApiKey);
     } catch (e) {
       return null;
     }
@@ -164,11 +194,24 @@ class AuthRepository {
 
   /// Получает сохраненный хэш PIN кода.
   ///
+  /// Оптимизировано: выполняет прямой запрос к нужному полю вместо полного getAuth().
+  ///
   /// Возвращает хэш PIN или null, если он не найден.
   Future<String?> getPinHash() async {
     try {
-      final auth = await getAuth();
-      return auth?['pin_hash'];
+      final db = await _db;
+      final records = await db.query(
+        'auth',
+        columns: ['pin_hash'],
+        limit: 1,
+        orderBy: 'id DESC',
+      );
+
+      if (records.isEmpty) {
+        return null;
+      }
+
+      return records.first['pin_hash'] as String?;
     } catch (e) {
       return null;
     }
@@ -176,11 +219,24 @@ class AuthRepository {
 
   /// Получает сохраненного провайдера.
   ///
+  /// Оптимизировано: выполняет прямой запрос к нужному полю вместо полного getAuth().
+  ///
   /// Возвращает 'openrouter' или 'vsegpt', или null, если не найден.
   Future<String?> getProvider() async {
     try {
-      final auth = await getAuth();
-      return auth?['provider'];
+      final db = await _db;
+      final records = await db.query(
+        'auth',
+        columns: ['provider'],
+        limit: 1,
+        orderBy: 'id DESC',
+      );
+
+      if (records.isEmpty) {
+        return null;
+      }
+
+      return records.first['provider'] as String?;
     } catch (e) {
       return null;
     }
@@ -244,13 +300,22 @@ class AuthRepository {
 
   /// Проверяет, существуют ли данные аутентификации.
   ///
+  /// Оптимизировано: выполняет быстрый COUNT запрос вместо полного getAuth().
+  ///
   /// Возвращает true, если есть сохраненный API ключ и PIN хэш, иначе false.
   Future<bool> hasAuth() async {
     try {
-      final auth = await getAuth();
-      return auth != null && 
-             auth['api_key'] != null && 
-             auth['pin_hash'] != null;
+      final db = await _db;
+      final result = await db.rawQuery(
+        'SELECT COUNT(*) as count FROM auth WHERE api_key IS NOT NULL AND pin_hash IS NOT NULL',
+      );
+      
+      if (result.isEmpty) {
+        return false;
+      }
+      
+      final count = result.first['count'] as int?;
+      return count != null && count > 0;
     } catch (e) {
       return false;
     }
