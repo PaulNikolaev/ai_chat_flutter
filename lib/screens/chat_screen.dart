@@ -3,6 +3,7 @@ import 'package:flutter/material.dart';
 import '../api/openrouter_client.dart';
 import '../ui/components/message_bubble.dart';
 import '../ui/styles.dart';
+import '../utils/cache.dart';
 import '../utils/platform.dart';
 
 /// Главный экран чата с историей сообщений и полем ввода.
@@ -61,12 +62,79 @@ class _ChatScreenState extends State<ChatScreen> {
   final _scrollController = ScrollController();
   final List<_MessageItem> _messages = [];
   bool _isLoading = false;
+  bool _isLoadingHistory = false;
+
+  @override
+  void initState() {
+    super.initState();
+    _loadChatHistory();
+  }
 
   @override
   void dispose() {
     _messageController.dispose();
     _scrollController.dispose();
     super.dispose();
+  }
+
+  /// Загружает историю чата из кэша и отображает сохраненные сообщения.
+  ///
+  /// Получает последние сообщения из базы данных, преобразует их в
+  /// формат для отображения и добавляет в список сообщений.
+  Future<void> _loadChatHistory() async {
+    setState(() {
+      _isLoadingHistory = true;
+    });
+
+    try {
+      final history = await ChatCache.instance.getChatHistory(limit: 100);
+      
+      // Переворачиваем список, так как getChatHistory возвращает DESC (новейшие первыми),
+      // а для отображения нужны старые сверху, новые снизу
+      final reversedHistory = history.reversed.toList();
+
+      final List<_MessageItem> loadedMessages = [];
+      
+      for (final message in reversedHistory) {
+        // Добавляем сообщение пользователя
+        loadedMessages.add(_MessageItem(
+          text: message.userMessage,
+          isUser: true,
+          timestamp: message.timestamp,
+        ));
+        
+        // Добавляем ответ AI
+        loadedMessages.add(_MessageItem(
+          text: message.aiResponse,
+          isUser: false,
+          timestamp: message.timestamp,
+          model: message.model,
+        ));
+      }
+
+      setState(() {
+        _messages.clear();
+        _messages.addAll(loadedMessages);
+        _isLoadingHistory = false;
+      });
+
+      // Автоскролл к последнему сообщению после загрузки истории
+      _scrollToBottom();
+    } catch (e) {
+      setState(() {
+        _isLoadingHistory = false;
+      });
+
+      if (mounted) {
+        ScaffoldMessenger.of(context).showSnackBar(
+          SnackBar(
+            content: Text('Ошибка загрузки истории: $e'),
+            backgroundColor: AppStyles.errorColor,
+            duration: const Duration(seconds: 3),
+          ),
+        );
+      }
+    }
   }
 
   void _scrollToBottom() {
@@ -122,11 +190,22 @@ class _ChatScreenState extends State<ChatScreen> {
         model: selectedModel,
       );
 
+      final now = DateTime.now();
+      final tokensUsed = result.totalTokens ?? 0;
+
+      // Сохраняем сообщение в кэш
+      await ChatCache.instance.saveMessage(
+        model: selectedModel,
+        userMessage: messageText,
+        aiResponse: result.text,
+        tokensUsed: tokensUsed,
+      );
+
       // Добавляем ответ AI
       final aiMessage = _MessageItem(
         text: result.text,
         isUser: false,
-        timestamp: DateTime.now(),
+        timestamp: now,
         model: selectedModel,
       );
       setState(() {
@@ -192,16 +271,20 @@ class _ChatScreenState extends State<ChatScreen> {
         children: [
           // Область истории чата
           Expanded(
-            child: _messages.isEmpty && !_isLoading
-                ? Center(
-                    child: Text(
-                      'Начните диалог, отправив сообщение',
-                      style: theme.textTheme.bodyLarge?.copyWith(
-                        color: AppStyles.textSecondary,
-                      ),
-                    ),
+            child: _isLoadingHistory
+                ? const Center(
+                    child: CircularProgressIndicator(),
                   )
-                : ListView.builder(
+                : _messages.isEmpty && !_isLoading
+                    ? Center(
+                        child: Text(
+                          'Начните диалог, отправив сообщение',
+                          style: theme.textTheme.bodyLarge?.copyWith(
+                            color: AppStyles.textSecondary,
+                          ),
+                        ),
+                      )
+                    : ListView.builder(
                     controller: _scrollController,
                     padding: EdgeInsets.all(
                       isMobile ? AppStyles.paddingSmall : AppStyles.padding,
