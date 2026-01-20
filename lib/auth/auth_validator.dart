@@ -137,6 +137,16 @@ class AuthValidator {
   ///
   /// Возвращает [ApiKeyValidationResult] с результатом валидации.
   Future<ApiKeyValidationResult> validateApiKey(String apiKey) async {
+    // Валидация входных данных: проверка на null и пустую строку
+    if (apiKey.isEmpty || apiKey.trim().isEmpty) {
+      return const ApiKeyValidationResult(
+        isValid: false,
+        message: 'API key cannot be empty',
+        balance: 0.0,
+        provider: 'unknown',
+      );
+    }
+
     final provider = detectProvider(apiKey);
     if (provider == null) {
       return const ApiKeyValidationResult(

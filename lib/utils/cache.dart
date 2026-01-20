@@ -320,7 +320,8 @@ class ChatCache {
     try {
       final db = await _db;
 
-      // Строим WHERE условие
+      // Строим WHERE условие с использованием параметризованных запросов
+      // ВАЖНО: Защита от SQL injection через параметризованные запросы
       final whereConditions = <String>[];
       final whereArgs = <dynamic>[];
 
@@ -341,6 +342,7 @@ class ChatCache {
         whereArgs.add(endDateInclusive.toIso8601String());
       }
 
+      // Безопасно: whereClause содержит только шаблоны с ?, не пользовательский ввод
       final whereClause =
           whereConditions.isNotEmpty ? whereConditions.join(' AND ') : null;
 
@@ -388,16 +390,20 @@ class ChatCache {
     try {
       final db = await _db;
 
-      // Строим WHERE условие
+      // Строим WHERE условие с использованием параметризованных запросов
+      // ВАЖНО: Все условия используют ? плейсхолдеры, значения передаются через whereArgs
+      // Это защищает от SQL injection, так как пользовательский ввод не конкатенируется напрямую
       final whereConditions = <String>[];
       final whereArgs = <dynamic>[];
 
       if (model != null && model.isNotEmpty) {
+        // Безопасно: шаблон контролируется кодом, значение передается через параметр
         whereConditions.add('model = ?');
         whereArgs.add(model);
       }
 
       if (startDate != null) {
+        // Безопасно: дата конвертируется в ISO8601 строку, шаблон контролируется кодом
         whereConditions.add('timestamp >= ?');
         whereArgs.add(startDate.toIso8601String());
       }
@@ -408,6 +414,7 @@ class ChatCache {
         whereArgs.add(endDateInclusive.toIso8601String());
       }
 
+      // Безопасно: whereClause содержит только шаблоны с ?, не пользовательский ввод
       final whereClause =
           whereConditions.isNotEmpty ? whereConditions.join(' AND ') : null;
 
@@ -440,7 +447,8 @@ class ChatCache {
     try {
       final db = await _db;
 
-      // Строим WHERE условие
+      // Строим WHERE условие с использованием параметризованных запросов
+      // ВАЖНО: Защита от SQL injection через параметризованные запросы
       final whereConditions = <String>[];
       final whereArgs = <dynamic>[];
 
@@ -460,6 +468,7 @@ class ChatCache {
         whereArgs.add(endDateInclusive.toIso8601String());
       }
 
+      // Безопасно: whereClause содержит только шаблоны с ?, не пользовательский ввод
       final whereClause = whereConditions.isNotEmpty
           ? 'WHERE ${whereConditions.join(' AND ')}'
           : '';
@@ -510,7 +519,8 @@ class ChatCache {
     try {
       final db = await _db;
 
-      // Строим WHERE условие
+      // Строим WHERE условие с использованием параметризованных запросов
+      // ВАЖНО: Защита от SQL injection через параметризованные запросы
       final whereConditions = <String>[];
       final whereArgs = <dynamic>[];
 
@@ -530,6 +540,7 @@ class ChatCache {
         whereArgs.add(endDateInclusive.toIso8601String());
       }
 
+      // Безопасно: whereClause содержит только шаблоны с ?, не пользовательский ввод
       final whereClause = whereConditions.isNotEmpty
           ? 'WHERE ${whereConditions.join(' AND ')}'
           : '';
