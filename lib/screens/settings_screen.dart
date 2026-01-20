@@ -19,9 +19,11 @@ class SettingsScreen extends StatefulWidget {
 class _SettingsScreenState extends State<SettingsScreen> {
   final AuthManager _authManager = AuthManager();
   bool _isLoading = true;
+  bool _isUpdatingProvider = false;
   String? _provider;
   String _maskedApiKey = '';
   String? _errorMessage;
+  String? _successMessage;
 
   @override
   void initState() {
@@ -34,6 +36,7 @@ class _SettingsScreenState extends State<SettingsScreen> {
     setState(() {
       _isLoading = true;
       _errorMessage = null;
+      _successMessage = null;
     });
 
     try {
@@ -61,6 +64,80 @@ class _SettingsScreenState extends State<SettingsScreen> {
     }
   }
 
+  /// Обрабатывает смену провайдера.
+  Future<void> _handleProviderChange(String? newProvider) async {
+    if (newProvider == null || newProvider == _provider) {
+      return;
+    }
+
+    setState(() {
+      _isUpdatingProvider = true;
+      _errorMessage = null;
+      _successMessage = null;
+    });
+
+    try {
+      final result = await _authManager.updateProvider(newProvider);
+      
+      if (mounted) {
+        if (result.success) {
+          setState(() {
+            _provider = newProvider;
+            _successMessage = result.message;
+            _isUpdatingProvider = false;
+          });
+          
+          // Показываем сообщение об успехе
+          ScaffoldMessenger.of(context).showSnackBar(
+            SnackBar(
+              content: Text(result.message),
+              backgroundColor: AppStyles.successColor,
+              duration: const Duration(seconds: 3),
+            ),
+          );
+          
+          // Очищаем сообщение через 3 секунды
+          Future.delayed(const Duration(seconds: 3), () {
+            if (mounted) {
+              setState(() {
+                _successMessage = null;
+              });
+            }
+          });
+        } else {
+          setState(() {
+            _errorMessage = result.message;
+            _isUpdatingProvider = false;
+          });
+          
+          // Показываем сообщение об ошибке
+          ScaffoldMessenger.of(context).showSnackBar(
+            SnackBar(
+              content: Text(result.message),
+              backgroundColor: AppStyles.errorColor,
+              duration: const Duration(seconds: 5),
+            ),
+          );
+        }
+      }
+    } catch (e) {
+      if (mounted) {
+        setState(() {
+          _errorMessage = 'Ошибка обновления провайдера: $e';
+          _isUpdatingProvider = false;
+        });
+        
+        ScaffoldMessenger.of(context).showSnackBar(
+          SnackBar(
+            content: Text('Ошибка обновления провайдера: $e'),
+            backgroundColor: AppStyles.errorColor,
+            duration: const Duration(seconds: 5),
+          ),
+        );
+      }
+    }
+  }
+
   /// Маскирует API ключ, оставляя только первые и последние символы видимыми.
   ///
   /// Пример: `sk-or-v1-abc123def456` -> `sk-or-v1-***...***456`
@@ -78,20 +155,6 @@ class _SettingsScreenState extends State<SettingsScreen> {
     final prefix = apiKey.substring(0, 8);
     final suffix = apiKey.substring(apiKey.length - 4);
     return '$prefix...$suffix';
-  }
-
-  /// Получает читаемое название провайдера.
-  String _getProviderDisplayName(String? provider) {
-    switch (provider) {
-      case 'openrouter':
-        return 'OpenRouter';
-      case 'vsegpt':
-        return 'VSEGPT';
-      case null:
-        return 'Не установлен';
-      default:
-        return provider;
-    }
   }
 
   /// Получает иконку провайдера.
@@ -217,39 +280,116 @@ class _SettingsScreenState extends State<SettingsScreen> {
             ],
           ),
           const SizedBox(height: AppStyles.padding),
-          Container(
-            padding: const EdgeInsets.all(AppStyles.paddingSmall),
-            decoration: BoxDecoration(
-              color: AppStyles.surfaceColor,
-              borderRadius: BorderRadius.circular(AppStyles.borderRadius),
-              border: Border.all(
-                color: _getProviderColor(_provider).withValues(alpha: 0.3),
-                width: 1,
+          // Переключатель провайдера
+          SegmentedButton<String>(
+            segments: const [
+              ButtonSegment<String>(
+                value: 'openrouter',
+                label: Text('OpenRouter'),
+                icon: Icon(Icons.cloud),
               ),
-            ),
-            child: Row(
+              ButtonSegment<String>(
+                value: 'vsegpt',
+                label: Text('VSEGPT'),
+                icon: Icon(Icons.router),
+              ),
+            ],
+            selected: _provider != null ? {_provider!} : <String>{},
+            onSelectionChanged: _isUpdatingProvider
+                ? null
+                : (Set<String> newSelection) {
+                    if (newSelection.isNotEmpty) {
+                      _handleProviderChange(newSelection.first);
+                    }
+                  },
+            selectedIcon: const Icon(Icons.check),
+          ),
+          if (_isUpdatingProvider) ...[
+            const SizedBox(height: AppStyles.paddingSmall),
+            const Row(
               children: [
-                Container(
-                  padding: const EdgeInsets.symmetric(
-                    horizontal: AppStyles.paddingSmall,
-                    vertical: 4,
-                  ),
-                  decoration: BoxDecoration(
-                    color: _getProviderColor(_provider).withValues(alpha: 0.2),
-                    borderRadius: BorderRadius.circular(AppStyles.borderRadius),
-                  ),
-                  child: Text(
-                    _getProviderDisplayName(_provider),
-                    style: TextStyle(
-                      fontSize: 16,
-                      fontWeight: FontWeight.w600,
-                      color: _getProviderColor(_provider),
-                    ),
+                SizedBox(
+                  width: 16,
+                  height: 16,
+                  child: CircularProgressIndicator(strokeWidth: 2),
+                ),
+                SizedBox(width: AppStyles.paddingSmall),
+                Text(
+                  'Обновление провайдера...',
+                  style: TextStyle(
+                    color: AppStyles.textSecondary,
+                    fontSize: 14,
                   ),
                 ),
               ],
             ),
-          ),
+          ],
+          if (_successMessage != null) ...[
+            const SizedBox(height: AppStyles.paddingSmall),
+            Container(
+              padding: const EdgeInsets.all(AppStyles.paddingSmall),
+              decoration: BoxDecoration(
+                color: AppStyles.successColor.withValues(alpha: 0.1),
+                borderRadius: BorderRadius.circular(AppStyles.borderRadius),
+                border: Border.all(
+                  color: AppStyles.successColor,
+                  width: 1,
+                ),
+              ),
+              child: Row(
+                children: [
+                  const Icon(
+                    Icons.check_circle,
+                    color: AppStyles.successColor,
+                    size: 20,
+                  ),
+                  const SizedBox(width: AppStyles.paddingSmall),
+                  Expanded(
+                    child: Text(
+                      _successMessage!,
+                      style: const TextStyle(
+                        color: AppStyles.successColor,
+                        fontSize: 14,
+                      ),
+                    ),
+                  ),
+                ],
+              ),
+            ),
+          ],
+          if (_errorMessage != null) ...[
+            const SizedBox(height: AppStyles.paddingSmall),
+            Container(
+              padding: const EdgeInsets.all(AppStyles.paddingSmall),
+              decoration: BoxDecoration(
+                color: AppStyles.errorColor.withValues(alpha: 0.1),
+                borderRadius: BorderRadius.circular(AppStyles.borderRadius),
+                border: Border.all(
+                  color: AppStyles.errorColor,
+                  width: 1,
+                ),
+              ),
+              child: Row(
+                children: [
+                  const Icon(
+                    Icons.error_outline,
+                    color: AppStyles.errorColor,
+                    size: 20,
+                  ),
+                  const SizedBox(width: AppStyles.paddingSmall),
+                  Expanded(
+                    child: Text(
+                      _errorMessage!,
+                      style: const TextStyle(
+                        color: AppStyles.errorColor,
+                        fontSize: 14,
+                      ),
+                    ),
+                  ),
+                ],
+              ),
+            ),
+          ],
         ],
       ),
     );

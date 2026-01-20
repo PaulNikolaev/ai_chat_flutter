@@ -590,4 +590,89 @@ class AuthManager {
   Future<String?> getStoredProvider() async {
     return await storage.getProvider();
   }
+
+  /// Обновляет провайдера, сохраняя существующий API ключ и PIN.
+  ///
+  /// Валидирует, что текущий API ключ совместим с новым провайдером.
+  /// Если API ключ несовместим, возвращает ошибку.
+  ///
+  /// **Параметры:**
+  /// - [newProvider]: Новый провайдер ('openrouter' или 'vsegpt').
+  ///
+  /// **Возвращает:** [AuthResult] с результатом операции.
+  Future<AuthResult> updateProvider(String newProvider) async {
+    // Проверяем, что провайдер валиден
+    if (newProvider != 'openrouter' && newProvider != 'vsegpt') {
+      return const AuthResult(
+        success: false,
+        message: 'Invalid provider. Supported providers: openrouter, vsegpt',
+      );
+    }
+
+    // Получаем текущие данные
+    final authData = await storage.getAuth();
+    if (authData == null) {
+      return const AuthResult(
+        success: false,
+        message: 'Authentication data not found. Please login first.',
+      );
+    }
+
+    final currentApiKey = authData['api_key'] ?? '';
+    final currentPinHash = authData['pin_hash'] ?? '';
+    final currentProvider = authData['provider'];
+
+    if (currentApiKey.isEmpty || currentPinHash.isEmpty) {
+      return const AuthResult(
+        success: false,
+        message: 'API key or PIN not found. Please login again.',
+      );
+    }
+
+    // Проверяем, что провайдер действительно изменился
+    if (currentProvider == newProvider) {
+      return const AuthResult(
+        success: true,
+        message: 'Provider is already set to this value.',
+      );
+    }
+
+    // Валидируем совместимость API ключа с новым провайдером
+    // OpenRouter ключи начинаются с sk-or-v1-, VSEGPT с sk-or-vv-
+    final isOpenRouterKey = currentApiKey.startsWith('sk-or-v1-');
+    final isVsegptKey = currentApiKey.startsWith('sk-or-vv-');
+
+    if (newProvider == 'openrouter' && !isOpenRouterKey) {
+      return const AuthResult(
+        success: false,
+        message: 'API key is not compatible with OpenRouter. OpenRouter keys must start with "sk-or-v1-". Please update your API key.',
+      );
+    }
+
+    if (newProvider == 'vsegpt' && !isVsegptKey) {
+      return const AuthResult(
+        success: false,
+        message: 'API key is not compatible with VSEGPT. VSEGPT keys must start with "sk-or-vv-". Please update your API key.',
+      );
+    }
+
+    // Обновляем провайдера в хранилище
+    final saved = await storage.saveAuth(
+      apiKey: currentApiKey,
+      pinHash: currentPinHash,
+      provider: newProvider,
+    );
+
+    if (!saved) {
+      return const AuthResult(
+        success: false,
+        message: 'Failed to update provider. Please try again.',
+      );
+    }
+
+    return AuthResult(
+      success: true,
+      message: 'Provider updated successfully to $newProvider',
+    );
+  }
 }
