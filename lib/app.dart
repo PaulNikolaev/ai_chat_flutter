@@ -3,7 +3,8 @@ import 'package:flutter/material.dart';
 import 'api/openrouter_client.dart';
 import 'auth/auth_manager.dart';
 import 'config/env.dart';
-import 'screens/chat_screen.dart';
+import 'navigation/app_router.dart';
+import 'screens/home_screen.dart';
 import 'ui/login/login_screen.dart';
 import 'ui/styles.dart';
 import 'ui/theme.dart';
@@ -289,10 +290,18 @@ class _MyAppState extends State<MyApp> {
 
   @override
   Widget build(BuildContext context) {
+    // Обновляем роутер с текущими значениями перед построением
+    AppRouter.apiClient = _apiClient;
+    AppRouter.onLoginSuccess = _handleLoginSuccess;
+    AppRouter.onLogout = _handleLogout;
+
     return MaterialApp(
       title: 'AI Chat',
       debugShowCheckedModeBanner: false,
       theme: AppTheme.darkTheme,
+      initialRoute: _isAuthenticated ? AppRoutes.home : AppRoutes.login,
+      routes: AppRouter.routes,
+      onGenerateRoute: AppRouter.onGenerateRoute,
       home: _isLoading
           ? const Scaffold(
               body: Center(
@@ -300,7 +309,7 @@ class _MyAppState extends State<MyApp> {
               ),
             )
           : _isAuthenticated
-              ? ChatScreen(
+              ? HomeScreen(
                   apiClient: _apiClient,
                   onLogout: _handleLogout,
                 )
