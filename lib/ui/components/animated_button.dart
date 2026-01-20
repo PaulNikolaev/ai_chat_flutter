@@ -2,7 +2,17 @@ import 'package:flutter/material.dart';
 
 /// Анимированная кнопка с улучшенной обратной связью.
 ///
-/// Предоставляет плавные анимации при нажатии и hover эффекты.
+/// Предоставляет плавные анимации при нажатии и hover эффекты для десктопных платформ.
+/// Использует scale анимацию для тактильной обратной связи.
+///
+/// **Пример использования:**
+/// ```dart
+/// AnimatedButton(
+///   onPressed: () => print('Нажато'),
+///   useScaleAnimation: true,
+///   child: Text('Нажми меня'),
+/// )
+/// ```
 class AnimatedButton extends StatefulWidget {
   /// Виджет-ребенок кнопки.
   final Widget child;

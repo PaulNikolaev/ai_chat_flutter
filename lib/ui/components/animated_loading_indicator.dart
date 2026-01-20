@@ -3,6 +3,16 @@ import 'package:flutter/material.dart';
 /// Анимированный индикатор загрузки с плавными переходами.
 ///
 /// Предоставляет улучшенную визуальную обратную связь при загрузке данных.
+/// Поддерживает пульсирующую анимацию и настраиваемые параметры отображения.
+///
+/// **Пример использования:**
+/// ```dart
+/// AnimatedLoadingIndicator(
+///   size: 40,
+///   usePulse: true,
+///   message: 'Загрузка данных...',
+/// )
+/// ```
 class AnimatedLoadingIndicator extends StatefulWidget {
   /// Размер индикатора.
   final double? size;
