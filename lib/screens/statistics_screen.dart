@@ -876,7 +876,9 @@ class StatisticsScreenState extends State<StatisticsScreen> {
               final isSmall = screenSize == 'small';
 
               // Фильтр по модели
+              // Используем key для кэширования FutureBuilder и предотвращения повторных вызовов
               final modelFilter = FutureBuilder<Map<String, Map<String, int>>>(
+                key: const ValueKey('model_statistics'),
                 future: analytics.getModelStatistics(),
                 builder: (context, snapshot) {
                   final allModels = snapshot.data?.keys.toList() ?? [];

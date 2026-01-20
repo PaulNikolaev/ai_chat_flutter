@@ -39,6 +39,10 @@ class MessageBubble extends StatelessWidget {
   @override
   Widget build(BuildContext context) {
     final theme = Theme.of(context);
+    // Вычисляем цвета один раз, а не в LayoutBuilder
+    final bubbleColor =
+        isUser ? AppStyles.buttonPrimaryColor : AppStyles.cardColor;
+    final borderColor = isUser ? Colors.transparent : AppStyles.borderColor;
 
     return LayoutBuilder(
       key: ValueKey('${text.hashCode}_$isUser'),
@@ -47,11 +51,6 @@ class MessageBubble extends StatelessWidget {
         final maxWidth = constraints.maxWidth *
             (PlatformUtils.isMobile() ? 0.9 : maxWidthFactor.clamp(0.4, 0.9));
 
-        final bubbleColor =
-            isUser ? AppStyles.buttonPrimaryColor : AppStyles.cardColor;
-        const textColor = AppStyles.textPrimary;
-        final borderColor = isUser ? Colors.transparent : AppStyles.borderColor;
-
         return Row(
           mainAxisAlignment:
               isUser ? MainAxisAlignment.end : MainAxisAlignment.start,
@@ -59,7 +58,7 @@ class MessageBubble extends StatelessWidget {
           children: [
             ConstrainedBox(
               constraints: BoxConstraints(maxWidth: maxWidth),
-              child: DecoratedBox(
+                child: DecoratedBox(
                 decoration: BoxDecoration(
                   color: bubbleColor,
                   borderRadius: BorderRadius.only(
@@ -97,7 +96,7 @@ class MessageBubble extends StatelessWidget {
                         child: SelectableText(
                           text,
                           style: theme.textTheme.bodyMedium?.copyWith(
-                            color: textColor,
+                            color: AppStyles.textPrimary,
                           ),
                         ),
                       ),

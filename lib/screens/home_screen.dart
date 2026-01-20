@@ -210,6 +210,7 @@ class _HomeScreenState extends State<HomeScreen> {
 
   @override
   Widget build(BuildContext context) {
+    // Кэшируем значение isMobile, чтобы не вычислять его при каждом rebuild
     final isMobile = PlatformUtils.isMobile();
 
     // Для мобильных устройств используем BottomNavigationBar

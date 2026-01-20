@@ -1,3 +1,4 @@
+import 'package:flutter/foundation.dart';
 import 'package:flutter/material.dart';
 
 import 'package:ai_chat/models/models.dart';
@@ -86,36 +87,46 @@ class _ModelSelectorState extends State<ModelSelector> {
   void _filterModels() {
     final searchText = _searchController.text.toLowerCase().trim();
 
-    setState(() {
-      List<ModelInfo> filtered;
-      if (searchText.isEmpty) {
-        filtered = widget.models;
-      } else {
-        filtered = widget.models.where((model) {
-          final nameMatch = model.name.toLowerCase().contains(searchText);
-          final idMatch = model.id.toLowerCase().contains(searchText);
-          final descriptionMatch =
-              model.description?.toLowerCase().contains(searchText) ?? false;
-          return nameMatch || idMatch || descriptionMatch;
-        }).toList();
-      }
+    // Вычисляем отфильтрованный список вне setState для оптимизации
+    List<ModelInfo> filtered;
+    if (searchText.isEmpty) {
+      filtered = widget.models;
+    } else {
+      filtered = widget.models.where((model) {
+        final nameMatch = model.name.toLowerCase().contains(searchText);
+        final idMatch = model.id.toLowerCase().contains(searchText);
+        final descriptionMatch =
+            model.description?.toLowerCase().contains(searchText) ?? false;
+        return nameMatch || idMatch || descriptionMatch;
+      }).toList();
+    }
 
-      // Удаляем дубликаты по id (на случай, если они все еще есть)
-      final uniqueModels = <String, ModelInfo>{};
-      for (final model in filtered) {
-        if (model.id.isNotEmpty && !uniqueModels.containsKey(model.id)) {
-          uniqueModels[model.id] = model;
-        }
+    // Удаляем дубликаты по id (на случай, если они все еще есть)
+    final uniqueModels = <String, ModelInfo>{};
+    for (final model in filtered) {
+      if (model.id.isNotEmpty && !uniqueModels.containsKey(model.id)) {
+        uniqueModels[model.id] = model;
       }
-      _filteredModels = uniqueModels.values.toList();
+    }
+    final newFilteredModels = uniqueModels.values.toList();
 
-      // Проверяем, что выбранная модель существует в отфильтрованном списке
-      if (_selectedModelId != null &&
-          !_filteredModels.any((m) => m.id == _selectedModelId)) {
-        _selectedModelId =
-            _filteredModels.isNotEmpty ? _filteredModels.first.id : null;
-      }
-    });
+    // Проверяем, что выбранная модель существует в отфильтрованном списке
+    String? newSelectedModelId = _selectedModelId;
+    if (_selectedModelId != null &&
+        !newFilteredModels.any((m) => m.id == _selectedModelId)) {
+      newSelectedModelId =
+          newFilteredModels.isNotEmpty ? newFilteredModels.first.id : null;
+    }
+
+    // Обновляем состояние только если что-то изменилось
+    if (newFilteredModels.length != _filteredModels.length ||
+        newSelectedModelId != _selectedModelId ||
+        !listEquals(newFilteredModels, _filteredModels)) {
+      setState(() {
+        _filteredModels = newFilteredModels;
+        _selectedModelId = newSelectedModelId;
+      });
+    }
   }
 
   void _onModelChanged(String? modelId) {
