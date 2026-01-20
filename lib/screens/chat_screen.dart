@@ -140,7 +140,8 @@ class _ChatScreenState extends State<ChatScreen> {
 
     try {
       _logger?.debug('Loading chat history from cache');
-      final history = await ChatCache.instance.getChatHistory(limit: 100);
+      final history = await ChatCache.instance.getChatHistory(
+          limit: AppConstants.maxChatHistoryMessages);
 
       // Переворачиваем список, так как getChatHistory возвращает DESC (новейшие первыми),
       // а для отображения нужны старые сверху, новые снизу

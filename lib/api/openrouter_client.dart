@@ -32,11 +32,30 @@ class OpenRouterClient {
   String? _cachedBalance;
   DateTime? _balanceUpdatedAt;
 
+  /// Максимальный возраст кэша баланса в секундах (60 секунд).
+  static const int _balanceCacheMaxAgeSeconds = 60;
+
   /// Очищает кэш моделей.
   ///
   /// Вызывается при переключении провайдера для принудительной перезагрузки моделей.
   void clearModelCache() {
     _modelCache = null;
+  }
+
+  /// Очищает кэш баланса.
+  void clearBalanceCache() {
+    _cachedBalance = null;
+    _balanceUpdatedAt = null;
+  }
+
+  /// Закрывает HTTP клиент и освобождает ресурсы.
+  ///
+  /// Должен вызываться при завершении работы с клиентом для предотвращения утечек памяти.
+  /// Очищает кэши моделей и баланса для освобождения памяти.
+  void dispose() {
+    _client.close();
+    _modelCache = null;
+    clearBalanceCache();
   }
 
   OpenRouterClient._({
@@ -465,8 +484,8 @@ class OpenRouterClient {
     if (!forceRefresh &&
         _cachedBalance != null &&
         _balanceUpdatedAt != null &&
-        DateTime.now().difference(_balanceUpdatedAt!) <
-            const Duration(minutes: 1)) {
+        DateTime.now().difference(_balanceUpdatedAt!).inSeconds <
+            _balanceCacheMaxAgeSeconds * 2) {
       return _cachedBalance!;
     }
 
@@ -755,10 +774,6 @@ class OpenRouterClient {
     return null;
   }
 
-  /// Освобождает ресурсы HTTP клиента.
-  void dispose() {
-    _client.close();
-  }
 }
 
 /// Результат чата с AI моделью.
