@@ -1,5 +1,9 @@
+import 'dart:convert';
+import 'dart:io';
+
 import 'package:flutter/material.dart';
 import 'package:intl/intl.dart';
+import 'package:path_provider/path_provider.dart';
 
 import '../api/openrouter_client.dart';
 import '../models/analytics_record.dart';
@@ -409,6 +413,11 @@ class _StatisticsScreenState extends State<StatisticsScreen> {
         ),
         elevation: 0,
         actions: [
+          IconButton(
+            icon: const Icon(Icons.download),
+            tooltip: 'Экспорт статистики',
+            onPressed: _exportStatistics,
+          ),
           IconButton(
             icon: const Icon(Icons.refresh),
             tooltip: 'Обновить',
@@ -1012,6 +1021,15 @@ class _StatisticsScreenState extends State<StatisticsScreen> {
                       overflow: TextOverflow.ellipsis,
                     ),
                   ),
+                  IconButton(
+                    icon: const Icon(
+                      Icons.info_outline,
+                      size: 20,
+                      color: AppStyles.accentColor,
+                    ),
+                    tooltip: 'Детальная статистика',
+                    onPressed: () => _showModelDetailsDialog(context, model),
+                  ),
                 ],
               ),
               const SizedBox(height: AppStyles.paddingSmall),
@@ -1272,5 +1290,368 @@ class _StatisticsScreenState extends State<StatisticsScreen> {
         ),
       ),
     );
+  }
+
+  /// Показывает детальный диалог со статистикой по конкретной модели.
+  Future<void> _showModelDetailsDialog(BuildContext context, String model) async {
+    final analytics = widget.analytics ?? Analytics();
+    
+    // Загружаем историю для этой модели
+    final records = await analytics.getHistoryByModel(model);
+    
+    if (records.isEmpty) {
+      if (context.mounted) {
+        ScaffoldMessenger.of(context).showSnackBar(
+          const SnackBar(
+            content: Text('Нет данных для этой модели'),
+          ),
+        );
+      }
+      return;
+    }
+    
+    // Рассчитываем статистику
+    final totalRequests = records.length;
+    final totalTokens = records.fold<int>(0, (sum, record) => sum + record.tokensUsed);
+    final avgTokens = totalTokens / totalRequests;
+    final avgResponseTime = records.fold<double>(0, (sum, record) => sum + record.responseTime) / totalRequests;
+    final avgMessageLength = records.fold<int>(0, (sum, record) => sum + record.messageLength) / totalRequests;
+    
+    final minResponseTime = records.map((r) => r.responseTime).reduce((a, b) => a < b ? a : b);
+    final maxResponseTime = records.map((r) => r.responseTime).reduce((a, b) => a > b ? a : b);
+    
+    final minTokens = records.map((r) => r.tokensUsed).reduce((a, b) => a < b ? a : b);
+    final maxTokens = records.map((r) => r.tokensUsed).reduce((a, b) => a > b ? a : b);
+    
+    final firstUse = records.first.timestamp;
+    final lastUse = records.last.timestamp;
+    
+    if (!context.mounted) return;
+    
+    showDialog(
+      context: context,
+      builder: (context) => Dialog(
+        backgroundColor: AppStyles.cardColor,
+        shape: RoundedRectangleBorder(
+          borderRadius: BorderRadius.circular(AppStyles.borderRadius),
+        ),
+        child: Container(
+          constraints: const BoxConstraints(maxWidth: 600),
+          padding: const EdgeInsets.all(AppStyles.padding),
+          child: SingleChildScrollView(
+            child: Column(
+              mainAxisSize: MainAxisSize.min,
+              crossAxisAlignment: CrossAxisAlignment.start,
+              children: [
+                Row(
+                  mainAxisAlignment: MainAxisAlignment.spaceBetween,
+                  children: [
+                    Expanded(
+                      child: Row(
+                        children: [
+                          const Icon(
+                            Icons.info,
+                            color: AppStyles.accentColor,
+                            size: 24,
+                          ),
+                          const SizedBox(width: 8),
+                          Expanded(
+                            child: Text(
+                              model,
+                              style: const TextStyle(
+                                fontSize: 20,
+                                fontWeight: FontWeight.bold,
+                                color: AppStyles.textPrimary,
+                              ),
+                              overflow: TextOverflow.ellipsis,
+                            ),
+                          ),
+                        ],
+                      ),
+                    ),
+                    IconButton(
+                      icon: const Icon(Icons.close),
+                      onPressed: () => Navigator.of(context).pop(),
+                    ),
+                  ],
+                ),
+                const SizedBox(height: AppStyles.padding),
+                const Divider(),
+                const SizedBox(height: AppStyles.padding),
+                // Общая статистика
+                _buildDetailStatRow(
+                  'Всего запросов',
+                  totalRequests.toString(),
+                  Icons.message,
+                ),
+                _buildDetailStatRow(
+                  'Всего токенов',
+                  _formatTokens(totalTokens),
+                  Icons.token,
+                ),
+                _buildDetailStatRow(
+                  'Среднее токенов на запрос',
+                  _formatTokens(avgTokens.round()),
+                  Icons.trending_up,
+                ),
+                const SizedBox(height: AppStyles.paddingSmall),
+                const Divider(),
+                const SizedBox(height: AppStyles.paddingSmall),
+                // Время ответа
+                _buildDetailStatRow(
+                  'Среднее время ответа',
+                  '${avgResponseTime.toStringAsFixed(2)} сек',
+                  Icons.speed,
+                ),
+                _buildDetailStatRow(
+                  'Минимальное время',
+                  '${minResponseTime.toStringAsFixed(2)} сек',
+                  Icons.arrow_downward,
+                ),
+                _buildDetailStatRow(
+                  'Максимальное время',
+                  '${maxResponseTime.toStringAsFixed(2)} сек',
+                  Icons.arrow_upward,
+                ),
+                const SizedBox(height: AppStyles.paddingSmall),
+                const Divider(),
+                const SizedBox(height: AppStyles.paddingSmall),
+                // Токены
+                _buildDetailStatRow(
+                  'Минимум токенов',
+                  _formatTokens(minTokens),
+                  Icons.remove_circle_outline,
+                ),
+                _buildDetailStatRow(
+                  'Максимум токенов',
+                  _formatTokens(maxTokens),
+                  Icons.add_circle_outline,
+                ),
+                const SizedBox(height: AppStyles.paddingSmall),
+                const Divider(),
+                const SizedBox(height: AppStyles.paddingSmall),
+                // Дополнительная информация
+                _buildDetailStatRow(
+                  'Средняя длина сообщения',
+                  '${avgMessageLength.round()} символов',
+                  Icons.text_fields,
+                ),
+                _buildDetailStatRow(
+                  'Первый запрос',
+                  DateFormat('yyyy-MM-dd HH:mm').format(firstUse),
+                  Icons.event_available,
+                ),
+                _buildDetailStatRow(
+                  'Последний запрос',
+                  DateFormat('yyyy-MM-dd HH:mm').format(lastUse),
+                  Icons.event,
+                ),
+                const SizedBox(height: AppStyles.padding),
+                Row(
+                  mainAxisAlignment: MainAxisAlignment.end,
+                  children: [
+                    TextButton.icon(
+                      onPressed: () async {
+                        await _exportModelStatistics(model, records);
+                        if (context.mounted) {
+                          Navigator.of(context).pop();
+                        }
+                      },
+                      icon: const Icon(Icons.download),
+                      label: const Text('Экспорт модели'),
+                    ),
+                    const SizedBox(width: AppStyles.paddingSmall),
+                    ElevatedButton(
+                      onPressed: () => Navigator.of(context).pop(),
+                      child: const Text('Закрыть'),
+                    ),
+                  ],
+                ),
+              ],
+            ),
+          ),
+        ),
+      ),
+    );
+  }
+
+  /// Строит строку статистики для детального диалога.
+  Widget _buildDetailStatRow(String label, String value, IconData icon) {
+    return Padding(
+      padding: const EdgeInsets.only(bottom: AppStyles.paddingSmall),
+      child: Row(
+        children: [
+          Icon(icon, size: 20, color: AppStyles.textSecondary),
+          const SizedBox(width: 12),
+          Expanded(
+            child: Text(
+              label,
+              style: const TextStyle(
+                color: AppStyles.textSecondary,
+                fontSize: 14,
+              ),
+            ),
+          ),
+          Text(
+            value,
+            style: const TextStyle(
+              color: AppStyles.textPrimary,
+              fontSize: 14,
+              fontWeight: FontWeight.bold,
+            ),
+          ),
+        ],
+      ),
+    );
+  }
+
+  /// Экспортирует всю статистику в файлы (JSON и CSV).
+  Future<void> _exportStatistics() async {
+    final analytics = widget.analytics ?? Analytics();
+    
+    try {
+      // Получаем всю историю
+      final history = await analytics.getHistory();
+      
+      if (history.isEmpty) {
+        if (!mounted) return;
+        ScaffoldMessenger.of(context).showSnackBar(
+          const SnackBar(
+            content: Text('Нет данных для экспорта'),
+          ),
+        );
+        return;
+      }
+      
+      // Получаем директорию для сохранения
+      Directory? directory;
+      try {
+        if (Platform.isWindows || Platform.isLinux || Platform.isMacOS) {
+          directory = await getDownloadsDirectory();
+          directory ??= await getApplicationDocumentsDirectory();
+        } else {
+          directory = await getApplicationDocumentsDirectory();
+        }
+      } catch (e) {
+        directory = Directory.current;
+      }
+      
+      final timestamp = DateFormat('yyyy-MM-dd_HH-mm-ss').format(DateTime.now());
+      
+      // Экспортируем в JSON
+      final jsonFile = File('${directory.path}/statistics_$timestamp.json');
+      final jsonData = {
+        'export_date': DateTime.now().toIso8601String(),
+        'total_records': history.length,
+        'records': history.map((r) => r.toJson()).toList(),
+        'summary': await analytics.getModelStatistics(),
+      };
+      await jsonFile.writeAsString(
+        const JsonEncoder.withIndent('  ').convert(jsonData),
+      );
+      
+      // Экспортируем в CSV
+      final csvFile = File('${directory.path}/statistics_$timestamp.csv');
+      final csvBuffer = StringBuffer();
+      // Заголовки CSV
+      csvBuffer.writeln('ID,Timestamp,Model,Message Length,Response Time (s),Tokens Used');
+      // Данные
+      for (final record in history) {
+        csvBuffer.writeln(
+          '${record.id ?? ""},'
+          '${record.timestamp.toIso8601String()},'
+          '"${record.model}",'
+          '${record.messageLength},'
+          '${record.responseTime},'
+          '${record.tokensUsed}',
+        );
+      }
+      await csvFile.writeAsString(csvBuffer.toString());
+      
+      if (!mounted) return;
+      ScaffoldMessenger.of(context).showSnackBar(
+        SnackBar(
+          content: Text('Статистика экспортирована:\n${jsonFile.path}\n${csvFile.path}'),
+          duration: const Duration(seconds: 5),
+          action: SnackBarAction(
+            label: 'OK',
+            onPressed: () {},
+          ),
+        ),
+      );
+    } catch (e) {
+      debugPrint('Error exporting statistics: $e');
+      if (!mounted) return;
+      ScaffoldMessenger.of(context).showSnackBar(
+        SnackBar(
+          content: Text('Ошибка при экспорте: $e'),
+          backgroundColor: AppStyles.errorColor,
+        ),
+      );
+    }
+  }
+
+  /// Экспортирует статистику конкретной модели.
+  Future<void> _exportModelStatistics(String model, List<AnalyticsRecord> records) async {
+    try {
+      Directory? directory;
+      try {
+        if (Platform.isWindows || Platform.isLinux || Platform.isMacOS) {
+          directory = await getDownloadsDirectory();
+          directory ??= await getApplicationDocumentsDirectory();
+        } else {
+          directory = await getApplicationDocumentsDirectory();
+        }
+      } catch (e) {
+        directory = Directory.current;
+      }
+      
+      final timestamp = DateFormat('yyyy-MM-dd_HH-mm-ss').format(DateTime.now());
+      final safeModelName = model.replaceAll(RegExp(r'[^\w\-_.]'), '_');
+      
+      // Экспортируем в JSON
+      final jsonFile = File('${directory.path}/model_${safeModelName}_$timestamp.json');
+      final jsonData = {
+        'export_date': DateTime.now().toIso8601String(),
+        'model': model,
+        'total_records': records.length,
+        'records': records.map((r) => r.toJson()).toList(),
+      };
+      await jsonFile.writeAsString(
+        const JsonEncoder.withIndent('  ').convert(jsonData),
+      );
+      
+      // Экспортируем в CSV
+      final csvFile = File('${directory.path}/model_${safeModelName}_$timestamp.csv');
+      final csvBuffer = StringBuffer();
+      csvBuffer.writeln('ID,Timestamp,Message Length,Response Time (s),Tokens Used');
+      for (final record in records) {
+        csvBuffer.writeln(
+          '${record.id ?? ""},'
+          '${record.timestamp.toIso8601String()},'
+          '${record.messageLength},'
+          '${record.responseTime},'
+          '${record.tokensUsed}',
+        );
+      }
+      await csvFile.writeAsString(csvBuffer.toString());
+      
+      if (!mounted) return;
+      ScaffoldMessenger.of(context).showSnackBar(
+        SnackBar(
+          content: Text('Статистика модели экспортирована:\n${jsonFile.path}'),
+          duration: const Duration(seconds: 5),
+        ),
+      );
+    } catch (e) {
+      debugPrint('Error exporting model statistics: $e');
+      if (!mounted) return;
+      ScaffoldMessenger.of(context).showSnackBar(
+        SnackBar(
+          content: Text('Ошибка при экспорте: $e'),
+          backgroundColor: AppStyles.errorColor,
+        ),
+      );
+    }
   }
 }
