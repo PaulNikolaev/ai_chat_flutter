@@ -45,26 +45,61 @@ temp/
 /build/
 *.apk
 *.aab
-android/
-ios/
-linux/
-macos/
-web/
-windows/
-test/
 export/
 .metadata
 
+# Platform build artifacts
+android/build/
+android/.gradle/
+android/app/build/
+android/app/.cxx/
+android/local.properties
+android/.idea/
+ios/build/
+ios/Pods/
+ios/.symlinks/
+ios/Flutter/Flutter.framework
+ios/Flutter/Flutter.podspec
+ios/Flutter/Generated.xcconfig
+ios/Flutter/flutter_export_environment.sh
+ios/.metadata
+ios/Flutter/App.framework
+ios/ServiceDefinitions.json
+ios/Runner/GeneratedPluginRegistrant.*
+linux/build/
+macos/build/
+macos/Flutter/Flutter-Debug.xcconfig
+macos/Flutter/Flutter-Release.xcconfig
+macos/Flutter/GeneratedPluginRegistrant.swift
+web/build/
+windows/build/
+windows/flutter/generated_plugin_registrant.cc
+windows/flutter/generated_plugin_registrant.h
+windows/flutter/generated_plugins.cmake
+
 # Environment variables
 .env
+.env.local
+.env.*.local
 
 # Logs
 logs/
 *.log
+
+# Test coverage
+coverage/
+*.lcov
 
 # Cache
 .cache/
 exports/
 chat_cache.db
 
-CODE_REVIEW_PLAN.md
+# OS files
+.DS_Store
+.DS_Store?
+._*
+.Spotlight-V100
+.Trashes
+ehthumbs.db
+Thumbs.db

@@ -54,7 +54,7 @@ flutter build apk --release
 ```
 Результат: `build/app/outputs/flutter-apk/app-release.apk`
 
-**Примечание:** Если возникают ошибки с кэшем Kotlin компилятора, сборка все равно может завершиться успешно. Для устранения предупреждений можно удалить проблемную папку кэша или использовать флаг `--no-incremental`.
+**Примечание:** Если возникают ошибки с кэшем Kotlin компилятора, см. раздел "Решение проблем" ниже.
 
 ### Для конкретной архитектуры
 ```bash
@@ -126,19 +126,50 @@ flutter build apk --release --analyze-size    # Анализ размера
   ```
   Это обновит проект до Flutter v2 embedding
 
-- **Ошибки кэша Kotlin компилятора**:
-  ```bash
-  # Остановка Gradle daemon
-  cd android && ./gradlew --stop && cd ..
+- **Ошибки кэша Kotlin компилятора** (например, "Could not delete cacheable/caches-jvm" или "this and base files have different roots"):
   
-  # Очистка кэша
+  **Проблема "different roots" (D:\ и C:\):** Возникает, когда проект находится на одном диске (например, D:\), а Flutter Pub Cache на другом (C:\). Kotlin компилятор не может корректно обработать пути с разными корнями.
+  
+  **Решение:** В файле `android/gradle.properties` добавлено `kotlin.incremental=false` для отключения инкрементальной компиляции. Это решает проблему, но немного замедляет сборку.
+  
+  **Вариант 1: Полная очистка кэша (рекомендуется)**
+  ```powershell
+  # Остановка всех Java/Gradle процессов
+  Get-Process | Where-Object {$_.ProcessName -like "*java*" -or $_.ProcessName -like "*gradle*"} | Stop-Process -Force -ErrorAction SilentlyContinue
+  
+  # Удаление проблемной папки кэша
+  Remove-Item -Recurse -Force "build\shared_preferences_android" -ErrorAction SilentlyContinue
+  
+  # Удаление кэша Gradle
+  Remove-Item -Recurse -Force ".gradle" -ErrorAction SilentlyContinue
+  Set-Location android; ./gradlew --stop; Remove-Item -Recurse -Force ".gradle" -ErrorAction SilentlyContinue; Set-Location ..
+  
+  # Очистка Flutter и пересборка
   flutter clean
-  cd android && ./gradlew clean && cd ..
-  
-  # Сборка без инкрементального кэша (если проблема сохраняется)
-  flutter build apk --release --no-incremental
+  flutter build apk --release
   ```
-  Примечание: Ошибки кэша могут появляться, но сборка обычно завершается успешно
+  
+  **Вариант 2: Отключение кэша Gradle**
+  
+  Создайте или отредактируйте `android/gradle.properties` и добавьте:
+  ```
+  org.gradle.caching=false
+  ```
+  
+  Затем выполните:
+  ```bash
+  flutter clean
+  flutter build apk --release
+  ```
+  
+  **Вариант 3: Сборка через Gradle напрямую**
+  ```bash
+  Set-Location android
+  ./gradlew assembleRelease --no-build-cache --rerun-tasks
+  Set-Location ..
+  ```
+  
+  Эти методы решают проблемы с поврежденным кэшем Kotlin компилятора, вызванные конфликтами путей или заблокированными файлами.
 
 - **Проблемы с разрешениями**: Убедитесь, что в `android/app/src/main/AndroidManifest.xml` добавлены:
   - `INTERNET`

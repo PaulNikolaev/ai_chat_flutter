@@ -3,16 +3,20 @@ flutter_launcher_icons:
   ios: false
   
   # Иконка для Android (PNG)
+  # Указываем полный путь для уверенности
   image_path: "assets/icon.png"
   
-  # Иконка для Windows (ICO)
+  # Иконка для Windows (автоматическая конвертация PNG в ICO)
   windows:
-    image_path: "assets/icon.ico"
+    generate: true
+    image_path: "assets/icon.png"
     icon_size: 256
   
-  # Адаптивные иконки для Android (опционально)
+  # Адаптивные иконки для Android
   adaptive_icon_background: "#ffffff"
   adaptive_icon_foreground: "assets/icon.png"
   
   # Минимальный SDK для Android
-  min_sdk_android: 21
+  min_sdk_android: 21  
+  # Убедимся, что используется правильный файл
+  # Путь относительно корня проекта
