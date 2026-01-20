@@ -45,6 +45,12 @@ class AppStyles {
 
   // ==================== Размеры и отступы ====================
 
+  /// Минимальный размер тач-таргета согласно WCAG (48x48 логических пикселей).
+  ///
+  /// Соответствует рекомендациям Material Design и Web Content Accessibility Guidelines.
+  /// Все интерактивные элементы должны иметь минимум 48dp для удобства использования.
+  static const double minTouchTargetSize = 48.0;
+
   /// Стандартный отступ
   static const double padding = 20.0;
 

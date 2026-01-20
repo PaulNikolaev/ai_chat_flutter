@@ -949,54 +949,10 @@ class _ChatScreenState extends State<ChatScreen> {
                         children: [
                           SizedBox(
                             height: inputHeight,
-                            child: TextField(
-                              controller: _messageController,
-                              decoration: InputDecoration(
-                                hintText: 'Введите сообщение здесь...',
-                                border: OutlineInputBorder(
-                                  borderRadius: BorderRadius.circular(
-                                    AppStyles.borderRadius,
-                                  ),
-                                ),
-                                contentPadding: EdgeInsets.all(
-                                  screenSize == 'small'
-                                      ? AppStyles.paddingSmall
-                                      : AppStyles.paddingSmall * 1.5,
-                                ),
-                              ),
-                              maxLines: null,
-                              textInputAction: TextInputAction.newline,
-                              style: AppStyles.primaryTextStyle,
-                              enabled: !_isLoading,
-                            ),
-                          ),
-                          const SizedBox(height: AppStyles.paddingSmall),
-                          SizedBox(
-                            height: buttonHeight,
-                            child: ElevatedButton.icon(
-                              onPressed: () {
-                                final apiClient = widget.apiClient;
-                                final selectedModel = _currentModelId;
-                                if (!_isLoading &&
-                                    apiClient != null &&
-                                    selectedModel != null &&
-                                    selectedModel.isNotEmpty) {
-                                  _sendMessage();
-                                }
-                              },
-                              icon: const Icon(Icons.send),
-                              label: const Text('Отправка'),
-                              style: AppStyles.sendButtonStyle,
-                            ),
-                          ),
-                        ],
-                      )
-                    : // Десктопный/планшетный portrait layout: поле ввода и кнопка горизонтально
-                    Row(
-                        children: [
-                          Expanded(
-                            child: SizedBox(
-                              height: inputHeight,
+                            child: Semantics(
+                              label: 'Поле ввода сообщения',
+                              hint: 'Введите сообщение здесь...',
+                              textField: true,
                               child: TextField(
                                 controller: _messageController,
                                 decoration: InputDecoration(
@@ -1016,7 +972,65 @@ class _ChatScreenState extends State<ChatScreen> {
                                 textInputAction: TextInputAction.newline,
                                 style: AppStyles.primaryTextStyle,
                                 enabled: !_isLoading,
-                                onSubmitted: (_) => _sendMessage(),
+                              ),
+                            ),
+                          ),
+                          const SizedBox(height: AppStyles.paddingSmall),
+                          SizedBox(
+                            height: buttonHeight,
+                            child: Semantics(
+                              label: 'Отправить сообщение',
+                              button: true,
+                              child: ElevatedButton.icon(
+                                onPressed: () {
+                                  final apiClient = widget.apiClient;
+                                  final selectedModel = _currentModelId;
+                                  if (!_isLoading &&
+                                      apiClient != null &&
+                                      selectedModel != null &&
+                                      selectedModel.isNotEmpty) {
+                                    _sendMessage();
+                                  }
+                                },
+                                icon: const Icon(Icons.send),
+                                label: const Text('Отправка'),
+                                style: AppStyles.sendButtonStyle,
+                              ),
+                            ),
+                          ),
+                        ],
+                      )
+                    : // Десктопный/планшетный portrait layout: поле ввода и кнопка горизонтально
+                    Row(
+                        children: [
+                          Expanded(
+                            child: SizedBox(
+                              height: inputHeight,
+                              child: Semantics(
+                                label: 'Поле ввода сообщения',
+                                hint: 'Введите сообщение здесь...',
+                                textField: true,
+                                child: TextField(
+                                  controller: _messageController,
+                                  decoration: InputDecoration(
+                                    hintText: 'Введите сообщение здесь...',
+                                    border: OutlineInputBorder(
+                                      borderRadius: BorderRadius.circular(
+                                        AppStyles.borderRadius,
+                                      ),
+                                    ),
+                                    contentPadding: EdgeInsets.all(
+                                      screenSize == 'small'
+                                          ? AppStyles.paddingSmall
+                                          : AppStyles.paddingSmall * 1.5,
+                                    ),
+                                  ),
+                                  maxLines: null,
+                                  textInputAction: TextInputAction.newline,
+                                  style: AppStyles.primaryTextStyle,
+                                  enabled: !_isLoading,
+                                  onSubmitted: (_) => _sendMessage(),
+                                ),
                               ),
                             ),
                           ),
@@ -1026,20 +1040,24 @@ class _ChatScreenState extends State<ChatScreen> {
                                 ? AppStyles.buttonWidth * 0.8
                                 : AppStyles.buttonWidth,
                             height: buttonHeight,
-                            child: ElevatedButton.icon(
-                              onPressed: () {
-                                final apiClient = widget.apiClient;
-                                final selectedModel = _currentModelId;
-                                if (!_isLoading &&
-                                    apiClient != null &&
-                                    selectedModel != null &&
-                                    selectedModel.isNotEmpty) {
-                                  _sendMessage();
-                                }
-                              },
-                              icon: const Icon(Icons.send),
-                              label: const Text('Отправка'),
-                              style: AppStyles.sendButtonStyle,
+                            child: Semantics(
+                              label: 'Отправить сообщение',
+                              button: true,
+                              child: ElevatedButton.icon(
+                                onPressed: () {
+                                  final apiClient = widget.apiClient;
+                                  final selectedModel = _currentModelId;
+                                  if (!_isLoading &&
+                                      apiClient != null &&
+                                      selectedModel != null &&
+                                      selectedModel.isNotEmpty) {
+                                    _sendMessage();
+                                  }
+                                },
+                                icon: const Icon(Icons.send),
+                                label: const Text('Отправка'),
+                                style: AppStyles.sendButtonStyle,
+                              ),
                             ),
                           ),
                         ],

@@ -51,13 +51,17 @@ class MessageBubble extends StatelessWidget {
         final maxWidth = constraints.maxWidth *
             (PlatformUtils.isMobile() ? 0.9 : maxWidthFactor.clamp(0.4, 0.9));
 
-        return Row(
-          mainAxisAlignment:
-              isUser ? MainAxisAlignment.end : MainAxisAlignment.start,
-          crossAxisAlignment: CrossAxisAlignment.start,
-          children: [
-            ConstrainedBox(
-              constraints: BoxConstraints(maxWidth: maxWidth),
+        return Semantics(
+          label: isUser
+              ? 'Сообщение пользователя: $text'
+              : 'Ответ AI: $text${model != null ? ' от модели $model' : ''}',
+          child: Row(
+            mainAxisAlignment:
+                isUser ? MainAxisAlignment.end : MainAxisAlignment.start,
+            crossAxisAlignment: CrossAxisAlignment.start,
+            children: [
+              ConstrainedBox(
+                constraints: BoxConstraints(maxWidth: maxWidth),
                 child: DecoratedBox(
                 decoration: BoxDecoration(
                   color: bubbleColor,
@@ -115,9 +119,10 @@ class MessageBubble extends StatelessWidget {
                     ],
                   ),
                 ),
+                ),
               ),
-            ),
-          ],
+            ],
+          ),
         );
       },
     );
