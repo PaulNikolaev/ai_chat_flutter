@@ -52,6 +52,18 @@ class ChatCache {
     required String aiResponse,
     required int tokensUsed,
   }) async {
+    // Валидация входных данных
+    if (model.trim().isEmpty || userMessage.trim().isEmpty || aiResponse.trim().isEmpty) {
+      debugPrint('[ChatCache] Error: Attempted to save message with empty required fields');
+      return null;
+    }
+
+    // Валидация tokensUsed - должно быть неотрицательным
+    if (tokensUsed < 0) {
+      debugPrint('[ChatCache] Warning: tokensUsed is negative ($tokensUsed), setting to 0');
+      // Не блокируем сохранение, но корректируем значение
+    }
+
     try {
       final db = await _db;
       final timestamp = DateTime.now().toIso8601String();
@@ -59,11 +71,11 @@ class ChatCache {
       final id = await db.insert(
         'messages',
         {
-          'model': model,
-          'user_message': userMessage,
-          'ai_response': aiResponse,
+          'model': model.trim(),
+          'user_message': userMessage.trim(),
+          'ai_response': aiResponse.trim(),
           'timestamp': timestamp,
-          'tokens_used': tokensUsed,
+          'tokens_used': tokensUsed.clamp(0, double.infinity).toInt(),
         },
       );
 
@@ -82,15 +94,19 @@ class ChatCache {
   ///
   /// Параметры:
   /// - [limit]: Максимальное количество сообщений для возврата. По умолчанию 50.
+  ///   Валидируется: минимальное значение 1, максимальное 1000 для предотвращения
+  ///   загрузки слишком больших объемов данных.
   ///
   /// Возвращает список [ChatMessage] или пустой список в случае ошибки.
   Future<List<ChatMessage>> getChatHistory({int limit = 50}) async {
+    // Валидация limit для предотвращения загрузки слишком больших объемов данных
+    final validatedLimit = limit.clamp(1, 1000);
     try {
       final db = await _db;
       final results = await db.query(
         'messages',
         orderBy: 'timestamp DESC',
-        limit: limit,
+        limit: validatedLimit,
       );
 
       return results
