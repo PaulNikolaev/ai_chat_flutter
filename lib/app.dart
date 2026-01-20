@@ -4,8 +4,6 @@ import 'api/openrouter_client.dart';
 import 'auth/auth_manager.dart';
 import 'config/env.dart';
 import 'navigation/app_router.dart';
-import 'screens/home_screen.dart';
-import 'ui/login/login_screen.dart';
 import 'ui/styles.dart';
 import 'ui/theme.dart';
 import 'utils/database/database.dart';
@@ -15,9 +13,10 @@ import 'utils/logger.dart';
 ///
 /// Отвечает за:
 /// - Проверку аутентификации при запуске
-/// - Навигацию между экранами логина и чата
-/// - Управление API клиентом
-/// - Обработку выхода из приложения
+/// - Навигацию между экранами логина и главной страницы (HomeScreen)
+/// - Управление API клиентом и его синхронизацию между всеми экранами через AppRouter
+/// - Оптимизированную инициализацию приложения с переиспользованием логики создания клиента
+/// - Обработку выхода из приложения с корректным освобождением ресурсов
 class MyApp extends StatefulWidget {
   const MyApp({super.key});
 
@@ -29,7 +28,6 @@ class _MyAppState extends State<MyApp> {
   AuthManager? _authManager;
   OpenRouterClient? _apiClient;
   bool _isAuthenticated = false;
-  bool _isLoading = true;
   AppLogger? _logger;
 
   @override
@@ -100,12 +98,61 @@ class _MyAppState extends State<MyApp> {
         error: e,
         stackTrace: stackTrace,
       );
-      if (mounted) {
-        setState(() {
-          _isLoading = false;
-        });
-      }
     }
+  }
+
+  /// Создает API клиент на основе сохраненных данных аутентификации.
+  ///
+  /// Оптимизированный метод для создания клиента с учетом провайдера.
+  /// Используется как при инициализации, так и при обновлении клиента.
+  Future<OpenRouterClient?> _createApiClient() async {
+    if (_authManager == null) return null;
+    
+    try {
+      final apiKey = await _authManager!.getStoredApiKey();
+      final provider = await _authManager!.getStoredProvider();
+      
+      if (apiKey.isEmpty) {
+        _logger?.warning('API key is empty, cannot initialize client');
+        return null;
+      }
+      
+      // Создаем клиент в зависимости от провайдера
+      if (provider == 'vsegpt') {
+        final vsegptBaseUrl = EnvConfig.vsegptBaseUrl.trim().isNotEmpty
+            ? EnvConfig.vsegptBaseUrl.trim()
+            : 'https://api.vsegpt.ru/v1/chat';
+        final client = OpenRouterClient(
+          apiKey: apiKey,
+          baseUrl: vsegptBaseUrl,
+          provider: 'vsegpt',
+        );
+        _logger?.info('VSEGPT API client created with baseUrl: $vsegptBaseUrl');
+        return client;
+      } else {
+        final client = OpenRouterClient(
+          apiKey: apiKey,
+          provider: 'openrouter',
+        );
+        _logger?.info('OpenRouter API client created');
+        return client;
+      }
+    } catch (e, stackTrace) {
+      _logger?.error(
+        'Failed to create API client',
+        error: e,
+        stackTrace: stackTrace,
+      );
+      return null;
+    }
+  }
+
+  /// Обновляет API клиент в роутере и всех зависимых компонентах.
+  ///
+  /// Гарантирует синхронизацию API клиента между всеми экранами приложения.
+  void _updateApiClientInRouter(OpenRouterClient? client) {
+    AppRouter.apiClient = client;
+    _logger?.debug('API client updated in router');
   }
 
   /// Проверяет статус аутентификации и инициализирует API клиент при необходимости.
@@ -118,52 +165,23 @@ class _MyAppState extends State<MyApp> {
       
       if (isAuthenticated) {
         _logger?.info('User is authenticated, initializing API client');
-        // Получаем сохраненный API ключ и провайдера, создаем соответствующий клиент
-        try {
-          final apiKey = await _authManager!.getStoredApiKey();
-          final provider = await _authManager!.getStoredProvider();
-          
-          if (apiKey.isNotEmpty) {
-            // Создаем клиент в зависимости от провайдера
-            if (provider == 'vsegpt') {
-              // Для VSEGPT используем OpenRouterClient с VSEGPT base URL
-              // Если baseUrl уже содержит путь (например /v1/chat), используем его как есть
-              final vsegptBaseUrl = EnvConfig.vsegptBaseUrl.trim().isNotEmpty
-                  ? EnvConfig.vsegptBaseUrl.trim()
-                  : 'https://api.vsegpt.ru/v1/chat';
-              _apiClient = OpenRouterClient(
-                apiKey: apiKey,
-                baseUrl: vsegptBaseUrl,
-                provider: 'vsegpt',
-              );
-              _logger?.info('VSEGPT API client initialized successfully with baseUrl: $vsegptBaseUrl');
-            } else {
-              // Для OpenRouter используем стандартный клиент
-              _apiClient = OpenRouterClient(
-                apiKey: apiKey,
-                provider: 'openrouter',
-              );
-              _logger?.info('OpenRouter API client initialized successfully');
-            }
-          } else {
-            _logger?.warning('API key is empty, cannot initialize client');
-          }
-        } catch (e, stackTrace) {
-          _logger?.error(
-            'Failed to initialize API client',
-            error: e,
-            stackTrace: stackTrace,
-          );
+        final client = await _createApiClient();
+        
+        if (mounted) {
+          setState(() {
+            _apiClient = client;
+            _isAuthenticated = true;
+          });
+          // Обновляем клиент в роутере после обновления состояния
+          _updateApiClientInRouter(_apiClient);
         }
       } else {
         _logger?.info('User is not authenticated, showing login screen');
-      }
-
-      if (mounted) {
-        setState(() {
-          _isAuthenticated = isAuthenticated;
-          _isLoading = false;
-        });
+        if (mounted) {
+          setState(() {
+            _isAuthenticated = false;
+          });
+        }
       }
     } catch (e, stackTrace) {
       _logger?.error(
@@ -174,7 +192,6 @@ class _MyAppState extends State<MyApp> {
       if (mounted) {
         setState(() {
           _isAuthenticated = false;
-          _isLoading = false;
         });
       }
     }
@@ -183,48 +200,30 @@ class _MyAppState extends State<MyApp> {
   /// Обрабатывает успешный вход пользователя.
   ///
   /// Создает API клиент из сохраненного ключа и переходит к экрану чата.
+  /// Оптимизирован для использования общего метода создания клиента.
   Future<void> _handleLoginSuccess() async {
     if (_authManager == null) return;
     
     try {
       _logger?.info('Login successful, initializing API client');
-      final apiKey = await _authManager!.getStoredApiKey();
-      final provider = await _authManager!.getStoredProvider();
+      final client = await _createApiClient();
       
-      if (apiKey.isNotEmpty) {
+      if (client != null) {
         if (mounted) {
           setState(() {
-            // Создаем клиент в зависимости от провайдера
-            if (provider == 'vsegpt') {
-              // Для VSEGPT используем OpenRouterClient с VSEGPT base URL
-              // Если baseUrl уже содержит путь (например /v1/chat), используем его как есть
-              final vsegptBaseUrl = EnvConfig.vsegptBaseUrl.trim().isNotEmpty
-                  ? EnvConfig.vsegptBaseUrl.trim()
-                  : 'https://api.vsegpt.ru/v1/chat';
-              _apiClient = OpenRouterClient(
-                apiKey: apiKey,
-                baseUrl: vsegptBaseUrl,
-                provider: 'vsegpt',
-              );
-              _logger?.info('VSEGPT API client initialized after login with baseUrl: $vsegptBaseUrl');
-            } else {
-              // Для OpenRouter используем стандартный клиент
-              _apiClient = OpenRouterClient(
-                apiKey: apiKey,
-                provider: 'openrouter',
-              );
-              _logger?.info('OpenRouter API client initialized after login');
-            }
+            _apiClient = client;
             _isAuthenticated = true;
           });
+          // Обновляем клиент в роутере после обновления состояния
+          _updateApiClientInRouter(_apiClient);
           _logger?.info('User logged in successfully');
         }
       } else {
-        _logger?.warning('API key is empty after login');
+        _logger?.warning('API key is empty or invalid after login');
         if (mounted) {
           ScaffoldMessenger.of(context).showSnackBar(
             const SnackBar(
-              content: Text('Ошибка: API ключ не найден'),
+              content: Text('Ошибка: API ключ не найден или недействителен'),
               backgroundColor: AppStyles.errorColor,
             ),
           );
@@ -252,6 +251,7 @@ class _MyAppState extends State<MyApp> {
   /// Обрабатывает выход из приложения.
   ///
   /// Очищает состояние аутентификации и возвращает к экрану логина.
+  /// Гарантирует корректное освобождение ресурсов и обновление роутера.
   Future<void> _handleLogout() async {
     try {
       _logger?.info('User logging out');
@@ -264,6 +264,8 @@ class _MyAppState extends State<MyApp> {
           _apiClient = null;
           _isAuthenticated = false;
         });
+        // Обновляем роутер после очистки состояния
+        _updateApiClientInRouter(null);
       }
       
       // Освобождаем ресурсы API клиента после обновления состояния
@@ -284,6 +286,7 @@ class _MyAppState extends State<MyApp> {
           _apiClient = null;
           _isAuthenticated = false;
         });
+        _updateApiClientInRouter(null);
       }
     }
   }
@@ -291,7 +294,8 @@ class _MyAppState extends State<MyApp> {
   @override
   Widget build(BuildContext context) {
     // Обновляем роутер с текущими значениями перед построением
-    AppRouter.apiClient = _apiClient;
+    // Это гарантирует, что все экраны получат актуальные данные
+    _updateApiClientInRouter(_apiClient);
     AppRouter.onLoginSuccess = _handleLoginSuccess;
     AppRouter.onLogout = _handleLogout;
 
@@ -299,23 +303,12 @@ class _MyAppState extends State<MyApp> {
       title: 'AI Chat',
       debugShowCheckedModeBanner: false,
       theme: AppTheme.darkTheme,
+      // Используем initialRoute для правильной навигации в многостраничном режиме
       initialRoute: _isAuthenticated ? AppRoutes.home : AppRoutes.login,
       routes: AppRouter.routes,
       onGenerateRoute: AppRouter.onGenerateRoute,
-      home: _isLoading
-          ? const Scaffold(
-              body: Center(
-                child: CircularProgressIndicator(),
-              ),
-            )
-          : _isAuthenticated
-              ? HomeScreen(
-                  apiClient: _apiClient,
-                  onLogout: _handleLogout,
-                )
-              : LoginScreen(
-                  onLoginSuccess: _handleLoginSuccess,
-                ),
+      // Убираем home, так как используем initialRoute для навигации
+      // Это обеспечивает правильную работу навигации в многостраничном режиме
     );
   }
 }
