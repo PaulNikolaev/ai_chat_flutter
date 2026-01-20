@@ -5,16 +5,10 @@ import 'package:intl/intl.dart';
 import 'package:path_provider/path_provider.dart';
 import 'package:shared_preferences/shared_preferences.dart';
 
-import '../api/openrouter_client.dart';
-import '../models/model_info.dart';
-import '../ui/components/animated_loading_indicator.dart';
-import '../ui/components/message_bubble.dart';
-import '../ui/components/model_selector.dart';
-import '../ui/styles.dart';
-import '../utils/analytics.dart';
-import '../utils/cache.dart';
-import '../utils/logger.dart';
-import '../utils/platform.dart';
+import 'package:ai_chat/api/api.dart';
+import 'package:ai_chat/models/models.dart';
+import 'package:ai_chat/ui/ui.dart';
+import 'package:ai_chat/utils/utils.dart';
 
 /// Главный экран чата с историей сообщений и полем ввода.
 ///

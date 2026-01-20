@@ -1,7 +1,7 @@
 import 'package:flutter/material.dart';
 
-import '../../utils/platform.dart';
-import '../styles.dart';
+import 'package:ai_chat/ui/ui.dart';
+import 'package:ai_chat/utils/utils.dart';
 
 /// Виджет пузырька сообщения для чата.
 ///

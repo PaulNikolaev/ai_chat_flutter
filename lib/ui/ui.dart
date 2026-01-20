@@ -3,3 +3,4 @@ export 'components/components.dart';
 export 'login/login_screen.dart';
 export 'styles.dart';
 export 'theme.dart';
+export 'transitions/page_transitions.dart';

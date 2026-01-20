@@ -1,5 +1,5 @@
 import 'package:flutter/material.dart';
-import '../utils/platform.dart';
+import 'package:ai_chat/utils/utils.dart';
 
 /// Централизованные стили приложения.
 ///

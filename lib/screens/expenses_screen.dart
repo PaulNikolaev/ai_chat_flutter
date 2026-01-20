@@ -6,13 +6,10 @@ import 'package:intl/intl.dart';
 import 'package:fl_chart/fl_chart.dart';
 import 'package:path_provider/path_provider.dart';
 
-import '../api/openrouter_client.dart';
-import '../models/model_info.dart';
-import '../ui/components/animated_loading_indicator.dart';
-import '../ui/styles.dart';
-import '../utils/analytics.dart';
-import '../utils/expenses_calculator.dart';
-import '../utils/platform.dart';
+import 'package:ai_chat/api/api.dart';
+import 'package:ai_chat/models/models.dart';
+import 'package:ai_chat/ui/ui.dart';
+import 'package:ai_chat/utils/utils.dart';
 
 /// Тип периода для отображения расходов.
 enum ExpensesPeriodType {

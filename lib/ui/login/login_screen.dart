@@ -1,9 +1,9 @@
 import 'package:flutter/material.dart';
 
-import '../../auth/auth_manager.dart';
-import '../../config/env.dart';
-import '../../utils/platform.dart';
-import '../styles.dart';
+import 'package:ai_chat/auth/auth.dart';
+import 'package:ai_chat/config/config.dart';
+import 'package:ai_chat/ui/ui.dart';
+import 'package:ai_chat/utils/utils.dart';
 
 /// Экран авторизации для входа в приложение.
 ///

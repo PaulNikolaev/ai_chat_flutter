@@ -1,9 +1,8 @@
 import 'dart:convert';
 import 'package:flutter/foundation.dart' show debugPrint;
 import 'package:sqflite/sqflite.dart';
+import 'package:ai_chat/models/models.dart';
 import 'database/database.dart';
-import '../models/chat_message.dart';
-import '../models/analytics_record.dart';
 
 /// Thread-safe кэш для истории чата и аналитических данных.
 ///

@@ -1,7 +1,7 @@
 import 'dart:convert';
 import 'package:crypto/crypto.dart';
 import 'package:sqflite/sqflite.dart';
-import '../utils/database/database.dart';
+import 'package:ai_chat/utils/utils.dart';
 
 /// Репозиторий для работы с данными аутентификации в базе данных.
 ///

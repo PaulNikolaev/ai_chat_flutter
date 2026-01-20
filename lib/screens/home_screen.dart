@@ -1,15 +1,9 @@
 import 'package:flutter/material.dart';
 
-import '../navigation/app_router.dart';
-import '../utils/platform.dart';
-import '../utils/analytics.dart';
-import '../utils/monitor.dart';
-import '../utils/expenses_calculator.dart';
-import 'chat_screen.dart';
-import 'expenses_screen.dart';
-import 'settings_screen.dart';
-import 'statistics_screen.dart';
-import '../api/openrouter_client.dart';
+import 'package:ai_chat/api/api.dart';
+import 'package:ai_chat/navigation/navigation.dart';
+import 'package:ai_chat/screens/screens.dart';
+import 'package:ai_chat/utils/utils.dart';
 
 /// Главная страница приложения с навигацией между разделами.
 ///

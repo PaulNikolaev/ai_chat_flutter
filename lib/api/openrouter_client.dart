@@ -4,8 +4,8 @@ import 'dart:convert';
 import 'package:flutter/foundation.dart' show debugPrint;
 import 'package:http/http.dart' as http;
 
-import '../config/env.dart';
-import '../models/model_info.dart';
+import 'package:ai_chat/config/config.dart';
+import 'package:ai_chat/models/models.dart';
 
 /// Базовый клиент для работы с OpenRouter API.
 ///

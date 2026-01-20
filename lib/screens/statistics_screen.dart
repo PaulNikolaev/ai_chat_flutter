@@ -6,13 +6,10 @@ import 'package:flutter/material.dart';
 import 'package:intl/intl.dart';
 import 'package:path_provider/path_provider.dart';
 
-import '../api/openrouter_client.dart';
-import '../models/analytics_record.dart';
-import '../ui/components/animated_loading_indicator.dart';
-import '../ui/styles.dart';
-import '../utils/analytics.dart';
-import '../utils/monitor.dart';
-import '../utils/platform.dart';
+import 'package:ai_chat/api/api.dart';
+import 'package:ai_chat/models/models.dart';
+import 'package:ai_chat/ui/ui.dart';
+import 'package:ai_chat/utils/utils.dart';
 
 /// Страница статистики использования моделей и метрик производительности.
 ///

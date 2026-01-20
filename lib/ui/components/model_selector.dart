@@ -1,8 +1,8 @@
 import 'package:flutter/material.dart';
 
-import '../../models/model_info.dart';
-import '../../utils/platform.dart';
-import '../styles.dart';
+import 'package:ai_chat/models/models.dart';
+import 'package:ai_chat/ui/ui.dart';
+import 'package:ai_chat/utils/utils.dart';
 
 /// Виджет селектора моделей с поиском и фильтрацией.
 ///

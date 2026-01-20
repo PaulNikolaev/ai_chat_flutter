@@ -1,4 +1,4 @@
-import '../models/analytics_record.dart';
+import 'package:ai_chat/models/models.dart';
 import 'cache.dart';
 
 /// Класс аналитики использования моделей.

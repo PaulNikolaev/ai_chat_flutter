@@ -1,14 +1,11 @@
 import 'package:flutter/material.dart';
 
-import 'api/openrouter_client.dart';
-import 'auth/auth_manager.dart';
-import 'config/env.dart';
-import 'navigation/app_router.dart';
-import 'ui/styles.dart';
-import 'ui/theme.dart';
-import 'utils/cache.dart';
-import 'utils/database/database.dart';
-import 'utils/logger.dart';
+import 'package:ai_chat/api/api.dart';
+import 'package:ai_chat/auth/auth.dart';
+import 'package:ai_chat/config/config.dart';
+import 'package:ai_chat/navigation/navigation.dart';
+import 'package:ai_chat/ui/ui.dart';
+import 'package:ai_chat/utils/utils.dart';
 
 /// Главный класс приложения с управлением состоянием и навигацией.
 ///

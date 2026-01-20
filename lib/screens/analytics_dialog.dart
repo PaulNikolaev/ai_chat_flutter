@@ -1,10 +1,8 @@
 import 'package:flutter/material.dart';
 
-import '../api/openrouter_client.dart';
-import '../ui/styles.dart';
-import '../utils/analytics.dart';
-import '../utils/monitor.dart';
-import '../utils/platform.dart';
+import 'package:ai_chat/api/api.dart';
+import 'package:ai_chat/ui/ui.dart';
+import 'package:ai_chat/utils/utils.dart';
 
 /// Диалог отображения аналитики использования моделей и метрик производительности.
 ///

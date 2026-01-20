@@ -1,16 +1,9 @@
 import 'package:flutter/material.dart';
 
-import '../screens/expenses_screen.dart';
-import '../screens/home_screen.dart';
-import '../screens/settings_screen.dart';
-import '../screens/statistics_screen.dart';
-import '../ui/login/login_screen.dart';
-import '../ui/transitions/page_transitions.dart';
-import '../api/openrouter_client.dart';
-import '../utils/analytics.dart';
-import '../utils/monitor.dart';
-import '../utils/expenses_calculator.dart';
-import '../utils/platform.dart';
+import 'package:ai_chat/api/api.dart';
+import 'package:ai_chat/screens/screens.dart';
+import 'package:ai_chat/ui/ui.dart';
+import 'package:ai_chat/utils/utils.dart';
 
 /// Константы для именованных маршрутов приложения.
 class AppRoutes {

@@ -1,10 +1,9 @@
 import 'package:flutter/material.dart';
 
-import '../auth/auth_manager.dart';
-import '../navigation/app_router.dart';
-import '../ui/components/animated_loading_indicator.dart';
-import '../ui/styles.dart';
-import '../utils/platform.dart';
+import 'package:ai_chat/auth/auth.dart';
+import 'package:ai_chat/navigation/navigation.dart';
+import 'package:ai_chat/ui/ui.dart';
+import 'package:ai_chat/utils/utils.dart';
 
 /// Страница настроек провайдера и API ключей.
 ///

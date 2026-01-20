@@ -1,6 +1,6 @@
+import 'package:ai_chat/config/config.dart';
 import 'auth_storage.dart';
 import 'auth_validator.dart';
-import '../config/env.dart';
 
 /// Результат операции аутентификации.
 class AuthResult {
