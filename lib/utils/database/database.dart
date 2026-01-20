@@ -66,85 +66,91 @@ class DatabaseHelper {
 
   /// Выполняет миграции при обновлении версии базы данных.
   ///
+  /// Все миграции выполняются в одной транзакции для обеспечения атомарности
+  /// и отката при ошибке.
+  ///
   /// [oldVersion] - предыдущая версия БД.
   /// [newVersion] - новая версия БД.
   Future<void> _onUpgrade(Database db, int oldVersion, int newVersion) async {
-    // Миграция с версии 1 на версию 2: добавление поля provider в таблицу auth
-    if (oldVersion < 2) {
-      // Проверяем, существует ли колонка provider
-      final tableInfo = await db.rawQuery('PRAGMA table_info(auth)');
-      final hasProviderColumn =
-          tableInfo.any((column) => column['name'] == 'provider');
+    // Выполняем все миграции в транзакции для атомарности
+    await db.transaction((txn) async {
+      // Миграция с версии 1 на версию 2: добавление поля provider в таблицу auth
+      if (oldVersion < 2) {
+        // Проверяем, существует ли колонка provider
+        final tableInfo = await txn.rawQuery('PRAGMA table_info(auth)');
+        final hasProviderColumn =
+            tableInfo.any((column) => column['name'] == 'provider');
 
-      if (!hasProviderColumn) {
-        // Добавляем колонку provider с значением по умолчанию 'openrouter'
-        await db.execute('''
-          ALTER TABLE auth ADD COLUMN provider TEXT NOT NULL DEFAULT 'openrouter'
+        if (!hasProviderColumn) {
+          // Добавляем колонку provider с значением по умолчанию 'openrouter'
+          await txn.execute('''
+            ALTER TABLE auth ADD COLUMN provider TEXT NOT NULL DEFAULT 'openrouter'
+          ''');
+        }
+      }
+
+      // Миграция с версии 2 на версию 3: добавление полей для токенов и стоимости
+      if (oldVersion < 3) {
+        final tableInfo =
+            await txn.rawQuery('PRAGMA table_info(analytics_messages)');
+        final columnNames =
+            tableInfo.map((column) => column['name'] as String).toList();
+
+        // Добавляем prompt_tokens если его нет
+        if (!columnNames.contains('prompt_tokens')) {
+          await txn.execute('''
+            ALTER TABLE analytics_messages ADD COLUMN prompt_tokens INTEGER
+          ''');
+        }
+
+        // Добавляем completion_tokens если его нет
+        if (!columnNames.contains('completion_tokens')) {
+          await txn.execute('''
+            ALTER TABLE analytics_messages ADD COLUMN completion_tokens INTEGER
+          ''');
+        }
+
+        // Добавляем cost если его нет
+        if (!columnNames.contains('cost')) {
+          await txn.execute('''
+            ALTER TABLE analytics_messages ADD COLUMN cost REAL
+          ''');
+        }
+      }
+
+      // Миграция с версии 3 на версию 4: поддержка нескольких API ключей от разных провайдеров
+      if (oldVersion < 4) {
+        // Создаем новую таблицу auth_keys для хранения нескольких ключей
+        await txn.execute('''
+          CREATE TABLE IF NOT EXISTS auth_keys (
+            id INTEGER PRIMARY KEY AUTOINCREMENT,
+            api_key TEXT NOT NULL,
+            provider TEXT NOT NULL,
+            pin_hash TEXT NOT NULL,
+            created_at TEXT NOT NULL DEFAULT (datetime('now')),
+            last_used TEXT,
+            UNIQUE(provider)
+          )
         ''');
+
+        // Мигрируем существующие данные из auth в auth_keys
+        final existingAuth = await txn.query('auth', limit: 1);
+        if (existingAuth.isNotEmpty) {
+          final record = existingAuth.first;
+          await txn.insert('auth_keys', {
+            'api_key': record['api_key'],
+            'provider': record['provider'] ?? 'openrouter',
+            'pin_hash': record['pin_hash'],
+            'created_at':
+                record['created_at'] ?? DateTime.now().toIso8601String(),
+            'last_used': record['last_used'],
+          });
+        }
+
+        // Удаляем старую таблицу auth (после миграции данных)
+        await txn.execute('DROP TABLE IF EXISTS auth');
       }
-    }
-
-    // Миграция с версии 2 на версию 3: добавление полей для токенов и стоимости
-    if (oldVersion < 3) {
-      final tableInfo =
-          await db.rawQuery('PRAGMA table_info(analytics_messages)');
-      final columnNames =
-          tableInfo.map((column) => column['name'] as String).toList();
-
-      // Добавляем prompt_tokens если его нет
-      if (!columnNames.contains('prompt_tokens')) {
-        await db.execute('''
-          ALTER TABLE analytics_messages ADD COLUMN prompt_tokens INTEGER
-        ''');
-      }
-
-      // Добавляем completion_tokens если его нет
-      if (!columnNames.contains('completion_tokens')) {
-        await db.execute('''
-          ALTER TABLE analytics_messages ADD COLUMN completion_tokens INTEGER
-        ''');
-      }
-
-      // Добавляем cost если его нет
-      if (!columnNames.contains('cost')) {
-        await db.execute('''
-          ALTER TABLE analytics_messages ADD COLUMN cost REAL
-        ''');
-      }
-    }
-
-    // Миграция с версии 3 на версию 4: поддержка нескольких API ключей от разных провайдеров
-    if (oldVersion < 4) {
-      // Создаем новую таблицу auth_keys для хранения нескольких ключей
-      await db.execute('''
-        CREATE TABLE IF NOT EXISTS auth_keys (
-          id INTEGER PRIMARY KEY AUTOINCREMENT,
-          api_key TEXT NOT NULL,
-          provider TEXT NOT NULL,
-          pin_hash TEXT NOT NULL,
-          created_at TEXT NOT NULL DEFAULT (datetime('now')),
-          last_used TEXT,
-          UNIQUE(provider)
-        )
-      ''');
-
-      // Мигрируем существующие данные из auth в auth_keys
-      final existingAuth = await db.query('auth', limit: 1);
-      if (existingAuth.isNotEmpty) {
-        final record = existingAuth.first;
-        await db.insert('auth_keys', {
-          'api_key': record['api_key'],
-          'provider': record['provider'] ?? 'openrouter',
-          'pin_hash': record['pin_hash'],
-          'created_at':
-              record['created_at'] ?? DateTime.now().toIso8601String(),
-          'last_used': record['last_used'],
-        });
-      }
-
-      // Удаляем старую таблицу auth (после миграции данных)
-      await db.execute('DROP TABLE IF EXISTS auth');
-    }
+    });
   }
 
   /// Создает таблицу `messages` для хранения сообщений чата.
@@ -169,12 +175,14 @@ class DatabaseHelper {
     ''');
 
     // Создаем индекс для быстрого поиска по timestamp
+    // Используется в ORDER BY timestamp DESC для getChatHistory
     await db.execute('''
       CREATE INDEX IF NOT EXISTS idx_messages_timestamp 
       ON messages(timestamp DESC)
     ''');
 
     // Создаем индекс для поиска по модели
+    // Используется в фильтрации и статистике по моделям
     await db.execute('''
       CREATE INDEX IF NOT EXISTS idx_messages_model 
       ON messages(model)
@@ -215,9 +223,17 @@ class DatabaseHelper {
     ''');
 
     // Создаем индекс для группировки по модели
+    // Используется в GROUP BY model, фильтрации по модели и статистике
     await db.execute('''
       CREATE INDEX IF NOT EXISTS idx_analytics_model 
       ON analytics_messages(model)
+    ''');
+
+    // Создаем составной индекс для оптимизации частых запросов
+    // (model, timestamp) используется в getAnalyticsHistoryFiltered с фильтрами по model и дате
+    await db.execute('''
+      CREATE INDEX IF NOT EXISTS idx_analytics_model_timestamp 
+      ON analytics_messages(model, timestamp ASC)
     ''');
   }
 

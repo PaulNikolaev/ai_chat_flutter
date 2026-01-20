@@ -111,10 +111,15 @@ class ChatCache {
   /// Возвращает список всех сообщений, отсортированных по времени
   /// в порядке возрастания (старейшие первыми).
   ///
+  /// **Примечание:** Этот метод используется для экспорта и может вернуть
+  /// большое количество записей. Для обычного использования предпочтительнее
+  /// использовать [getChatHistory] с ограничением по количеству.
+  ///
   /// Возвращает список [ChatMessage] или пустой список в случае ошибки.
   Future<List<ChatMessage>> getFormattedHistory() async {
     try {
       final db = await _db;
+      // Для экспорта используем индекс idx_messages_timestamp для оптимизации
       final results = await db.query(
         'messages',
         orderBy: 'timestamp ASC',
@@ -273,10 +278,14 @@ class ChatCache {
   /// Возвращает список всех аналитических записей, отсортированных
   /// по времени в порядке возрастания (старейшие первыми).
   ///
+  /// **Примечание:** Для больших объемов данных рекомендуется использовать
+  /// [getAnalyticsHistoryFiltered] с пагинацией через limit и offset.
+  ///
   /// Возвращает список [AnalyticsRecord] или пустой список в случае ошибки.
   Future<List<AnalyticsRecord>> getAnalyticsHistory() async {
     try {
       final db = await _db;
+      // Используем индекс idx_analytics_timestamp для оптимизации сортировки
       final results = await db.query(
         'analytics_messages',
         orderBy: 'timestamp ASC',
