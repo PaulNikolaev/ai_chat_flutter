@@ -17,11 +17,27 @@ flutter pub get            # Установка зависимостей
 ## Сборка
 
 ### Windows
+
+#### Первоначальная настройка
+
+Если проект еще не настроен для Windows:
+
 ```bash
+# Создание/обновление Windows конфигурации
 flutter create --platforms=windows .
+
+# Очистка кэша перед сборкой (рекомендуется при проблемах)
+flutter clean
+```
+
+#### Сборка Release
+
+```bash
 flutter build windows --release
 ```
 Результат: `build\windows\x64\runner\Release\ai_chat.exe`
+
+**Примечание:** Исполняемый файл можно запускать напрямую. Для распространения может потребоваться упаковка в установщик (WiX Toolset, Inno Setup и т.д.).
 
 ### Linux
 ```bash
@@ -50,10 +66,31 @@ flutter build macos --release
 
 ## Решение проблем
 
-- **Windows**: Проверьте Visual Studio и Windows SDK через `flutter doctor`
-- **Linux**: Установите все зависимости, проверьте CMake версию (3.10+)
-- **macOS**: Примите лицензию Xcode, обновите CocoaPods
+### Windows
+
+- **Visual Studio не найден**: Установите Visual Studio 2022 с компонентом "Desktop development with C++"
+- **Windows SDK**: Проверьте установку через `flutter doctor -v`
+- **Ошибки сборки**: 
+  ```bash
+  flutter clean
+  flutter build windows --release
+  ```
+- **Проблемы с зависимостями**: Убедитесь, что все зависимости установлены через `flutter pub get`
+
+### Linux
+
+- **Зависимости**: Установите все зависимости, проверьте CMake версию (3.10+)
+- **Права доступа**: Убедитесь, что у вас есть права на запись в директорию сборки
+
+### macOS
+
+- **Xcode**: Примите лицензию Xcode, обновите CocoaPods
+- **CocoaPods**: Обновите через `sudo gem install cocoapods`
+
+### Общие проблемы
+
 - **База данных**: Убедитесь, что `sqflite_common_ffi` установлен и инициализирован в `main.dart`
+- **Переменные окружения**: Проверьте, что `.env` файл создан на основе `.env.example` (для работы с API)
 
 ## Дополнительные ресурсы
 

@@ -34,11 +34,27 @@ sudo gem install cocoapods
 
 ## Сборка Android APK
 
+### Первоначальная настройка
+
+Если проект еще не настроен для Android или возникают ошибки с v1 embedding:
+
 ```bash
+# Создание/обновление Android конфигурации с Flutter v2 embedding
 flutter create --platforms=android .
+
+# Очистка кэша перед сборкой (рекомендуется при проблемах)
+flutter clean
+cd android && ./gradlew clean && cd ..
+```
+
+### Сборка Release APK
+
+```bash
 flutter build apk --release
 ```
 Результат: `build/app/outputs/flutter-apk/app-release.apk`
+
+**Примечание:** Если возникают ошибки с кэшем Kotlin компилятора, сборка все равно может завершиться успешно. Для устранения предупреждений можно удалить проблемную папку кэша или использовать флаг `--no-incremental`.
 
 ### Для конкретной архитектуры
 ```bash
@@ -90,9 +106,47 @@ flutter build apk --release --analyze-size    # Анализ размера
 
 ## Решение проблем
 
+### Общие проблемы
+
 - **Flutter не найден**: Добавьте в PATH
-- **ANDROID_HOME/JAVA_HOME**: Проверьте переменные окружения
-- **Ошибки сборки**: `flutter clean && flutter pub get`
+- **ANDROID_HOME/JAVA_HOME**: Проверьте переменные окружения через `flutter doctor`
+- **Ошибки сборки**: 
+  ```bash
+  flutter clean
+  cd android && ./gradlew clean && cd ..
+  flutter pub get
+  flutter build apk --release
+  ```
+
+### Android специфичные проблемы
+
+- **Ошибка "deleted Android v1 embedding"**: 
+  ```bash
+  flutter create --platforms=android .
+  ```
+  Это обновит проект до Flutter v2 embedding
+
+- **Ошибки кэша Kotlin компилятора**:
+  ```bash
+  # Остановка Gradle daemon
+  cd android && ./gradlew --stop && cd ..
+  
+  # Очистка кэша
+  flutter clean
+  cd android && ./gradlew clean && cd ..
+  
+  # Сборка без инкрементального кэша (если проблема сохраняется)
+  flutter build apk --release --no-incremental
+  ```
+  Примечание: Ошибки кэша могут появляться, но сборка обычно завершается успешно
+
+- **Проблемы с разрешениями**: Убедитесь, что в `android/app/src/main/AndroidManifest.xml` добавлены:
+  - `INTERNET`
+  - `ACCESS_NETWORK_STATE`
+  - `WRITE_EXTERNAL_STORAGE` (если требуется экспорт файлов)
+
+### iOS проблемы
+
 - **iOS ошибки**: Обновите CocoaPods, очистите кэш: `pod cache clean --all`
 - **Недостаточно места**: Минимум 5 ГБ свободного места
 
