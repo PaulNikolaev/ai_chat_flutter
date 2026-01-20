@@ -1,6 +1,10 @@
+import 'dart:convert';
+import 'dart:io';
+
 import 'package:flutter/material.dart';
 import 'package:intl/intl.dart';
 import 'package:fl_chart/fl_chart.dart';
+import 'package:path_provider/path_provider.dart';
 
 import '../api/openrouter_client.dart';
 import '../models/model_info.dart';
@@ -59,6 +63,25 @@ class _ExpensesScreenState extends State<ExpensesScreen> {
   /// Флаг загрузки данных.
   bool _isLoading = false;
 
+  /// Флаг сравнения периодов.
+  bool _isComparisonMode = false;
+
+  /// Дата начала второго периода для сравнения.
+  DateTime? _compareStartDate;
+
+  /// Дата окончания второго периода для сравнения.
+  DateTime? _compareEndDate;
+
+  /// Данные расходов за второй период для сравнения.
+  List<ExpensesPeriod> _compareExpensesData = [];
+
+  /// Общая сумма расходов за второй период.
+  double _compareTotalExpenses = 0.0;
+
+  /// Кэш для оптимизации производительности.
+  final Map<String, List<ExpensesPeriod>> _expensesCache = {};
+  final Map<String, double> _totalExpensesCache = {};
+
   /// Данные расходов за выбранный период.
   List<ExpensesPeriod> _expensesData = [];
 
@@ -114,7 +137,7 @@ class _ExpensesScreenState extends State<ExpensesScreen> {
     }
   }
 
-  /// Загружает данные расходов для выбранного периода.
+  /// Загружает данные расходов для выбранного периода с кэшированием.
   Future<void> _loadExpenses() async {
     if (_startDate == null || _endDate == null) return;
 
@@ -123,38 +146,62 @@ class _ExpensesScreenState extends State<ExpensesScreen> {
     });
 
     try {
+      // Проверяем кэш для оптимизации
+      final cacheKey = _getCacheKey(_startDate!, _endDate!, _selectedModelFilter, _periodType);
+      
       List<ExpensesPeriod> expenses;
       double total;
 
-      switch (_periodType) {
-        case ExpensesPeriodType.day:
-          expenses = await _calculator.getExpensesByDays(
-            startDate: _startDate!,
-            endDate: _endDate!,
-            model: _selectedModelFilter,
-          );
-          break;
-        case ExpensesPeriodType.week:
-          expenses = await _calculator.getExpensesByWeeks(
-            startDate: _startDate!,
-            endDate: _endDate!,
-            model: _selectedModelFilter,
-          );
-          break;
-        case ExpensesPeriodType.month:
-          expenses = await _calculator.getExpensesByMonths(
-            startDate: _startDate!,
-            endDate: _endDate!,
-            model: _selectedModelFilter,
-          );
-          break;
-      }
+      if (_expensesCache.containsKey(cacheKey) && _totalExpensesCache.containsKey(cacheKey)) {
+        // Используем кэшированные данные
+        expenses = _expensesCache[cacheKey]!;
+        total = _totalExpensesCache[cacheKey]!;
+      } else {
+        // Загружаем данные
+        switch (_periodType) {
+          case ExpensesPeriodType.day:
+            expenses = await _calculator.getExpensesByDays(
+              startDate: _startDate!,
+              endDate: _endDate!,
+              model: _selectedModelFilter,
+            );
+            break;
+          case ExpensesPeriodType.week:
+            expenses = await _calculator.getExpensesByWeeks(
+              startDate: _startDate!,
+              endDate: _endDate!,
+              model: _selectedModelFilter,
+            );
+            break;
+          case ExpensesPeriodType.month:
+            expenses = await _calculator.getExpensesByMonths(
+              startDate: _startDate!,
+              endDate: _endDate!,
+              model: _selectedModelFilter,
+            );
+            break;
+        }
 
-      total = await _calculator.getTotalExpenses(
-        startDate: _startDate!,
-        endDate: _endDate!,
-        model: _selectedModelFilter,
-      );
+        // Ограничиваем количество данных для производительности (максимум 365 периодов)
+        if (expenses.length > 365) {
+          expenses = expenses.sublist(expenses.length - 365);
+        }
+
+        total = await _calculator.getTotalExpenses(
+          startDate: _startDate!,
+          endDate: _endDate!,
+          model: _selectedModelFilter,
+        );
+
+        // Сохраняем в кэш (ограничиваем размер кэша до 10 записей)
+        if (_expensesCache.length >= 10) {
+          final firstKey = _expensesCache.keys.first;
+          _expensesCache.remove(firstKey);
+          _totalExpensesCache.remove(firstKey);
+        }
+        _expensesCache[cacheKey] = expenses;
+        _totalExpensesCache[cacheKey] = total;
+      }
 
       if (mounted) {
         setState(() {
@@ -162,6 +209,11 @@ class _ExpensesScreenState extends State<ExpensesScreen> {
           _totalExpenses = total;
           _isLoading = false;
         });
+      }
+
+      // Загружаем данные для сравнения, если режим сравнения включен
+      if (_isComparisonMode && _compareStartDate != null && _compareEndDate != null) {
+        await _loadCompareExpenses();
       }
     } catch (e, stackTrace) {
       debugPrint('ExpensesScreen: Error loading expenses: $e');
@@ -174,6 +226,92 @@ class _ExpensesScreenState extends State<ExpensesScreen> {
         });
       }
     }
+  }
+
+  /// Генерирует ключ кэша для данных расходов.
+  String _getCacheKey(DateTime startDate, DateTime endDate, String? model, ExpensesPeriodType periodType) {
+    return '${startDate.toIso8601String()}_${endDate.toIso8601String()}_${model ?? "all"}_${periodType.name}';
+  }
+
+  /// Загружает данные расходов для второго периода сравнения.
+  Future<void> _loadCompareExpenses() async {
+    if (_compareStartDate == null || _compareEndDate == null) return;
+
+    try {
+      List<ExpensesPeriod> expenses;
+      double total;
+
+      switch (_periodType) {
+        case ExpensesPeriodType.day:
+          expenses = await _calculator.getExpensesByDays(
+            startDate: _compareStartDate!,
+            endDate: _compareEndDate!,
+            model: _selectedModelFilter,
+          );
+          break;
+        case ExpensesPeriodType.week:
+          expenses = await _calculator.getExpensesByWeeks(
+            startDate: _compareStartDate!,
+            endDate: _compareEndDate!,
+            model: _selectedModelFilter,
+          );
+          break;
+        case ExpensesPeriodType.month:
+          expenses = await _calculator.getExpensesByMonths(
+            startDate: _compareStartDate!,
+            endDate: _compareEndDate!,
+            model: _selectedModelFilter,
+          );
+          break;
+      }
+
+      // Ограничиваем количество данных для производительности
+      if (expenses.length > 365) {
+        expenses = expenses.sublist(expenses.length - 365);
+      }
+
+      total = await _calculator.getTotalExpenses(
+        startDate: _compareStartDate!,
+        endDate: _compareEndDate!,
+        model: _selectedModelFilter,
+      );
+
+      if (mounted) {
+        setState(() {
+          _compareExpensesData = expenses;
+          _compareTotalExpenses = total;
+        });
+      }
+    } catch (e) {
+      debugPrint('ExpensesScreen: Error loading compare expenses: $e');
+      if (mounted) {
+        setState(() {
+          _compareExpensesData = [];
+          _compareTotalExpenses = 0.0;
+        });
+      }
+    }
+  }
+
+  /// Переключает режим сравнения периодов.
+  void _toggleComparisonMode() {
+    setState(() {
+      _isComparisonMode = !_isComparisonMode;
+      if (!_isComparisonMode) {
+        _compareStartDate = null;
+        _compareEndDate = null;
+        _compareExpensesData = [];
+        _compareTotalExpenses = 0.0;
+      } else {
+        // Инициализируем второй период: предыдущий такой же длины
+        if (_startDate != null && _endDate != null) {
+          final periodLength = _endDate!.difference(_startDate!);
+          _compareEndDate = _startDate!.subtract(const Duration(days: 1));
+          _compareStartDate = _compareEndDate!.subtract(periodLength);
+          _loadCompareExpenses();
+        }
+      }
+    });
   }
 
   /// Применяет фильтры и перезагружает данные.
@@ -217,6 +355,16 @@ class _ExpensesScreenState extends State<ExpensesScreen> {
         elevation: 0,
         actions: [
           IconButton(
+            icon: const Icon(Icons.download),
+            tooltip: 'Экспорт данных',
+            onPressed: _exportExpensesData,
+          ),
+          IconButton(
+            icon: Icon(_isComparisonMode ? Icons.compare_arrows : Icons.compare),
+            tooltip: _isComparisonMode ? 'Отключить сравнение' : 'Сравнить периоды',
+            onPressed: _toggleComparisonMode,
+          ),
+          IconButton(
             icon: const Icon(Icons.refresh),
             tooltip: 'Обновить',
             onPressed: _loadData,
@@ -253,6 +401,12 @@ class _ExpensesScreenState extends State<ExpensesScreen> {
                       // Общая сумма расходов
                       _buildTotalExpensesSection(),
                       const SizedBox(height: AppStyles.padding),
+
+                      // Сравнение периодов (если включено)
+                      if (_isComparisonMode) ...[
+                        _buildComparisonSection(),
+                        const SizedBox(height: AppStyles.padding),
+                      ],
 
                       // Фильтры и выбор периода
                       _buildFiltersSection(),
@@ -1006,5 +1160,317 @@ class _ExpensesScreenState extends State<ExpensesScreen> {
       return 'Не выбран';
     }
     return '${DateFormat('yyyy-MM-dd').format(_startDate!)} - ${DateFormat('yyyy-MM-dd').format(_endDate!)}';
+  }
+
+  /// Экспортирует данные расходов в CSV и JSON форматы.
+  Future<void> _exportExpensesData() async {
+    if (_expensesData.isEmpty) {
+      if (!mounted) return;
+      ScaffoldMessenger.of(context).showSnackBar(
+        const SnackBar(
+          content: Text('Нет данных для экспорта'),
+          backgroundColor: AppStyles.warningColor,
+        ),
+      );
+      return;
+    }
+
+    try {
+      // Получаем директорию для сохранения
+      Directory? directory;
+      try {
+        if (Platform.isWindows || Platform.isLinux || Platform.isMacOS) {
+          directory = await getDownloadsDirectory();
+          directory ??= await getApplicationDocumentsDirectory();
+        } else {
+          directory = await getApplicationDocumentsDirectory();
+        }
+      } catch (e) {
+        directory = Directory.current;
+      }
+
+      final timestamp = DateFormat('yyyy-MM-dd_HH-mm-ss').format(DateTime.now());
+      final periodTypeStr = _periodType.name;
+
+      // Экспортируем в JSON
+      final jsonFile = File('${directory.path}/expenses_${periodTypeStr}_$timestamp.json');
+      final jsonData = {
+        'export_date': DateTime.now().toIso8601String(),
+        'period_type': periodTypeStr,
+        'start_date': _startDate?.toIso8601String(),
+        'end_date': _endDate?.toIso8601String(),
+        'model_filter': _selectedModelFilter,
+        'total_expenses': _totalExpenses,
+        'periods': _expensesData.map((period) => {
+          'start_date': period.startDate.toIso8601String(),
+          'end_date': period.endDate.toIso8601String(),
+          'total_cost': period.totalCost,
+          'request_count': period.requestCount,
+          'costs_by_model': period.costsByModel,
+        }).toList(),
+      };
+      await jsonFile.writeAsString(
+        const JsonEncoder.withIndent('  ').convert(jsonData),
+      );
+
+      // Экспортируем в CSV
+      final csvFile = File('${directory.path}/expenses_${periodTypeStr}_$timestamp.csv');
+      final csvBuffer = StringBuffer();
+      
+      // Заголовки CSV
+      csvBuffer.writeln('Start Date,End Date,Total Cost (\$),Request Count,Models');
+      
+      // Данные
+      for (final period in _expensesData) {
+        final modelsStr = period.costsByModel.entries
+            .map((e) => '${e.key}: ${_formatCost(e.value)}')
+            .join('; ');
+        csvBuffer.writeln(
+          '${DateFormat('yyyy-MM-dd').format(period.startDate)},'
+          '${DateFormat('yyyy-MM-dd').format(period.endDate)},'
+          '${period.totalCost},'
+          '${period.requestCount},'
+          '"$modelsStr"',
+        );
+      }
+      await csvFile.writeAsString(csvBuffer.toString());
+
+      if (!mounted) return;
+      ScaffoldMessenger.of(context).showSnackBar(
+        SnackBar(
+          content: Text('Данные экспортированы:\n${jsonFile.path}\n${csvFile.path}'),
+          duration: const Duration(seconds: 5),
+          action: SnackBarAction(
+            label: 'OK',
+            onPressed: () {},
+          ),
+        ),
+      );
+    } catch (e) {
+      debugPrint('Error exporting expenses: $e');
+      if (!mounted) return;
+      ScaffoldMessenger.of(context).showSnackBar(
+        SnackBar(
+          content: Text('Ошибка при экспорте: $e'),
+          backgroundColor: AppStyles.errorColor,
+        ),
+      );
+    }
+  }
+
+  /// Строит секцию сравнения периодов.
+  Widget _buildComparisonSection() {
+    return Container(
+      padding: const EdgeInsets.all(AppStyles.padding),
+      decoration: BoxDecoration(
+        color: AppStyles.cardColor,
+        borderRadius: BorderRadius.circular(AppStyles.borderRadius),
+        border: Border.all(color: AppStyles.accentColor.withValues(alpha: 0.5)),
+        boxShadow: [
+          BoxShadow(
+            color: Colors.black.withValues(alpha: 0.1),
+            blurRadius: 4,
+            offset: const Offset(0, 2),
+          ),
+        ],
+      ),
+      child: Column(
+        crossAxisAlignment: CrossAxisAlignment.start,
+        children: [
+          Row(
+            children: [
+              const Icon(
+                Icons.compare_arrows,
+                color: AppStyles.accentColor,
+                size: 24,
+              ),
+              const SizedBox(width: 8),
+              const Text(
+                'Сравнение периодов',
+                style: TextStyle(
+                  fontSize: 18,
+                  fontWeight: FontWeight.bold,
+                  color: AppStyles.textPrimary,
+                ),
+              ),
+              const Spacer(),
+              IconButton(
+                icon: const Icon(Icons.close, size: 20),
+                onPressed: _toggleComparisonMode,
+                tooltip: 'Отключить сравнение',
+              ),
+            ],
+          ),
+          const SizedBox(height: AppStyles.padding),
+          // Выбор второго периода
+          Row(
+            children: [
+              Expanded(
+                child: InkWell(
+                  onTap: () async {
+                    final date = await showDatePicker(
+                      context: context,
+                      initialDate: _compareStartDate ?? DateTime.now(),
+                      firstDate: DateTime(2000),
+                      lastDate: _compareEndDate ?? DateTime.now(),
+                    );
+                    if (date != null) {
+                      setState(() {
+                        _compareStartDate = date;
+                      });
+                      _loadCompareExpenses();
+                    }
+                  },
+                  child: InputDecorator(
+                    decoration: InputDecoration(
+                      labelText: 'Начало периода сравнения',
+                      prefixIcon: const Icon(Icons.calendar_today),
+                      border: OutlineInputBorder(
+                        borderRadius: BorderRadius.circular(AppStyles.borderRadius),
+                      ),
+                    ),
+                    child: Text(
+                      _compareStartDate != null
+                          ? DateFormat('yyyy-MM-dd').format(_compareStartDate!)
+                          : 'Не выбрана',
+                    ),
+                  ),
+                ),
+              ),
+              const SizedBox(width: AppStyles.paddingSmall),
+              Expanded(
+                child: InkWell(
+                  onTap: () async {
+                    final date = await showDatePicker(
+                      context: context,
+                      initialDate: _compareEndDate ?? DateTime.now(),
+                      firstDate: _compareStartDate ?? DateTime(2000),
+                      lastDate: DateTime.now(),
+                    );
+                    if (date != null) {
+                      setState(() {
+                        _compareEndDate = date;
+                      });
+                      _loadCompareExpenses();
+                    }
+                  },
+                  child: InputDecorator(
+                    decoration: InputDecoration(
+                      labelText: 'Конец периода сравнения',
+                      prefixIcon: const Icon(Icons.calendar_today),
+                      border: OutlineInputBorder(
+                        borderRadius: BorderRadius.circular(AppStyles.borderRadius),
+                      ),
+                    ),
+                    child: Text(
+                      _compareEndDate != null
+                          ? DateFormat('yyyy-MM-dd').format(_compareEndDate!)
+                          : 'Не выбрана',
+                    ),
+                  ),
+                ),
+              ),
+            ],
+          ),
+          if (_compareExpensesData.isNotEmpty) ...[
+            const SizedBox(height: AppStyles.padding),
+            const Divider(),
+            const SizedBox(height: AppStyles.padding),
+            // Сравнение сумм
+            Row(
+              children: [
+                Expanded(
+                  child: _buildComparisonCard(
+                    'Текущий период',
+                    _formatCost(_totalExpenses),
+                    AppStyles.accentColor,
+                  ),
+                ),
+                const SizedBox(width: AppStyles.padding),
+                Expanded(
+                  child: _buildComparisonCard(
+                    'Период сравнения',
+                    _formatCost(_compareTotalExpenses),
+                    AppStyles.successColor,
+                  ),
+                ),
+              ],
+            ),
+            const SizedBox(height: AppStyles.paddingSmall),
+            // Разница
+            Container(
+              padding: const EdgeInsets.all(AppStyles.paddingSmall),
+              decoration: BoxDecoration(
+                color: AppStyles.surfaceColor,
+                borderRadius: BorderRadius.circular(AppStyles.borderRadius),
+              ),
+              child: Row(
+                mainAxisAlignment: MainAxisAlignment.center,
+                children: [
+                  const Text(
+                    'Разница: ',
+                    style: TextStyle(
+                      color: AppStyles.textSecondary,
+                      fontSize: 14,
+                    ),
+                  ),
+                  Text(
+                    _formatCost(_totalExpenses - _compareTotalExpenses),
+                    style: TextStyle(
+                      color: _totalExpenses > _compareTotalExpenses
+                          ? AppStyles.errorColor
+                          : AppStyles.successColor,
+                      fontSize: 16,
+                      fontWeight: FontWeight.bold,
+                    ),
+                  ),
+                  const SizedBox(width: 8),
+                  Text(
+                    '(${((_totalExpenses / (_compareTotalExpenses > 0 ? _compareTotalExpenses : 1) - 1) * 100).toStringAsFixed(1)}%)',
+                    style: const TextStyle(
+                      color: AppStyles.textSecondary,
+                      fontSize: 12,
+                    ),
+                  ),
+                ],
+              ),
+            ),
+          ],
+        ],
+      ),
+    );
+  }
+
+  /// Строит карточку сравнения.
+  Widget _buildComparisonCard(String label, String value, Color color) {
+    return Container(
+      padding: const EdgeInsets.all(AppStyles.padding),
+      decoration: BoxDecoration(
+        color: AppStyles.surfaceColor,
+        borderRadius: BorderRadius.circular(AppStyles.borderRadius),
+        border: Border.all(color: color.withValues(alpha: 0.3)),
+      ),
+      child: Column(
+        crossAxisAlignment: CrossAxisAlignment.start,
+        children: [
+          Text(
+            label,
+            style: const TextStyle(
+              color: AppStyles.textSecondary,
+              fontSize: 12,
+            ),
+          ),
+          const SizedBox(height: 4),
+          Text(
+            value,
+            style: TextStyle(
+              color: color,
+              fontSize: 20,
+              fontWeight: FontWeight.bold,
+            ),
+          ),
+        ],
+      ),
+    );
   }
 }
