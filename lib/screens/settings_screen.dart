@@ -18,17 +18,28 @@ class SettingsScreen extends StatefulWidget {
 
 class _SettingsScreenState extends State<SettingsScreen> {
   final AuthManager _authManager = AuthManager();
+  final _apiKeyController = TextEditingController();
+  final _apiKeyFormKey = GlobalKey<FormState>();
   bool _isLoading = true;
   bool _isUpdatingProvider = false;
+  bool _isUpdatingApiKey = false;
+  bool _showApiKeyForm = false;
   String? _provider;
   String _maskedApiKey = '';
   String? _errorMessage;
   String? _successMessage;
+  String? _apiKeyError;
 
   @override
   void initState() {
     super.initState();
     _loadSettings();
+  }
+
+  @override
+  void dispose() {
+    _apiKeyController.dispose();
+    super.dispose();
   }
 
   /// Загружает текущие настройки из хранилища.
@@ -130,6 +141,98 @@ class _SettingsScreenState extends State<SettingsScreen> {
         ScaffoldMessenger.of(context).showSnackBar(
           SnackBar(
             content: Text('Ошибка обновления провайдера: $e'),
+            backgroundColor: AppStyles.errorColor,
+            duration: const Duration(seconds: 5),
+          ),
+        );
+      }
+    }
+  }
+
+  /// Обрабатывает обновление API ключа.
+  Future<void> _handleApiKeyUpdate() async {
+    if (!_apiKeyFormKey.currentState!.validate()) {
+      return;
+    }
+
+    final newApiKey = _apiKeyController.text.trim();
+    if (newApiKey.isEmpty) {
+      setState(() {
+        _apiKeyError = 'API ключ не может быть пустым';
+      });
+      return;
+    }
+
+    setState(() {
+      _isUpdatingApiKey = true;
+      _apiKeyError = null;
+      _errorMessage = null;
+      _successMessage = null;
+    });
+
+    try {
+      final result = await _authManager.handleApiKeyLogin(newApiKey);
+
+      if (mounted) {
+        if (result.success) {
+          // Очищаем форму и скрываем её
+          _apiKeyController.clear();
+          setState(() {
+            _showApiKeyForm = false;
+            _isUpdatingApiKey = false;
+            _successMessage = 'API ключ успешно обновлен. Баланс: ${result.balance}';
+          });
+
+          // Перезагружаем настройки для отображения нового маскированного ключа
+          await _loadSettings();
+
+          // Показываем сообщение об успехе
+          if (mounted) {
+            ScaffoldMessenger.of(context).showSnackBar(
+            SnackBar(
+              content: Text(result.balance.isNotEmpty
+                  ? 'API ключ обновлен. Баланс: ${result.balance}'
+                  : 'API ключ успешно обновлен'),
+              backgroundColor: AppStyles.successColor,
+              duration: const Duration(seconds: 5),
+            ),
+          );
+          }
+
+          // Очищаем сообщение через 5 секунд
+          Future.delayed(const Duration(seconds: 5), () {
+            if (mounted) {
+              setState(() {
+                _successMessage = null;
+              });
+            }
+          });
+        } else {
+          setState(() {
+            _apiKeyError = result.message;
+            _isUpdatingApiKey = false;
+          });
+
+          // Показываем сообщение об ошибке
+          ScaffoldMessenger.of(context).showSnackBar(
+            SnackBar(
+              content: Text(result.message),
+              backgroundColor: AppStyles.errorColor,
+              duration: const Duration(seconds: 5),
+            ),
+          );
+        }
+      }
+    } catch (e) {
+      if (mounted) {
+        setState(() {
+          _apiKeyError = 'Ошибка обновления API ключа: $e';
+          _isUpdatingApiKey = false;
+        });
+
+        ScaffoldMessenger.of(context).showSnackBar(
+          SnackBar(
+            content: Text('Ошибка обновления API ключа: $e'),
             backgroundColor: AppStyles.errorColor,
             duration: const Duration(seconds: 5),
           ),
@@ -469,6 +572,104 @@ class _SettingsScreenState extends State<SettingsScreen> {
                 ),
               ),
             ),
+          const SizedBox(height: AppStyles.padding),
+          // Кнопка для показа/скрытия формы обновления
+          ElevatedButton.icon(
+            onPressed: _isUpdatingApiKey
+                ? null
+                : () {
+                    setState(() {
+                      _showApiKeyForm = !_showApiKeyForm;
+                      if (!_showApiKeyForm) {
+                        _apiKeyController.clear();
+                        _apiKeyError = null;
+                      }
+                    });
+                  },
+            icon: Icon(_showApiKeyForm ? Icons.close : Icons.edit),
+            label: Text(_showApiKeyForm ? 'Отменить' : 'Обновить API ключ'),
+            style: ElevatedButton.styleFrom(
+              backgroundColor: AppStyles.accentColor,
+              foregroundColor: Colors.white,
+            ),
+          ),
+          // Форма для обновления API ключа
+          if (_showApiKeyForm) ...[
+            const SizedBox(height: AppStyles.padding),
+            Form(
+              key: _apiKeyFormKey,
+              child: Column(
+                crossAxisAlignment: CrossAxisAlignment.stretch,
+                children: [
+                  TextFormField(
+                    controller: _apiKeyController,
+                    decoration: InputDecoration(
+                      labelText: 'Новый API ключ',
+                      hintText: 'Введите новый API ключ',
+                      prefixIcon: const Icon(Icons.vpn_key),
+                      errorText: _apiKeyError,
+                      border: OutlineInputBorder(
+                        borderRadius: BorderRadius.circular(AppStyles.borderRadius),
+                      ),
+                    ),
+                    obscureText: true,
+                    enabled: !_isUpdatingApiKey,
+                    validator: (value) {
+                      if (value == null || value.trim().isEmpty) {
+                        return 'Введите API ключ';
+                      }
+                      final trimmed = value.trim();
+                      if (!trimmed.startsWith('sk-or-')) {
+                        return 'Ключ должен начинаться с "sk-or-v1-" (OpenRouter) или "sk-or-vv-" (VSEGPT)';
+                      }
+                      if (!trimmed.startsWith('sk-or-v1-') && !trimmed.startsWith('sk-or-vv-')) {
+                        return 'Неверный формат ключа. Используйте "sk-or-v1-..." или "sk-or-vv-..."';
+                      }
+                      if (trimmed.length < 20) {
+                        return 'API ключ слишком короткий. Проверьте правильность ввода';
+                      }
+                      return null;
+                    },
+                  ),
+                  const SizedBox(height: AppStyles.paddingSmall),
+                  if (_isUpdatingApiKey)
+                    const Center(
+                      child: Padding(
+                        padding: EdgeInsets.all(AppStyles.paddingSmall),
+                        child: Row(
+                          mainAxisAlignment: MainAxisAlignment.center,
+                          children: [
+                            SizedBox(
+                              width: 16,
+                              height: 16,
+                              child: CircularProgressIndicator(strokeWidth: 2),
+                            ),
+                            SizedBox(width: AppStyles.paddingSmall),
+                            Text(
+                              'Обновление API ключа...',
+                              style: TextStyle(
+                                color: AppStyles.textSecondary,
+                                fontSize: 14,
+                              ),
+                            ),
+                          ],
+                        ),
+                      ),
+                    )
+                  else
+                    ElevatedButton.icon(
+                      onPressed: _handleApiKeyUpdate,
+                      icon: const Icon(Icons.save),
+                      label: const Text('Сохранить'),
+                      style: ElevatedButton.styleFrom(
+                        backgroundColor: AppStyles.successColor,
+                        foregroundColor: Colors.white,
+                      ),
+                    ),
+                ],
+              ),
+            ),
+          ],
         ],
       ),
     );
