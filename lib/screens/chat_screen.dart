@@ -122,6 +122,40 @@ class _ChatScreenState extends State<ChatScreen> {
     }
   }
 
+  /// Получает понятное сообщение об ошибке для пользователя.
+  ///
+  /// Преобразует технические сообщения об ошибках в понятные пользователю.
+  String _getUserFriendlyErrorMessage(dynamic error) {
+    final errorString = error.toString().toLowerCase();
+    
+    if (errorString.contains('network') || errorString.contains('connection')) {
+      return 'Проблема с подключением к интернету. Проверьте соединение и попробуйте снова.';
+    }
+    
+    if (errorString.contains('timeout')) {
+      return 'Превышено время ожидания ответа. Сервер не отвечает. Попробуйте позже.';
+    }
+    
+    if (errorString.contains('401') || errorString.contains('unauthorized')) {
+      return 'Неверный API ключ. Проверьте ключ в настройках.';
+    }
+    
+    if (errorString.contains('429') || errorString.contains('rate limit')) {
+      return 'Слишком много запросов. Подождите немного и попробуйте снова.';
+    }
+    
+    if (errorString.contains('500') || errorString.contains('502') || errorString.contains('503')) {
+      return 'Сервер временно недоступен. Попробуйте позже.';
+    }
+    
+    if (errorString.contains('404') || errorString.contains('not found')) {
+      return 'Запрашиваемый ресурс не найден. Проверьте настройки.';
+    }
+    
+    // Для остальных ошибок возвращаем оригинальное сообщение, но убираем технические детали
+    return error.toString().split('\n').first;
+  }
+
   @override
   void dispose() {
     _messageController.dispose();
@@ -472,9 +506,16 @@ class _ChatScreenState extends State<ChatScreen> {
 
         ScaffoldMessenger.of(context).showSnackBar(
           SnackBar(
-            content: Text('Ошибка загрузки моделей: $e'),
+            content: Text('Ошибка загрузки моделей: ${_getUserFriendlyErrorMessage(e)}'),
             backgroundColor: AppStyles.errorColor,
             duration: const Duration(seconds: 5),
+            action: SnackBarAction(
+              label: 'Повторить',
+              textColor: AppStyles.textPrimary,
+              onPressed: () {
+                _loadModels(forceRefresh: true);
+              },
+            ),
           ),
         );
       }
