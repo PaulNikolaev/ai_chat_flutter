@@ -54,12 +54,14 @@ class _ModelSelectorState extends State<ModelSelector> {
       }
     }
     _filteredModels = uniqueModels.values.toList();
-    
+
     // Устанавливаем начальное значение, если оно не задано или не существует
-    if (_selectedModelId == null || !_filteredModels.any((m) => m.id == _selectedModelId)) {
-      _selectedModelId = _filteredModels.isNotEmpty ? _filteredModels.first.id : null;
+    if (_selectedModelId == null ||
+        !_filteredModels.any((m) => m.id == _selectedModelId)) {
+      _selectedModelId =
+          _filteredModels.isNotEmpty ? _filteredModels.first.id : null;
     }
-    
+
     _searchController.addListener(_filterModels);
   }
 
@@ -83,7 +85,7 @@ class _ModelSelectorState extends State<ModelSelector> {
 
   void _filterModels() {
     final searchText = _searchController.text.toLowerCase().trim();
-    
+
     setState(() {
       List<ModelInfo> filtered;
       if (searchText.isEmpty) {
@@ -92,11 +94,12 @@ class _ModelSelectorState extends State<ModelSelector> {
         filtered = widget.models.where((model) {
           final nameMatch = model.name.toLowerCase().contains(searchText);
           final idMatch = model.id.toLowerCase().contains(searchText);
-          final descriptionMatch = model.description?.toLowerCase().contains(searchText) ?? false;
+          final descriptionMatch =
+              model.description?.toLowerCase().contains(searchText) ?? false;
           return nameMatch || idMatch || descriptionMatch;
         }).toList();
       }
-      
+
       // Удаляем дубликаты по id (на случай, если они все еще есть)
       final uniqueModels = <String, ModelInfo>{};
       for (final model in filtered) {
@@ -105,10 +108,12 @@ class _ModelSelectorState extends State<ModelSelector> {
         }
       }
       _filteredModels = uniqueModels.values.toList();
-      
+
       // Проверяем, что выбранная модель существует в отфильтрованном списке
-      if (_selectedModelId != null && !_filteredModels.any((m) => m.id == _selectedModelId)) {
-        _selectedModelId = _filteredModels.isNotEmpty ? _filteredModels.first.id : null;
+      if (_selectedModelId != null &&
+          !_filteredModels.any((m) => m.id == _selectedModelId)) {
+        _selectedModelId =
+            _filteredModels.isNotEmpty ? _filteredModels.first.id : null;
       }
     });
   }
@@ -123,7 +128,8 @@ class _ModelSelectorState extends State<ModelSelector> {
   @override
   Widget build(BuildContext context) {
     final isMobile = PlatformUtils.isMobile();
-    final effectiveWidth = isMobile ? null : (widget.width ?? AppStyles.searchFieldWidth);
+    final effectiveWidth =
+        isMobile ? null : (widget.width ?? AppStyles.searchFieldWidth);
 
     return Column(
       crossAxisAlignment: CrossAxisAlignment.start,
@@ -144,11 +150,13 @@ class _ModelSelectorState extends State<ModelSelector> {
                   borderSide: const BorderSide(color: AppStyles.borderColor),
                 ),
                 enabledBorder: const OutlineInputBorder(
-                  borderRadius: BorderRadius.all(Radius.circular(AppStyles.borderRadius)),
+                  borderRadius:
+                      BorderRadius.all(Radius.circular(AppStyles.borderRadius)),
                   borderSide: BorderSide(color: AppStyles.borderColor),
                 ),
                 focusedBorder: const OutlineInputBorder(
-                  borderRadius: BorderRadius.all(Radius.circular(AppStyles.borderRadius)),
+                  borderRadius:
+                      BorderRadius.all(Radius.circular(AppStyles.borderRadius)),
                   borderSide: BorderSide(
                     color: AppStyles.accentColor,
                     width: 2,
@@ -177,11 +185,13 @@ class _ModelSelectorState extends State<ModelSelector> {
                 borderSide: const BorderSide(color: AppStyles.borderColor),
               ),
               enabledBorder: const OutlineInputBorder(
-                borderRadius: BorderRadius.all(Radius.circular(AppStyles.borderRadius)),
+                borderRadius:
+                    BorderRadius.all(Radius.circular(AppStyles.borderRadius)),
                 borderSide: BorderSide(color: AppStyles.borderColor),
               ),
               focusedBorder: const OutlineInputBorder(
-                borderRadius: BorderRadius.all(Radius.circular(AppStyles.borderRadius)),
+                borderRadius:
+                    BorderRadius.all(Radius.circular(AppStyles.borderRadius)),
                 borderSide: BorderSide(
                   color: AppStyles.accentColor,
                   width: 2,

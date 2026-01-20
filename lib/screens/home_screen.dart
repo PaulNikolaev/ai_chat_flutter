@@ -45,13 +45,15 @@ class _HomeScreenState extends State<HomeScreen> {
 
   /// Кэш виджетов страниц для сохранения состояния при переключении.
   List<Widget>? _pages;
-  
+
   /// Ключи для доступа к State виджетов страниц для вызова методов обновления.
-  final GlobalKey<StatisticsScreenState> _statisticsKey = GlobalKey<StatisticsScreenState>();
-  final GlobalKey<ExpensesScreenState> _expensesKey = GlobalKey<ExpensesScreenState>();
+  final GlobalKey<StatisticsScreenState> _statisticsKey =
+      GlobalKey<StatisticsScreenState>();
+  final GlobalKey<ExpensesScreenState> _expensesKey =
+      GlobalKey<ExpensesScreenState>();
 
   /// Список страниц приложения с их маршрутами.
-  /// 
+  ///
   /// Порядок элементов определяет порядок отображения в навигации.
   /// Все страницы имеют иконки и названия для удобной навигации.
   final List<NavigationItem> _navigationItems = const [
@@ -91,17 +93,17 @@ class _HomeScreenState extends State<HomeScreen> {
     super.initState();
     // Инициализируем калькулятор расходов
     _expensesCalculator = ExpensesCalculator(analytics: _analytics);
-    
+
     // Обновляем параметры в роутере при инициализации
     AppRouter.apiClient = widget.apiClient;
     AppRouter.onLogout = widget.onLogout;
     AppRouter.analytics = _analytics;
     AppRouter.performanceMonitor = _performanceMonitor;
     AppRouter.expensesCalculator = _expensesCalculator;
-    
+
     // Инициализируем кэш страниц для сохранения состояния
     _pages ??= _buildPages();
-    
+
     // Обновляем данные для начальной страницы (если это статистика или расходы)
     WidgetsBinding.instance.addPostFrameCallback((_) {
       _refreshPageData(_selectedIndex);
@@ -135,11 +137,11 @@ class _HomeScreenState extends State<HomeScreen> {
     setState(() {
       _selectedIndex = index;
     });
-    
+
     // Обновляем данные при переключении на страницы статистики или расходов
     _refreshPageData(index);
   }
-  
+
   /// Обновляет данные страницы при переключении вкладок.
   void _refreshPageData(int index) {
     // Индексы страниц: 0 - Чат, 1 - Статистика, 2 - Расходы, 3 - Настройки
@@ -153,15 +155,16 @@ class _HomeScreenState extends State<HomeScreen> {
   }
 
   /// Создает список виджетов страниц для кэширования состояния.
-  /// 
+  ///
   /// Использует ключи для сохранения состояния при пересоздании виджетов.
   List<Widget> _buildPages() {
     return _navigationItems.map((item) {
       final routeName = item.route;
-      
+
       // Создаем уникальный ключ для каждой страницы для сохранения состояния
-      final pageKey = ValueKey('${routeName}_${widget.apiClient?.hashCode ?? 'null'}');
-      
+      final pageKey =
+          ValueKey('${routeName}_${widget.apiClient?.hashCode ?? 'null'}');
+
       // Создаем виджеты страниц напрямую для правильной работы IndexedStack
       switch (routeName) {
         case AppRoutes.home:
@@ -170,28 +173,30 @@ class _HomeScreenState extends State<HomeScreen> {
             apiClient: widget.apiClient,
             onLogout: widget.onLogout,
           );
-        
+
         case AppRoutes.statistics:
           return StatisticsScreen(
             key: _statisticsKey,
             apiClient: widget.apiClient,
             analytics: AppRouter.analytics ?? _analytics,
-            performanceMonitor: AppRouter.performanceMonitor ?? _performanceMonitor,
+            performanceMonitor:
+                AppRouter.performanceMonitor ?? _performanceMonitor,
             onLogout: widget.onLogout,
           );
-        
+
         case AppRoutes.expenses:
           return ExpensesScreen(
             key: _expensesKey,
             apiClient: widget.apiClient,
             analytics: AppRouter.analytics ?? _analytics,
-            expensesCalculator: AppRouter.expensesCalculator ?? _expensesCalculator,
+            expensesCalculator:
+                AppRouter.expensesCalculator ?? _expensesCalculator,
             onLogout: widget.onLogout,
           );
-        
+
         case AppRoutes.settings:
           return SettingsScreen(key: pageKey);
-        
+
         default:
           // Fallback на главную страницу
           return ChatScreen(
@@ -221,8 +226,8 @@ class _HomeScreenState extends State<HomeScreen> {
           items: _navigationItems.map((item) {
             return BottomNavigationBarItem(
               icon: Icon(item.icon),
-              activeIcon: item.selectedIcon != null 
-                  ? Icon(item.selectedIcon) 
+              activeIcon: item.selectedIcon != null
+                  ? Icon(item.selectedIcon)
                   : Icon(item.icon),
               label: item.label,
               tooltip: item.label,

@@ -201,8 +201,7 @@ class ExpensesCalculator {
       final dayEnd = currentDate.add(const Duration(days: 1));
 
       result.add(
-        dailyExpenses[dateKey] ??
-            ExpensesPeriod.empty(currentDate, dayEnd),
+        dailyExpenses[dateKey] ?? ExpensesPeriod.empty(currentDate, dayEnd),
       );
 
       currentDate = dayEnd;
@@ -319,7 +318,8 @@ class ExpensesCalculator {
         1,
       );
 
-      final monthKey = '${record.timestamp.year}-${record.timestamp.month.toString().padLeft(2, '0')}';
+      final monthKey =
+          '${record.timestamp.year}-${record.timestamp.month.toString().padLeft(2, '0')}';
 
       final cost = _calculateRecordCost(record);
       if (cost == null) continue;
@@ -348,7 +348,8 @@ class ExpensesCalculator {
         currentDate.month + 1,
         1,
       );
-      final monthKey = '${currentDate.year}-${currentDate.month.toString().padLeft(2, '0')}';
+      final monthKey =
+          '${currentDate.year}-${currentDate.month.toString().padLeft(2, '0')}';
 
       result.add(
         monthlyExpenses[monthKey] ??

@@ -55,7 +55,7 @@ class _SettingsScreenState extends State<SettingsScreen> {
     try {
       // Получаем активного провайдера
       final provider = await _authManager.getStoredProvider();
-      
+
       // Получаем все API ключи
       final allKeys = await _authManager.getAllStoredApiKeys();
 
@@ -81,12 +81,13 @@ class _SettingsScreenState extends State<SettingsScreen> {
     if (newProvider == null || newProvider == _activeProvider) {
       return;
     }
-    
+
     // Проверяем, есть ли ключ для этого провайдера
     final hasKey = _allApiKeys.any((key) => key['provider'] == newProvider);
     if (!hasKey) {
       setState(() {
-        _errorMessage = 'API ключ для $newProvider не найден. Пожалуйста, добавьте ключ для этого провайдера.';
+        _errorMessage =
+            'API ключ для $newProvider не найден. Пожалуйста, добавьте ключ для этого провайдера.';
       });
       ScaffoldMessenger.of(context).showSnackBar(
         SnackBar(
@@ -106,7 +107,7 @@ class _SettingsScreenState extends State<SettingsScreen> {
 
     try {
       final result = await _authManager.updateProvider(newProvider);
-      
+
       if (mounted) {
         if (result.success) {
           setState(() {
@@ -114,15 +115,15 @@ class _SettingsScreenState extends State<SettingsScreen> {
             _successMessage = result.message;
             _isUpdatingProvider = false;
           });
-          
+
           // Обновляем список ключей
           await _loadSettings();
-          
+
           // Обновляем API клиент с новым провайдером
           if (AppRouter.onProviderChanged != null) {
             await AppRouter.onProviderChanged!();
           }
-          
+
           // Показываем сообщение об успехе
           if (mounted) {
             ScaffoldMessenger.of(context).showSnackBar(
@@ -133,7 +134,7 @@ class _SettingsScreenState extends State<SettingsScreen> {
               ),
             );
           }
-          
+
           // Очищаем сообщение через 3 секунды
           Future.delayed(const Duration(seconds: 3), () {
             if (mounted) {
@@ -147,7 +148,7 @@ class _SettingsScreenState extends State<SettingsScreen> {
             _errorMessage = result.message;
             _isUpdatingProvider = false;
           });
-          
+
           // Показываем сообщение об ошибке
           ScaffoldMessenger.of(context).showSnackBar(
             SnackBar(
@@ -164,7 +165,7 @@ class _SettingsScreenState extends State<SettingsScreen> {
           _errorMessage = 'Ошибка обновления провайдера: $e';
           _isUpdatingProvider = false;
         });
-        
+
         ScaffoldMessenger.of(context).showSnackBar(
           SnackBar(
             content: Text('Ошибка обновления провайдера: $e'),
@@ -270,7 +271,7 @@ class _SettingsScreenState extends State<SettingsScreen> {
       }
     }
   }
-  
+
   /// Обрабатывает удаление API ключа для указанного провайдера.
   Future<void> _handleDeleteApiKey(String provider) async {
     final confirmed = await showDialog<bool>(
@@ -353,7 +354,7 @@ class _SettingsScreenState extends State<SettingsScreen> {
     final suffix = apiKey.substring(apiKey.length - 4);
     return '$prefix...$suffix';
   }
-  
+
   /// Получает название провайдера для отображения.
   String _getProviderDisplayName(String provider) {
     switch (provider) {
@@ -459,7 +460,7 @@ class _SettingsScreenState extends State<SettingsScreen> {
                             ),
                             const SizedBox(height: AppStyles.paddingLarge),
                           ],
-                          
+
                           // Раздел: Провайдер
                           _buildSectionHeader(
                             icon: Icons.cloud_circle,
@@ -471,7 +472,8 @@ class _SettingsScreenState extends State<SettingsScreen> {
                           const SizedBox(height: AppStyles.paddingLarge),
 
                           // Разделитель
-                          const Divider(color: AppStyles.borderColor, thickness: 1),
+                          const Divider(
+                              color: AppStyles.borderColor, thickness: 1),
                           const SizedBox(height: AppStyles.paddingLarge),
 
                           // Раздел: API ключ
@@ -541,9 +543,10 @@ class _SettingsScreenState extends State<SettingsScreen> {
   /// Строит секцию с информацией о провайдере.
   Widget _buildProviderSection() {
     final isMobile = PlatformUtils.isMobile();
-    
+
     return Container(
-      padding: EdgeInsets.all(isMobile ? AppStyles.paddingSmall : AppStyles.padding),
+      padding:
+          EdgeInsets.all(isMobile ? AppStyles.paddingSmall : AppStyles.padding),
       decoration: BoxDecoration(
         color: AppStyles.cardColor,
         borderRadius: BorderRadius.circular(AppStyles.borderRadius),
@@ -686,9 +689,10 @@ class _SettingsScreenState extends State<SettingsScreen> {
   /// Строит секцию с информацией об API ключе.
   Widget _buildApiKeySection() {
     final isMobile = PlatformUtils.isMobile();
-    
+
     return Container(
-      padding: EdgeInsets.all(isMobile ? AppStyles.paddingSmall : AppStyles.padding),
+      padding:
+          EdgeInsets.all(isMobile ? AppStyles.paddingSmall : AppStyles.padding),
       decoration: BoxDecoration(
         color: AppStyles.cardColor,
         borderRadius: BorderRadius.circular(AppStyles.borderRadius),
@@ -721,17 +725,17 @@ class _SettingsScreenState extends State<SettingsScreen> {
               final provider = key['provider'] ?? '';
               final maskedKey = _maskApiKey(key['api_key'] ?? '');
               final isActive = provider == _activeProvider;
-              
+
               return Container(
                 margin: const EdgeInsets.only(bottom: AppStyles.paddingSmall),
                 padding: const EdgeInsets.all(AppStyles.paddingSmall),
                 decoration: BoxDecoration(
-                  color: isActive 
+                  color: isActive
                       ? AppStyles.accentColor.withValues(alpha: 0.1)
                       : AppStyles.surfaceColor,
                   borderRadius: BorderRadius.circular(AppStyles.borderRadius),
                   border: Border.all(
-                    color: isActive 
+                    color: isActive
                         ? AppStyles.accentColor
                         : AppStyles.borderColor,
                     width: isActive ? 2 : 1,
@@ -750,7 +754,7 @@ class _SettingsScreenState extends State<SettingsScreen> {
                                 style: TextStyle(
                                   fontSize: 14,
                                   fontWeight: FontWeight.bold,
-                                  color: isActive 
+                                  color: isActive
                                       ? AppStyles.accentColor
                                       : AppStyles.textPrimary,
                                 ),
@@ -798,9 +802,9 @@ class _SettingsScreenState extends State<SettingsScreen> {
               );
             }),
           ],
-          
+
           const SizedBox(height: AppStyles.padding),
-          
+
           // Кнопка для показа/скрытия формы добавления
           ElevatedButton.icon(
             onPressed: _isAddingApiKey
@@ -837,7 +841,8 @@ class _SettingsScreenState extends State<SettingsScreen> {
                       prefixIcon: const Icon(Icons.vpn_key),
                       errorText: _apiKeyError,
                       border: OutlineInputBorder(
-                        borderRadius: BorderRadius.circular(AppStyles.borderRadius),
+                        borderRadius:
+                            BorderRadius.circular(AppStyles.borderRadius),
                       ),
                     ),
                     obscureText: true,
@@ -850,7 +855,8 @@ class _SettingsScreenState extends State<SettingsScreen> {
                       if (!trimmed.startsWith('sk-or-')) {
                         return 'Ключ должен начинаться с "sk-or-v1-" (OpenRouter) или "sk-or-vv-" (VSEGPT)';
                       }
-                      if (!trimmed.startsWith('sk-or-v1-') && !trimmed.startsWith('sk-or-vv-')) {
+                      if (!trimmed.startsWith('sk-or-v1-') &&
+                          !trimmed.startsWith('sk-or-vv-')) {
                         return 'Неверный формат ключа. Используйте "sk-or-v1-..." или "sk-or-vv-..."';
                       }
                       if (trimmed.length < 20) {

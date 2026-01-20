@@ -55,7 +55,7 @@ class ApiKeyValidationResult {
 /// **Пример использования:**
 /// ```dart
 /// final validator = AuthValidator();
-/// 
+///
 /// // Валидация API ключа
 /// final result = await validator.validateApiKey('sk-or-v1-...');
 /// if (result.isValid) {
@@ -64,11 +64,11 @@ class ApiKeyValidationResult {
 /// } else {
 ///   print('Ошибка: ${result.message}');
 /// }
-/// 
+///
 /// // Генерация PIN
 /// final pin = AuthValidator.generatePin();
 /// final pinHash = AuthValidator.hashPin(pin);
-/// 
+///
 /// // Проверка формата PIN
 /// final isValid = AuthValidator.validatePinFormat('1234');
 /// ```
@@ -140,7 +140,8 @@ class AuthValidator {
     if (provider == null) {
       return const ApiKeyValidationResult(
         isValid: false,
-        message: 'Invalid API key format. Key must start with sk-or-vv- (VSEGPT) or sk-or-v1- (OpenRouter)',
+        message:
+            'Invalid API key format. Key must start with sk-or-vv- (VSEGPT) or sk-or-v1- (OpenRouter)',
         balance: 0.0,
         provider: 'unknown',
       );
@@ -165,7 +166,7 @@ class AuthValidator {
   /// Валидирует OpenRouter API ключ через проверку баланса.
   Future<ApiKeyValidationResult> _validateOpenRouterKey(String apiKey) async {
     final uri = Uri.parse('$openRouterBaseUrl/credits');
-    
+
     final headers = {
       'Authorization': 'Bearer $apiKey',
       'Content-Type': 'application/json',
@@ -192,10 +193,12 @@ class AuthValidator {
 
           if (data == null) {
             // Пытаемся извлечь сообщение об ошибке, если есть
-            String errorMessage = 'Missing data field in OpenRouter API response';
+            String errorMessage =
+                'Missing data field in OpenRouter API response';
             if (decoded.containsKey('error')) {
               final error = decoded['error'];
-              if (error is Map<String, dynamic> && error.containsKey('message')) {
+              if (error is Map<String, dynamic> &&
+                  error.containsKey('message')) {
                 errorMessage = error['message'] as String;
               } else if (error is String) {
                 errorMessage = error;
@@ -203,7 +206,7 @@ class AuthValidator {
             } else if (decoded.containsKey('message')) {
               errorMessage = decoded['message'] as String;
             }
-            
+
             return ApiKeyValidationResult(
               isValid: false,
               message: errorMessage,
@@ -215,10 +218,10 @@ class AuthValidator {
           // Извлекаем баланс с проверкой на null и валидность типов
           final totalCreditsValue = data['total_credits'];
           final totalUsageValue = data['total_usage'];
-          
+
           double totalCredits = 0.0;
           double totalUsage = 0.0;
-          
+
           if (totalCreditsValue != null) {
             if (totalCreditsValue is num) {
               totalCredits = totalCreditsValue.toDouble();
@@ -226,7 +229,7 @@ class AuthValidator {
               totalCredits = double.tryParse(totalCreditsValue) ?? 0.0;
             }
           }
-          
+
           if (totalUsageValue != null) {
             if (totalUsageValue is num) {
               totalUsage = totalUsageValue.toDouble();
@@ -234,7 +237,7 @@ class AuthValidator {
               totalUsage = double.tryParse(totalUsageValue) ?? 0.0;
             }
           }
-          
+
           final balance = totalCredits - totalUsage;
           final balanceStr = balance.toStringAsFixed(2);
 
@@ -259,7 +262,8 @@ class AuthValidator {
 
       // Обработка различных HTTP статусов для лучшей диагностики
       // Пытаемся извлечь сообщение об ошибке из ответа
-      String errorMessage = 'Failed to validate OpenRouter key: HTTP ${response.statusCode}';
+      String errorMessage =
+          'Failed to validate OpenRouter key: HTTP ${response.statusCode}';
       try {
         final decoded = jsonDecode(response.body) as Map<String, dynamic>?;
         if (decoded != null) {
@@ -281,8 +285,9 @@ class AuthValidator {
       if (response.statusCode == 401) {
         return ApiKeyValidationResult(
           isValid: false,
-          message: errorMessage.contains('401') || errorMessage.contains('Unauthorized') 
-              ? errorMessage 
+          message: errorMessage.contains('401') ||
+                  errorMessage.contains('Unauthorized')
+              ? errorMessage
               : 'Invalid OpenRouter API key. ${errorMessage.isNotEmpty ? "Details: $errorMessage" : ""}',
           balance: 0.0,
           provider: 'openrouter',
@@ -290,7 +295,8 @@ class AuthValidator {
       } else if (response.statusCode == 403) {
         return ApiKeyValidationResult(
           isValid: false,
-          message: errorMessage.contains('403') || errorMessage.contains('Forbidden')
+          message: errorMessage.contains('403') ||
+                  errorMessage.contains('Forbidden')
               ? errorMessage
               : 'Insufficient permissions to check OpenRouter balance. ${errorMessage.isNotEmpty ? "Details: $errorMessage" : ""}',
           balance: 0.0,
@@ -299,7 +305,8 @@ class AuthValidator {
       } else if (response.statusCode == 429) {
         return ApiKeyValidationResult(
           isValid: false,
-          message: errorMessage.contains('429') || errorMessage.contains('rate limit')
+          message: errorMessage.contains('429') ||
+                  errorMessage.contains('rate limit')
               ? errorMessage
               : 'Rate limit exceeded. Please try again later. ${errorMessage.isNotEmpty ? "Details: $errorMessage" : ""}',
           balance: 0.0,
@@ -308,7 +315,8 @@ class AuthValidator {
       } else if (response.statusCode == 404) {
         return ApiKeyValidationResult(
           isValid: false,
-          message: errorMessage.contains('404') || errorMessage.contains('Not Found')
+          message: errorMessage.contains('404') ||
+                  errorMessage.contains('Not Found')
               ? errorMessage
               : 'OpenRouter API endpoint not found. Please check your base URL configuration. ${errorMessage.isNotEmpty ? "Details: $errorMessage" : ""}',
           balance: 0.0,
@@ -317,7 +325,8 @@ class AuthValidator {
       } else if (response.statusCode >= 500 && response.statusCode < 600) {
         return ApiKeyValidationResult(
           isValid: false,
-          message: errorMessage.contains('500') || errorMessage.contains('server error')
+          message: errorMessage.contains('500') ||
+                  errorMessage.contains('server error')
               ? errorMessage
               : 'OpenRouter server error (HTTP ${response.statusCode}). Please try again later. ${errorMessage.isNotEmpty ? "Details: $errorMessage" : ""}',
           balance: 0.0,
@@ -378,7 +387,7 @@ class AuthValidator {
     // VSEGPT использует endpoint /v1/balance для проверки баланса
     Uri uri;
     final baseUri = Uri.parse(vsegptBaseUrl!);
-    
+
     // Формируем правильный endpoint для баланса
     // VSEGPT API использует /v1/balance для проверки баланса
     // Если базовый URL уже содержит путь (например /v1/chat), заменяем его на /v1/balance
@@ -414,14 +423,14 @@ class AuthValidator {
       if (response.statusCode == 200) {
         try {
           final decoded = jsonDecode(response.body) as Map<String, dynamic>;
-          
+
           // Пытаемся извлечь баланс из различных форматов ответа
           double? balance = _extractBalanceFromVsegptResponse(decoded);
 
           if (balance != null) {
             // Проверяем, что баланс неотрицательный (больше или равен нулю)
             final isValid = balance >= 0;
-            
+
             if (isValid) {
               return ApiKeyValidationResult(
                 isValid: true,
@@ -480,14 +489,16 @@ class AuthValidator {
       } else if (response.statusCode >= 500 && response.statusCode < 600) {
         return ApiKeyValidationResult(
           isValid: false,
-          message: 'VSEGPT server error (HTTP ${response.statusCode}). Please try again later',
+          message:
+              'VSEGPT server error (HTTP ${response.statusCode}). Please try again later',
           balance: 0.0,
           provider: 'vsegpt',
         );
       } else {
         return ApiKeyValidationResult(
           isValid: false,
-          message: 'Failed to validate VSEGPT key: HTTP ${response.statusCode}. Tried URL: $uri',
+          message:
+              'Failed to validate VSEGPT key: HTTP ${response.statusCode}. Tried URL: $uri',
           balance: 0.0,
           provider: 'vsegpt',
         );
@@ -553,7 +564,7 @@ class AuthValidator {
     if (account != null) {
       final balance = (account['balance'] as num?)?.toDouble();
       if (balance != null) return balance;
-      
+
       final credits = (account['credits'] as num?)?.toDouble();
       if (credits != null) return credits;
     }

@@ -96,10 +96,10 @@ class ExpensesScreenState extends State<ExpensesScreen> {
 
   /// Экземпляр калькулятора расходов.
   late ExpensesCalculator _calculator;
-  
+
   // Флаг для отслеживания первого вызова didChangeDependencies
   bool _isFirstBuild = true;
-  
+
   // Время последнего обновления расходов
   DateTime? _lastExpensesUpdate;
 
@@ -126,7 +126,7 @@ class ExpensesScreenState extends State<ExpensesScreen> {
     if (!_isFirstBuild) {
       // Обновляем расходы только если прошло больше 1 секунды с последнего обновления
       final now = DateTime.now();
-      if (_lastExpensesUpdate == null || 
+      if (_lastExpensesUpdate == null ||
           now.difference(_lastExpensesUpdate!).inSeconds > 1) {
         _lastExpensesUpdate = now;
         // Принудительно обновляем расходы при входе на страницу
@@ -146,7 +146,7 @@ class ExpensesScreenState extends State<ExpensesScreen> {
       _loadExpenses(),
     ]);
   }
-  
+
   /// Публичный метод для принудительного обновления данных при входе на страницу.
   /// Вызывается из HomeScreen при переключении вкладок.
   void refreshData() {
@@ -185,12 +185,15 @@ class ExpensesScreenState extends State<ExpensesScreen> {
 
     try {
       // Проверяем кэш для оптимизации (если не принудительное обновление)
-      final cacheKey = _getCacheKey(_startDate!, _endDate!, _selectedModelFilter, _periodType);
-      
+      final cacheKey = _getCacheKey(
+          _startDate!, _endDate!, _selectedModelFilter, _periodType);
+
       List<ExpensesPeriod> expenses;
       double total;
 
-      if (!forceRefresh && _expensesCache.containsKey(cacheKey) && _totalExpensesCache.containsKey(cacheKey)) {
+      if (!forceRefresh &&
+          _expensesCache.containsKey(cacheKey) &&
+          _totalExpensesCache.containsKey(cacheKey)) {
         // Используем кэшированные данные
         expenses = _expensesCache[cacheKey]!;
         total = _totalExpensesCache[cacheKey]!;
@@ -250,7 +253,9 @@ class ExpensesScreenState extends State<ExpensesScreen> {
       }
 
       // Загружаем данные для сравнения, если режим сравнения включен
-      if (_isComparisonMode && _compareStartDate != null && _compareEndDate != null) {
+      if (_isComparisonMode &&
+          _compareStartDate != null &&
+          _compareEndDate != null) {
         await _loadCompareExpenses();
       }
     } catch (e, stackTrace) {
@@ -267,7 +272,8 @@ class ExpensesScreenState extends State<ExpensesScreen> {
   }
 
   /// Генерирует ключ кэша для данных расходов.
-  String _getCacheKey(DateTime startDate, DateTime endDate, String? model, ExpensesPeriodType periodType) {
+  String _getCacheKey(DateTime startDate, DateTime endDate, String? model,
+      ExpensesPeriodType periodType) {
     return '${startDate.toIso8601String()}_${endDate.toIso8601String()}_${model ?? "all"}_${periodType.name}';
   }
 
@@ -398,8 +404,10 @@ class ExpensesScreenState extends State<ExpensesScreen> {
             onPressed: _exportExpensesData,
           ),
           IconButton(
-            icon: Icon(_isComparisonMode ? Icons.compare_arrows : Icons.compare),
-            tooltip: _isComparisonMode ? 'Отключить сравнение' : 'Сравнить периоды',
+            icon:
+                Icon(_isComparisonMode ? Icons.compare_arrows : Icons.compare),
+            tooltip:
+                _isComparisonMode ? 'Отключить сравнение' : 'Сравнить периоды',
             onPressed: _toggleComparisonMode,
           ),
           IconButton(
@@ -560,7 +568,7 @@ class ExpensesScreenState extends State<ExpensesScreen> {
             builder: (context, constraints) {
               final screenSize = PlatformUtils.getScreenSize(context);
               final isSmall = screenSize == 'small';
-              
+
               // Выбор типа периода
               final periodTypeSelector = Column(
                 crossAxisAlignment: CrossAxisAlignment.start,
@@ -603,7 +611,7 @@ class ExpensesScreenState extends State<ExpensesScreen> {
                   ),
                 ],
               );
-              
+
               // Фильтр по дате
               final dateFilters = Row(
                 children: [
@@ -628,7 +636,8 @@ class ExpensesScreenState extends State<ExpensesScreen> {
                           labelText: 'Дата начала',
                           prefixIcon: const Icon(Icons.calendar_today),
                           border: OutlineInputBorder(
-                            borderRadius: BorderRadius.circular(AppStyles.borderRadius),
+                            borderRadius:
+                                BorderRadius.circular(AppStyles.borderRadius),
                           ),
                         ),
                         child: Text(
@@ -638,45 +647,46 @@ class ExpensesScreenState extends State<ExpensesScreen> {
                           overflow: TextOverflow.ellipsis,
                         ),
                       ),
-                ),
-              ),
-              const SizedBox(width: AppStyles.paddingSmall),
-              Expanded(
-                child: InkWell(
-                  onTap: () async {
-                    final date = await showDatePicker(
-                      context: context,
-                      initialDate: _endDate ?? DateTime.now(),
-                      firstDate: _startDate ?? DateTime(2000),
-                      lastDate: DateTime.now(),
-                    );
-                    if (date != null) {
-                      setState(() {
-                        _endDate = date;
-                      });
-                      _applyFilters();
-                    }
-                  },
-                  child: InputDecorator(
-                    decoration: InputDecoration(
-                      labelText: 'Дата окончания',
-                      prefixIcon: const Icon(Icons.calendar_today),
-                      border: OutlineInputBorder(
-                        borderRadius: BorderRadius.circular(AppStyles.borderRadius),
-                      ),
-                    ),
-                    child: Text(
-                      _endDate != null
-                          ? DateFormat('yyyy-MM-dd').format(_endDate!)
-                          : 'Не выбрана',
-                      overflow: TextOverflow.ellipsis,
                     ),
                   ),
-                ),
-              ),
-            ],
-          );
-              
+                  const SizedBox(width: AppStyles.paddingSmall),
+                  Expanded(
+                    child: InkWell(
+                      onTap: () async {
+                        final date = await showDatePicker(
+                          context: context,
+                          initialDate: _endDate ?? DateTime.now(),
+                          firstDate: _startDate ?? DateTime(2000),
+                          lastDate: DateTime.now(),
+                        );
+                        if (date != null) {
+                          setState(() {
+                            _endDate = date;
+                          });
+                          _applyFilters();
+                        }
+                      },
+                      child: InputDecorator(
+                        decoration: InputDecoration(
+                          labelText: 'Дата окончания',
+                          prefixIcon: const Icon(Icons.calendar_today),
+                          border: OutlineInputBorder(
+                            borderRadius:
+                                BorderRadius.circular(AppStyles.borderRadius),
+                          ),
+                        ),
+                        child: Text(
+                          _endDate != null
+                              ? DateFormat('yyyy-MM-dd').format(_endDate!)
+                              : 'Не выбрана',
+                          overflow: TextOverflow.ellipsis,
+                        ),
+                      ),
+                    ),
+                  ),
+                ],
+              );
+
               // Фильтр по модели
               final modelFilter = DropdownButtonFormField<String>(
                 decoration: InputDecoration(
@@ -705,7 +715,7 @@ class ExpensesScreenState extends State<ExpensesScreen> {
                   _applyFilters();
                 },
               );
-              
+
               // Кнопка сброса фильтров
               final resetButton = Row(
                 mainAxisAlignment: MainAxisAlignment.end,
@@ -717,7 +727,7 @@ class ExpensesScreenState extends State<ExpensesScreen> {
                   ),
                 ],
               );
-              
+
               if (isSmall) {
                 return Column(
                   crossAxisAlignment: CrossAxisAlignment.stretch,
@@ -859,7 +869,7 @@ class ExpensesScreenState extends State<ExpensesScreen> {
     final barGroups = _expensesData.asMap().entries.map((entry) {
       final index = entry.key;
       final period = entry.value;
-      
+
       return BarChartGroupData(
         x: index,
         barRods: [
@@ -909,7 +919,8 @@ class ExpensesScreenState extends State<ExpensesScreen> {
               String periodLabel;
               switch (_periodType) {
                 case ExpensesPeriodType.day:
-                  periodLabel = DateFormat('yyyy-MM-dd').format(period.startDate);
+                  periodLabel =
+                      DateFormat('yyyy-MM-dd').format(period.startDate);
                   break;
                 case ExpensesPeriodType.week:
                   periodLabel =
@@ -919,41 +930,43 @@ class ExpensesScreenState extends State<ExpensesScreen> {
                   periodLabel = DateFormat('MMM yyyy').format(period.startDate);
                   break;
               }
-              
+
               // Формируем детальную информацию с разбивкой по моделям
               final tooltipLines = <String>[
                 periodLabel,
                 'Общие расходы: ${_formatCost(rod.toY)}',
                 'Запросов: ${period.requestCount}',
               ];
-              
+
               // Добавляем разбивку по моделям, если есть данные
               if (period.costsByModel.isNotEmpty) {
                 tooltipLines.add('');
                 tooltipLines.add('По моделям:');
                 final sortedModels = period.costsByModel.entries.toList()
                   ..sort((a, b) => b.value.compareTo(a.value));
-                
+
                 // Показываем топ-5 моделей, чтобы не перегружать tooltip
                 final modelsToShow = sortedModels.take(5);
                 for (final modelEntry in modelsToShow) {
                   final percentage = period.totalCost > 0
-                      ? (modelEntry.value / period.totalCost * 100).toStringAsFixed(1)
+                      ? (modelEntry.value / period.totalCost * 100)
+                          .toStringAsFixed(1)
                       : '0.0';
                   tooltipLines.add(
                     '  • ${modelEntry.key}: ${_formatCost(modelEntry.value)} ($percentage%)',
                   );
                 }
-                
+
                 if (sortedModels.length > 5) {
-                  final remainingCost = sortedModels.skip(5)
+                  final remainingCost = sortedModels
+                      .skip(5)
                       .fold<double>(0.0, (sum, e) => sum + e.value);
                   tooltipLines.add(
                     '  • Прочие: ${_formatCost(remainingCost)}',
                   );
                 }
               }
-              
+
               return BarTooltipItem(
                 tooltipLines.join('\n'),
                 const TextStyle(
@@ -994,16 +1007,16 @@ class ExpensesScreenState extends State<ExpensesScreen> {
                 if (index < 0 || index >= xLabels.length) {
                   return const Text('');
                 }
-                
+
                 // Показываем каждую N-ю подпись в зависимости от количества данных
                 final showEveryNth = _expensesData.length > 20
                     ? (_expensesData.length / 10).ceil()
                     : (_expensesData.length > 10 ? 2 : 1);
-                
+
                 if (index % showEveryNth != 0 && index != xLabels.length - 1) {
                   return const Text('');
                 }
-                
+
                 return Padding(
                   padding: const EdgeInsets.only(top: 8),
                   child: Text(
@@ -1279,11 +1292,13 @@ class ExpensesScreenState extends State<ExpensesScreen> {
         directory = Directory.current;
       }
 
-      final timestamp = DateFormat('yyyy-MM-dd_HH-mm-ss').format(DateTime.now());
+      final timestamp =
+          DateFormat('yyyy-MM-dd_HH-mm-ss').format(DateTime.now());
       final periodTypeStr = _periodType.name;
 
       // Экспортируем в JSON
-      final jsonFile = File('${directory.path}/expenses_${periodTypeStr}_$timestamp.json');
+      final jsonFile =
+          File('${directory.path}/expenses_${periodTypeStr}_$timestamp.json');
       final jsonData = {
         'export_date': DateTime.now().toIso8601String(),
         'period_type': periodTypeStr,
@@ -1291,25 +1306,29 @@ class ExpensesScreenState extends State<ExpensesScreen> {
         'end_date': _endDate?.toIso8601String(),
         'model_filter': _selectedModelFilter,
         'total_expenses': _totalExpenses,
-        'periods': _expensesData.map((period) => {
-          'start_date': period.startDate.toIso8601String(),
-          'end_date': period.endDate.toIso8601String(),
-          'total_cost': period.totalCost,
-          'request_count': period.requestCount,
-          'costs_by_model': period.costsByModel,
-        }).toList(),
+        'periods': _expensesData
+            .map((period) => {
+                  'start_date': period.startDate.toIso8601String(),
+                  'end_date': period.endDate.toIso8601String(),
+                  'total_cost': period.totalCost,
+                  'request_count': period.requestCount,
+                  'costs_by_model': period.costsByModel,
+                })
+            .toList(),
       };
       await jsonFile.writeAsString(
         const JsonEncoder.withIndent('  ').convert(jsonData),
       );
 
       // Экспортируем в CSV
-      final csvFile = File('${directory.path}/expenses_${periodTypeStr}_$timestamp.csv');
+      final csvFile =
+          File('${directory.path}/expenses_${periodTypeStr}_$timestamp.csv');
       final csvBuffer = StringBuffer();
-      
+
       // Заголовки CSV
-      csvBuffer.writeln('Start Date,End Date,Total Cost (\$),Request Count,Models');
-      
+      csvBuffer
+          .writeln('Start Date,End Date,Total Cost (\$),Request Count,Models');
+
       // Данные
       for (final period in _expensesData) {
         final modelsStr = period.costsByModel.entries
@@ -1328,7 +1347,8 @@ class ExpensesScreenState extends State<ExpensesScreen> {
       if (!mounted) return;
       ScaffoldMessenger.of(context).showSnackBar(
         SnackBar(
-          content: Text('Данные экспортированы:\n${jsonFile.path}\n${csvFile.path}'),
+          content:
+              Text('Данные экспортированы:\n${jsonFile.path}\n${csvFile.path}'),
           duration: const Duration(seconds: 5),
           action: SnackBarAction(
             label: 'OK',
@@ -1416,7 +1436,8 @@ class ExpensesScreenState extends State<ExpensesScreen> {
                       labelText: 'Начало периода сравнения',
                       prefixIcon: const Icon(Icons.calendar_today),
                       border: OutlineInputBorder(
-                        borderRadius: BorderRadius.circular(AppStyles.borderRadius),
+                        borderRadius:
+                            BorderRadius.circular(AppStyles.borderRadius),
                       ),
                     ),
                     child: Text(
@@ -1450,7 +1471,8 @@ class ExpensesScreenState extends State<ExpensesScreen> {
                       labelText: 'Конец периода сравнения',
                       prefixIcon: const Icon(Icons.calendar_today),
                       border: OutlineInputBorder(
-                        borderRadius: BorderRadius.circular(AppStyles.borderRadius),
+                        borderRadius:
+                            BorderRadius.circular(AppStyles.borderRadius),
                       ),
                     ),
                     child: Text(

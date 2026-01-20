@@ -50,8 +50,10 @@ class ChatMessage {
     return ChatMessage(
       id: json['id'] as int?,
       model: json['model'] as String,
-      userMessage: json['user_message'] as String? ?? json['userMessage'] as String,
-      aiResponse: json['ai_response'] as String? ?? json['aiResponse'] as String,
+      userMessage:
+          json['user_message'] as String? ?? json['userMessage'] as String,
+      aiResponse:
+          json['ai_response'] as String? ?? json['aiResponse'] as String,
       timestamp: json['timestamp'] is String
           ? DateTime.parse(json['timestamp'] as String)
           : DateTime.fromMillisecondsSinceEpoch(json['timestamp'] as int),

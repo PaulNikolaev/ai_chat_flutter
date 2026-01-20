@@ -31,7 +31,8 @@ class EnvConfig {
   ///
   /// Если переменная обязательная и отсутствует — выбрасывает [EnvConfigException].
   /// Если `.env` не загружен, использует fallback или возвращает пустую строку.
-  static String getString(String key, {bool required = false, String? fallback}) {
+  static String getString(String key,
+      {bool required = false, String? fallback}) {
     String? value;
     if (_loaded) {
       value = dotenv.env[key] ?? fallback;
@@ -57,8 +58,8 @@ class EnvConfig {
   }
 
   /// Базовый URL OpenRouter.
-  static String get openRouterBaseUrl =>
-      getString('OPENROUTER_BASE_URL', fallback: 'https://openrouter.ai/api/v1');
+  static String get openRouterBaseUrl => getString('OPENROUTER_BASE_URL',
+      fallback: 'https://openrouter.ai/api/v1');
 
   /// API ключ OpenRouter (если используется).
   static String get openRouterApiKey => getString('OPENROUTER_API_KEY');
@@ -111,4 +112,3 @@ class EnvConfigException implements Exception {
   @override
   String toString() => 'EnvConfigException: $message';
 }
-

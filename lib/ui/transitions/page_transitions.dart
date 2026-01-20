@@ -65,7 +65,7 @@ class PageTransitions {
         const end = Offset.zero;
         const curve = Curves.easeInOut;
 
-        var tween = Tween(begin: begin, end: end).chain(
+        final tween = Tween(begin: begin, end: end).chain(
           CurveTween(curve: curve),
         );
 
@@ -94,7 +94,7 @@ class PageTransitions {
         const end = Offset.zero;
         const curve = Curves.easeInOut;
 
-        var tween = Tween(begin: begin, end: end).chain(
+        final tween = Tween(begin: begin, end: end).chain(
           CurveTween(curve: curve),
         );
 
@@ -123,7 +123,7 @@ class PageTransitions {
         const end = Offset.zero;
         const curve = Curves.easeOutCubic;
 
-        var slideTween = Tween(begin: beginOffset, end: end).chain(
+        final slideTween = Tween(begin: beginOffset, end: end).chain(
           CurveTween(curve: curve),
         );
 

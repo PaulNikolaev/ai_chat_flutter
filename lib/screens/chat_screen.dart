@@ -67,7 +67,7 @@ class _ChatScreenState extends State<ChatScreen> {
   final List<_MessageItem> _messages = [];
   bool _isLoading = false;
   bool _isLoadingHistory = false;
-  
+
   // Экземпляр для аналитики
   final Analytics _analytics = Analytics();
   AppLogger? _logger;
@@ -141,13 +141,13 @@ class _ChatScreenState extends State<ChatScreen> {
     try {
       _logger?.debug('Loading chat history from cache');
       final history = await ChatCache.instance.getChatHistory(limit: 100);
-      
+
       // Переворачиваем список, так как getChatHistory возвращает DESC (новейшие первыми),
       // а для отображения нужны старые сверху, новые снизу
       final reversedHistory = history.reversed.toList();
 
       final List<_MessageItem> loadedMessages = [];
-      
+
       for (final message in reversedHistory) {
         // Добавляем сообщение пользователя
         loadedMessages.add(_MessageItem(
@@ -155,7 +155,7 @@ class _ChatScreenState extends State<ChatScreen> {
           isUser: true,
           timestamp: message.timestamp,
         ));
-        
+
         // Добавляем ответ AI
         loadedMessages.add(_MessageItem(
           text: message.aiResponse,
@@ -274,7 +274,8 @@ class _ChatScreenState extends State<ChatScreen> {
         if (mounted) {
           ScaffoldMessenger.of(context).showSnackBar(
             const SnackBar(
-              content: Text('Ошибка при очистке истории: не удалось удалить записи из базы данных'),
+              content: Text(
+                  'Ошибка при очистке истории: не удалось удалить записи из базы данных'),
               backgroundColor: AppStyles.errorColor,
               duration: Duration(seconds: 5),
             ),
@@ -433,19 +434,21 @@ class _ChatScreenState extends State<ChatScreen> {
         setState(() {
           _models = models;
           _isLoadingModels = false;
-          
+
           // Проверяем, существует ли сохраненная модель в новом списке моделей
           if (_selectedModelId != null) {
-            final modelExists = models.any((model) => model.id == _selectedModelId);
+            final modelExists =
+                models.any((model) => model.id == _selectedModelId);
             if (!modelExists) {
               // Если сохраненная модель не найдена (например, при переключении провайдера),
               // очищаем её и выбираем первую доступную
-              _logger?.info('Saved model $_selectedModelId not found in new list, selecting default');
+              _logger?.info(
+                  'Saved model $_selectedModelId not found in new list, selecting default');
               _selectedModelId = null;
               _clearSavedModel();
             }
           }
-          
+
           // Если модель не выбрана, выбираем первую доступную
           if (_selectedModelId == null && models.isNotEmpty) {
             _selectedModelId = models.first.id;
@@ -483,8 +486,9 @@ class _ChatScreenState extends State<ChatScreen> {
   Future<void> _loadSelectedModel() async {
     try {
       _logger?.debug('Loading saved model preference');
-      final savedModelId = await PreferencesService.instance.getString(_selectedModelKey);
-      
+      final savedModelId =
+          await PreferencesService.instance.getString(_selectedModelKey);
+
       if (mounted && savedModelId != null && savedModelId.isNotEmpty) {
         setState(() {
           _selectedModelId = savedModelId;
@@ -543,7 +547,8 @@ class _ChatScreenState extends State<ChatScreen> {
     // Если модель изменилась, очищаем историю чата
     final previousModelId = _selectedModelId;
     if (previousModelId != null && previousModelId != modelId) {
-      _logger?.info('Model changed from $previousModelId to $modelId, clearing chat history');
+      _logger?.info(
+          'Model changed from $previousModelId to $modelId, clearing chat history');
       _clearHistorySilently();
     }
 
@@ -590,8 +595,8 @@ class _ChatScreenState extends State<ChatScreen> {
   Future<void> _sendMessage() async {
     final apiClient = widget.apiClient;
     final selectedModel = _currentModelId;
-    final canSend = !_isLoading && 
-        apiClient != null && 
+    final canSend = !_isLoading &&
+        apiClient != null &&
         selectedModel != null &&
         selectedModel.isNotEmpty;
     if (!canSend) {
@@ -626,7 +631,7 @@ class _ChatScreenState extends State<ChatScreen> {
     try {
       _logger?.debug('Sending message to model: $selectedModel');
       final startTime = DateTime.now();
-      
+
       // Отправляем запрос к API
       final result = await apiClient.sendMessage(
         message: messageText,
@@ -648,7 +653,7 @@ class _ChatScreenState extends State<ChatScreen> {
           (m) => m.id == selectedModel,
           orElse: () => ModelInfo(id: selectedModel, name: selectedModel),
         );
-        
+
         await _analytics.trackMessage(
           model: selectedModel,
           messageLength: messageText.length,
@@ -738,7 +743,8 @@ class _ChatScreenState extends State<ChatScreen> {
       backgroundColor: AppStyles.backgroundColor,
       appBar: AppBar(
         title: const Text('AI Chat'),
-        automaticallyImplyLeading: false, // Убираем кнопку "назад" в контексте HomeScreen
+        automaticallyImplyLeading:
+            false, // Убираем кнопку "назад" в контексте HomeScreen
         actions: [
           // Кнопка сохранения истории чата
           IconButton(
@@ -805,7 +811,9 @@ class _ChatScreenState extends State<ChatScreen> {
                           models: _models,
                           selectedModelId: _currentModelId,
                           onChanged: _onModelChanged,
-                          width: PlatformUtils.isMobile() ? null : AppStyles.searchFieldWidth,
+                          width: PlatformUtils.isMobile()
+                              ? null
+                              : AppStyles.searchFieldWidth,
                         ),
             ),
           ),
@@ -827,52 +835,53 @@ class _ChatScreenState extends State<ChatScreen> {
                         ),
                       )
                     : Center(
-                      child: ConstrainedBox(
-                        constraints: BoxConstraints(
-                          maxWidth: maxContentWidth ?? double.infinity,
-                        ),
-                        child: ListView.builder(
-                          controller: _scrollController,
-                          padding: EdgeInsets.all(padding),
-                          // Оптимизация: кэшируем больше элементов для плавной прокрутки
-                          cacheExtent: 500,
-                          // Оптимизация: добавляем key для эффективного обновления
-                          itemCount: _messages.length + (_isLoading ? 1 : 0),
-                          itemBuilder: (context, index) {
-                            if (index == _messages.length) {
-                              // Индикатор загрузки
-                              return const Padding(
-                                padding: EdgeInsets.all(AppStyles.padding),
-                                child: Center(
-                                  child: AnimatedLoadingIndicator(
-                                    size: 20,
-                                    strokeWidth: 2,
+                        child: ConstrainedBox(
+                          constraints: BoxConstraints(
+                            maxWidth: maxContentWidth ?? double.infinity,
+                          ),
+                          child: ListView.builder(
+                            controller: _scrollController,
+                            padding: EdgeInsets.all(padding),
+                            // Оптимизация: кэшируем больше элементов для плавной прокрутки
+                            cacheExtent: 500,
+                            // Оптимизация: добавляем key для эффективного обновления
+                            itemCount: _messages.length + (_isLoading ? 1 : 0),
+                            itemBuilder: (context, index) {
+                              if (index == _messages.length) {
+                                // Индикатор загрузки
+                                return const Padding(
+                                  padding: EdgeInsets.all(AppStyles.padding),
+                                  child: Center(
+                                    child: AnimatedLoadingIndicator(
+                                      size: 20,
+                                      strokeWidth: 2,
+                                    ),
+                                  ),
+                                );
+                              }
+
+                              final message = _messages[index];
+                              // Оптимизация: используем RepaintBoundary для изоляции перерисовок
+                              return RepaintBoundary(
+                                key: ValueKey(
+                                    'message_${message.timestamp.millisecondsSinceEpoch}_$index'),
+                                child: Padding(
+                                  padding: const EdgeInsets.only(
+                                    bottom: AppStyles.paddingSmall,
+                                  ),
+                                  child: MessageBubble(
+                                    text: message.text,
+                                    isUser: message.isUser,
+                                    timestamp: message.timestamp,
+                                    model: message.model,
                                   ),
                                 ),
                               );
-                            }
-
-                            final message = _messages[index];
-                            // Оптимизация: используем RepaintBoundary для изоляции перерисовок
-                            return RepaintBoundary(
-                              key: ValueKey('message_${message.timestamp.millisecondsSinceEpoch}_$index'),
-                              child: Padding(
-                                padding: const EdgeInsets.only(
-                                  bottom: AppStyles.paddingSmall,
-                                ),
-                                child: MessageBubble(
-                                  text: message.text,
-                                  isUser: message.isUser,
-                                  timestamp: message.timestamp,
-                                  model: message.model,
-                                ),
-                              ),
-                            );
-                          },
+                            },
+                          ),
                         ),
                       ),
-                    ),
-                  ),
+          ),
           // Область ввода сообщения
           Center(
             child: ConstrainedBox(
@@ -891,58 +900,12 @@ class _ChatScreenState extends State<ChatScreen> {
                   ),
                 ),
                 child: (isMobile || (isTablet && isLandscape))
-                ? // Мобильный layout: поле ввода и кнопка вертикально
-                  Column(
-                      mainAxisSize: MainAxisSize.min,
-                      crossAxisAlignment: CrossAxisAlignment.stretch,
-                      children: [
-                        SizedBox(
-                          height: inputHeight,
-                          child: TextField(
-                            controller: _messageController,
-                            decoration: InputDecoration(
-                              hintText: 'Введите сообщение здесь...',
-                              border: OutlineInputBorder(
-                                borderRadius: BorderRadius.circular(
-                                  AppStyles.borderRadius,
-                                ),
-                              ),
-                              contentPadding: EdgeInsets.all(
-                                screenSize == 'small' ? AppStyles.paddingSmall : AppStyles.paddingSmall * 1.5,
-                              ),
-                            ),
-                            maxLines: null,
-                            textInputAction: TextInputAction.newline,
-                            style: AppStyles.primaryTextStyle,
-                            enabled: !_isLoading,
-                          ),
-                        ),
-                        const SizedBox(height: AppStyles.paddingSmall),
-                        SizedBox(
-                          height: buttonHeight,
-                          child: ElevatedButton.icon(
-                            onPressed: () {
-                              final apiClient = widget.apiClient;
-                              final selectedModel = _currentModelId;
-                              if (!_isLoading && 
-                                  apiClient != null && 
-                                  selectedModel != null &&
-                                  selectedModel.isNotEmpty) {
-                                _sendMessage();
-                              }
-                            },
-                            icon: const Icon(Icons.send),
-                            label: const Text('Отправка'),
-                            style: AppStyles.sendButtonStyle,
-                          ),
-                        ),
-                      ],
-                    )
-                : // Десктопный/планшетный portrait layout: поле ввода и кнопка горизонтально
-                  Row(
-                      children: [
-                        Expanded(
-                          child: SizedBox(
+                    ? // Мобильный layout: поле ввода и кнопка вертикально
+                    Column(
+                        mainAxisSize: MainAxisSize.min,
+                        crossAxisAlignment: CrossAxisAlignment.stretch,
+                        children: [
+                          SizedBox(
                             height: inputHeight,
                             child: TextField(
                               controller: _messageController,
@@ -954,39 +917,91 @@ class _ChatScreenState extends State<ChatScreen> {
                                   ),
                                 ),
                                 contentPadding: EdgeInsets.all(
-                                  screenSize == 'small' ? AppStyles.paddingSmall : AppStyles.paddingSmall * 1.5,
+                                  screenSize == 'small'
+                                      ? AppStyles.paddingSmall
+                                      : AppStyles.paddingSmall * 1.5,
                                 ),
                               ),
                               maxLines: null,
                               textInputAction: TextInputAction.newline,
                               style: AppStyles.primaryTextStyle,
                               enabled: !_isLoading,
-                              onSubmitted: (_) => _sendMessage(),
                             ),
                           ),
-                        ),
-                        const SizedBox(width: AppStyles.paddingSmall),
-                        SizedBox(
-                          width: isTablet ? AppStyles.buttonWidth * 0.8 : AppStyles.buttonWidth,
-                          height: buttonHeight,
-                          child: ElevatedButton.icon(
-                            onPressed: () {
-                              final apiClient = widget.apiClient;
-                              final selectedModel = _currentModelId;
-                              if (!_isLoading && 
-                                  apiClient != null && 
-                                  selectedModel != null &&
-                                  selectedModel.isNotEmpty) {
-                                _sendMessage();
-                              }
-                            },
-                            icon: const Icon(Icons.send),
-                            label: const Text('Отправка'),
-                            style: AppStyles.sendButtonStyle,
+                          const SizedBox(height: AppStyles.paddingSmall),
+                          SizedBox(
+                            height: buttonHeight,
+                            child: ElevatedButton.icon(
+                              onPressed: () {
+                                final apiClient = widget.apiClient;
+                                final selectedModel = _currentModelId;
+                                if (!_isLoading &&
+                                    apiClient != null &&
+                                    selectedModel != null &&
+                                    selectedModel.isNotEmpty) {
+                                  _sendMessage();
+                                }
+                              },
+                              icon: const Icon(Icons.send),
+                              label: const Text('Отправка'),
+                              style: AppStyles.sendButtonStyle,
+                            ),
                           ),
-                        ),
-                      ],
-                    ),
+                        ],
+                      )
+                    : // Десктопный/планшетный portrait layout: поле ввода и кнопка горизонтально
+                    Row(
+                        children: [
+                          Expanded(
+                            child: SizedBox(
+                              height: inputHeight,
+                              child: TextField(
+                                controller: _messageController,
+                                decoration: InputDecoration(
+                                  hintText: 'Введите сообщение здесь...',
+                                  border: OutlineInputBorder(
+                                    borderRadius: BorderRadius.circular(
+                                      AppStyles.borderRadius,
+                                    ),
+                                  ),
+                                  contentPadding: EdgeInsets.all(
+                                    screenSize == 'small'
+                                        ? AppStyles.paddingSmall
+                                        : AppStyles.paddingSmall * 1.5,
+                                  ),
+                                ),
+                                maxLines: null,
+                                textInputAction: TextInputAction.newline,
+                                style: AppStyles.primaryTextStyle,
+                                enabled: !_isLoading,
+                                onSubmitted: (_) => _sendMessage(),
+                              ),
+                            ),
+                          ),
+                          const SizedBox(width: AppStyles.paddingSmall),
+                          SizedBox(
+                            width: isTablet
+                                ? AppStyles.buttonWidth * 0.8
+                                : AppStyles.buttonWidth,
+                            height: buttonHeight,
+                            child: ElevatedButton.icon(
+                              onPressed: () {
+                                final apiClient = widget.apiClient;
+                                final selectedModel = _currentModelId;
+                                if (!_isLoading &&
+                                    apiClient != null &&
+                                    selectedModel != null &&
+                                    selectedModel.isNotEmpty) {
+                                  _sendMessage();
+                                }
+                              },
+                              icon: const Icon(Icons.send),
+                              label: const Text('Отправка'),
+                              style: AppStyles.sendButtonStyle,
+                            ),
+                          ),
+                        ],
+                      ),
               ),
             ),
           ),

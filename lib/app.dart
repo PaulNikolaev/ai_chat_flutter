@@ -27,7 +27,7 @@ class _MyAppState extends State<MyApp> {
   OpenRouterClient? _apiClient;
   bool _isAuthenticated = false;
   AppLogger? _logger;
-  
+
   /// Глобальный ключ навигатора для программной навигации.
   final GlobalKey<NavigatorState> _navigatorKey = GlobalKey<NavigatorState>();
 
@@ -108,16 +108,16 @@ class _MyAppState extends State<MyApp> {
   /// Используется как при инициализации, так и при обновлении клиента.
   Future<OpenRouterClient?> _createApiClient() async {
     if (_authManager == null) return null;
-    
+
     try {
       final apiKey = await _authManager!.getStoredApiKey();
       final provider = await _authManager!.getStoredProvider();
-      
+
       if (apiKey.isEmpty) {
         _logger?.warning('API key is empty, cannot initialize client');
         return null;
       }
-      
+
       // Создаем клиент в зависимости от провайдера
       if (provider == 'vsegpt') {
         // Для VSEGPT базовый URL должен быть https://api.vsegpt.ru/v1
@@ -127,7 +127,8 @@ class _MyAppState extends State<MyApp> {
             : 'https://api.vsegpt.ru/v1';
         // Если пользователь указал URL с /chat, убираем его
         final cleanBaseUrl = vsegptBaseUrl.endsWith('/chat')
-            ? vsegptBaseUrl.substring(0, vsegptBaseUrl.length - 5) // убираем '/chat'
+            ? vsegptBaseUrl.substring(
+                0, vsegptBaseUrl.length - 5) // убираем '/chat'
             : vsegptBaseUrl;
         final client = OpenRouterClient(
           apiKey: apiKey,
@@ -169,33 +170,34 @@ class _MyAppState extends State<MyApp> {
   /// Очищает историю чата, так как модели разных провайдеров несовместимы.
   Future<void> _refreshApiClient() async {
     if (_authManager == null) return;
-    
+
     try {
       _logger?.info('Refreshing API client after provider change');
-      
+
       // Очищаем кэш моделей в старом клиенте перед освобождением
       _apiClient?.clearModelCache();
-      
+
       // Очищаем историю чата при переключении провайдера,
       // так как модели разных провайдеров несовместимы
       _logger?.info('Clearing chat history due to provider change');
       await ChatCache.instance.clearHistory();
-      
+
       // Освобождаем старый клиент
       _apiClient?.dispose();
-      
+
       // Создаем новый клиент с обновленным провайдером
       final newClient = await _createApiClient();
-      
+
       if (mounted) {
         setState(() {
           _apiClient = newClient;
         });
-        
+
         // Обновляем клиент в роутере и всех экранах
         _updateApiClientInRouter(_apiClient);
-        
-        _logger?.info('API client refreshed successfully with provider: ${newClient?.provider}');
+
+        _logger?.info(
+            'API client refreshed successfully with provider: ${newClient?.provider}');
       }
     } catch (e, stackTrace) {
       _logger?.error(
@@ -209,15 +211,15 @@ class _MyAppState extends State<MyApp> {
   /// Проверяет статус аутентификации и инициализирует API клиент при необходимости.
   Future<void> _checkAuthentication() async {
     if (_authManager == null) return;
-    
+
     try {
       _logger?.debug('Checking authentication status...');
       final isAuthenticated = await _authManager!.isAuthenticated();
-      
+
       if (isAuthenticated) {
         _logger?.info('User is authenticated, initializing API client');
         final client = await _createApiClient();
-        
+
         if (mounted) {
           setState(() {
             _apiClient = client;
@@ -254,11 +256,11 @@ class _MyAppState extends State<MyApp> {
   /// Оптимизирован для использования общего метода создания клиента.
   Future<void> _handleLoginSuccess() async {
     if (_authManager == null) return;
-    
+
     try {
       _logger?.info('Login successful, initializing API client');
       final client = await _createApiClient();
-      
+
       if (client != null) {
         if (mounted) {
           setState(() {
@@ -268,7 +270,7 @@ class _MyAppState extends State<MyApp> {
           // Обновляем клиент в роутере после обновления состояния
           _updateApiClientInRouter(_apiClient);
           _logger?.info('User logged in successfully');
-          
+
           // Переходим на главный экран после успешного входа
           _navigatorKey.currentState?.pushReplacementNamed(AppRoutes.home);
         }
@@ -309,10 +311,10 @@ class _MyAppState extends State<MyApp> {
   Future<void> _handleLogout() async {
     try {
       _logger?.info('User logging out');
-      
+
       // Сохраняем ссылку на клиент перед очисткой состояния
       final clientToDispose = _apiClient;
-      
+
       if (mounted) {
         setState(() {
           _apiClient = null;
@@ -320,19 +322,19 @@ class _MyAppState extends State<MyApp> {
         });
         // Обновляем роутер после очистки состояния
         _updateApiClientInRouter(null);
-        
+
         // Переходим на экран входа после выхода
         _navigatorKey.currentState?.pushNamedAndRemoveUntil(
           AppRoutes.login,
           (route) => false,
         );
       }
-      
+
       // Освобождаем ресурсы API клиента после обновления состояния
       // Это предотвращает закрытие клиента во время активных запросов
       await Future.delayed(const Duration(milliseconds: 100));
       clientToDispose?.dispose();
-      
+
       _logger?.info('Logout completed');
     } catch (e, stackTrace) {
       _logger?.error(
@@ -347,7 +349,7 @@ class _MyAppState extends State<MyApp> {
           _isAuthenticated = false;
         });
         _updateApiClientInRouter(null);
-        
+
         // Переходим на экран входа даже при ошибке
         _navigatorKey.currentState?.pushNamedAndRemoveUntil(
           AppRoutes.login,

@@ -91,14 +91,16 @@ class ChatCache {
         limit: limit,
       );
 
-      return results.map((row) => ChatMessage(
-            id: row['id'] as int?,
-            model: row['model'] as String,
-            userMessage: row['user_message'] as String,
-            aiResponse: row['ai_response'] as String,
-            timestamp: DateTime.parse(row['timestamp'] as String),
-            tokensUsed: row['tokens_used'] as int,
-          )).toList();
+      return results
+          .map((row) => ChatMessage(
+                id: row['id'] as int?,
+                model: row['model'] as String,
+                userMessage: row['user_message'] as String,
+                aiResponse: row['ai_response'] as String,
+                timestamp: DateTime.parse(row['timestamp'] as String),
+                tokensUsed: row['tokens_used'] as int,
+              ))
+          .toList();
     } catch (e) {
       return [];
     }
@@ -118,14 +120,16 @@ class ChatCache {
         orderBy: 'timestamp ASC',
       );
 
-      return results.map((row) => ChatMessage(
-            id: row['id'] as int?,
-            model: row['model'] as String,
-            userMessage: row['user_message'] as String,
-            aiResponse: row['ai_response'] as String,
-            timestamp: DateTime.parse(row['timestamp'] as String),
-            tokensUsed: row['tokens_used'] as int,
-          )).toList();
+      return results
+          .map((row) => ChatMessage(
+                id: row['id'] as int?,
+                model: row['model'] as String,
+                userMessage: row['user_message'] as String,
+                aiResponse: row['ai_response'] as String,
+                timestamp: DateTime.parse(row['timestamp'] as String),
+                tokensUsed: row['tokens_used'] as int,
+              ))
+          .toList();
     } catch (e) {
       return [];
     }
@@ -174,18 +178,19 @@ class ChatCache {
   /// - [messages]: Список сообщений для сохранения.
   ///
   /// Возвращает список ID сохраненных сообщений.
-  Future<List<int>> saveMessagesBatch(List<Map<String, dynamic>> messages) async {
+  Future<List<int>> saveMessagesBatch(
+      List<Map<String, dynamic>> messages) async {
     if (messages.isEmpty) return [];
-    
+
     try {
       final db = await _db;
       final List<int> ids = [];
-      
+
       // Используем транзакцию для батчинга
       await db.transaction((txn) async {
         final batch = txn.batch();
         final timestamp = DateTime.now().toIso8601String();
-        
+
         for (final message in messages) {
           batch.insert(
             'messages',
@@ -198,11 +203,11 @@ class ChatCache {
             },
           );
         }
-        
+
         final result = await batch.commit(noResult: false);
         ids.addAll((result as List).cast<int>());
       });
-      
+
       return ids;
     } catch (e) {
       return [];
@@ -252,8 +257,9 @@ class ChatCache {
           if (cost != null) 'cost': cost,
         },
       );
-      
-      debugPrint('ChatCache.saveAnalytics: Saved analytics record with id=$id, model=$model, tokens=$tokensUsed, cost=$cost');
+
+      debugPrint(
+          'ChatCache.saveAnalytics: Saved analytics record with id=$id, model=$model, tokens=$tokensUsed, cost=$cost');
       return id;
     } catch (e, stackTrace) {
       debugPrint('ChatCache.saveAnalytics error: $e');
@@ -276,17 +282,19 @@ class ChatCache {
         orderBy: 'timestamp ASC',
       );
 
-      return results.map((row) => AnalyticsRecord(
-            id: row['id'] as int?,
-            timestamp: DateTime.parse(row['timestamp'] as String),
-            model: row['model'] as String,
-            messageLength: row['message_length'] as int,
-            responseTime: (row['response_time'] as num).toDouble(),
-            tokensUsed: row['tokens_used'] as int,
-            promptTokens: row['prompt_tokens'] as int?,
-            completionTokens: row['completion_tokens'] as int?,
-            cost: (row['cost'] as num?)?.toDouble(),
-          )).toList();
+      return results
+          .map((row) => AnalyticsRecord(
+                id: row['id'] as int?,
+                timestamp: DateTime.parse(row['timestamp'] as String),
+                model: row['model'] as String,
+                messageLength: row['message_length'] as int,
+                responseTime: (row['response_time'] as num).toDouble(),
+                tokensUsed: row['tokens_used'] as int,
+                promptTokens: row['prompt_tokens'] as int?,
+                completionTokens: row['completion_tokens'] as int?,
+                cost: (row['cost'] as num?)?.toDouble(),
+              ))
+          .toList();
     } catch (e) {
       return [];
     }
@@ -311,32 +319,31 @@ class ChatCache {
   }) async {
     try {
       final db = await _db;
-      
+
       // Строим WHERE условие
       final whereConditions = <String>[];
       final whereArgs = <dynamic>[];
-      
+
       if (model != null && model.isNotEmpty) {
         whereConditions.add('model = ?');
         whereArgs.add(model);
       }
-      
+
       if (startDate != null) {
         whereConditions.add('timestamp >= ?');
         whereArgs.add(startDate.toIso8601String());
       }
-      
+
       if (endDate != null) {
         // Добавляем день к конечной дате для включения всего дня
         final endDateInclusive = endDate.add(const Duration(days: 1));
         whereConditions.add('timestamp < ?');
         whereArgs.add(endDateInclusive.toIso8601String());
       }
-      
-      final whereClause = whereConditions.isNotEmpty
-          ? whereConditions.join(' AND ')
-          : null;
-      
+
+      final whereClause =
+          whereConditions.isNotEmpty ? whereConditions.join(' AND ') : null;
+
       final results = await db.query(
         'analytics_messages',
         where: whereClause,
@@ -346,17 +353,19 @@ class ChatCache {
         offset: offset,
       );
 
-      return results.map((row) => AnalyticsRecord(
-            id: row['id'] as int?,
-            timestamp: DateTime.parse(row['timestamp'] as String),
-            model: row['model'] as String,
-            messageLength: row['message_length'] as int,
-            responseTime: (row['response_time'] as num).toDouble(),
-            tokensUsed: row['tokens_used'] as int,
-            promptTokens: row['prompt_tokens'] as int?,
-            completionTokens: row['completion_tokens'] as int?,
-            cost: (row['cost'] as num?)?.toDouble(),
-          )).toList();
+      return results
+          .map((row) => AnalyticsRecord(
+                id: row['id'] as int?,
+                timestamp: DateTime.parse(row['timestamp'] as String),
+                model: row['model'] as String,
+                messageLength: row['message_length'] as int,
+                responseTime: (row['response_time'] as num).toDouble(),
+                tokensUsed: row['tokens_used'] as int,
+                promptTokens: row['prompt_tokens'] as int?,
+                completionTokens: row['completion_tokens'] as int?,
+                cost: (row['cost'] as num?)?.toDouble(),
+              ))
+          .toList();
     } catch (e) {
       debugPrint('ChatCache.getAnalyticsHistoryFiltered error: $e');
       return [];
@@ -378,37 +387,36 @@ class ChatCache {
   }) async {
     try {
       final db = await _db;
-      
+
       // Строим WHERE условие
       final whereConditions = <String>[];
       final whereArgs = <dynamic>[];
-      
+
       if (model != null && model.isNotEmpty) {
         whereConditions.add('model = ?');
         whereArgs.add(model);
       }
-      
+
       if (startDate != null) {
         whereConditions.add('timestamp >= ?');
         whereArgs.add(startDate.toIso8601String());
       }
-      
+
       if (endDate != null) {
         final endDateInclusive = endDate.add(const Duration(days: 1));
         whereConditions.add('timestamp < ?');
         whereArgs.add(endDateInclusive.toIso8601String());
       }
-      
-      final whereClause = whereConditions.isNotEmpty
-          ? whereConditions.join(' AND ')
-          : null;
-      
+
+      final whereClause =
+          whereConditions.isNotEmpty ? whereConditions.join(' AND ') : null;
+
       final result = await db.rawQuery(
         'SELECT COUNT(*) as count FROM analytics_messages'
         '${whereClause != null ? ' WHERE $whereClause' : ''}',
         whereArgs.isNotEmpty ? whereArgs : null,
       );
-      
+
       return Sqflite.firstIntValue(result) ?? 0;
     } catch (e) {
       debugPrint('ChatCache.getAnalyticsCount error: $e');
@@ -431,53 +439,53 @@ class ChatCache {
   }) async {
     try {
       final db = await _db;
-      
+
       // Строим WHERE условие
       final whereConditions = <String>[];
       final whereArgs = <dynamic>[];
-      
+
       if (model != null && model.isNotEmpty) {
         whereConditions.add('model = ?');
         whereArgs.add(model);
       }
-      
+
       if (startDate != null) {
         whereConditions.add('timestamp >= ?');
         whereArgs.add(startDate.toIso8601String());
       }
-      
+
       if (endDate != null) {
         final endDateInclusive = endDate.add(const Duration(days: 1));
         whereConditions.add('timestamp < ?');
         whereArgs.add(endDateInclusive.toIso8601String());
       }
-      
+
       final whereClause = whereConditions.isNotEmpty
           ? 'WHERE ${whereConditions.join(' AND ')}'
           : '';
-      
+
       final result = await db.rawQuery('''
         SELECT SUM(tokens_used) as total_tokens
         FROM analytics_messages
         $whereClause
       ''', whereArgs.isNotEmpty ? whereArgs : null);
-      
+
       if (result.isEmpty || result.first['total_tokens'] == null) {
         return 0;
       }
-      
+
       final totalTokens = result.first['total_tokens'];
       if (totalTokens == null) {
         return 0;
       }
-      
+
       // SQLite возвращает SUM как int или double в зависимости от типа данных
       if (totalTokens is int) {
         return totalTokens;
       } else if (totalTokens is num) {
         return totalTokens.toInt();
       }
-      
+
       return 0;
     } catch (e) {
       debugPrint('ChatCache.getTotalTokens error: $e');
@@ -501,31 +509,31 @@ class ChatCache {
   }) async {
     try {
       final db = await _db;
-      
+
       // Строим WHERE условие
       final whereConditions = <String>[];
       final whereArgs = <dynamic>[];
-      
+
       if (model != null && model.isNotEmpty) {
         whereConditions.add('model = ?');
         whereArgs.add(model);
       }
-      
+
       if (startDate != null) {
         whereConditions.add('timestamp >= ?');
         whereArgs.add(startDate.toIso8601String());
       }
-      
+
       if (endDate != null) {
         final endDateInclusive = endDate.add(const Duration(days: 1));
         whereConditions.add('timestamp < ?');
         whereArgs.add(endDateInclusive.toIso8601String());
       }
-      
+
       final whereClause = whereConditions.isNotEmpty
           ? 'WHERE ${whereConditions.join(' AND ')}'
           : '';
-      
+
       final results = await db.rawQuery('''
         SELECT 
           model,
@@ -537,20 +545,20 @@ class ChatCache {
       ''', whereArgs.isNotEmpty ? whereArgs : null);
 
       final statistics = <String, Map<String, int>>{};
-      
+
       for (final row in results) {
         final modelName = row['model'] as String?;
         if (modelName == null) continue;
-        
+
         final count = row['count'] as int? ?? 0;
         final tokens = row['tokens'] as int? ?? 0;
-        
+
         statistics[modelName] = {
           'count': count,
           'tokens': tokens,
         };
       }
-      
+
       return statistics;
     } catch (e) {
       debugPrint('ChatCache.getModelStatisticsFiltered error: $e');
@@ -577,17 +585,19 @@ class ChatCache {
         orderBy: 'timestamp ASC',
       );
 
-      return results.map((row) => AnalyticsRecord(
-            id: row['id'] as int?,
-            timestamp: DateTime.parse(row['timestamp'] as String),
-            model: row['model'] as String,
-            messageLength: row['message_length'] as int,
-            responseTime: (row['response_time'] as num).toDouble(),
-            tokensUsed: row['tokens_used'] as int,
-            promptTokens: row['prompt_tokens'] as int?,
-            completionTokens: row['completion_tokens'] as int?,
-            cost: (row['cost'] as num?)?.toDouble(),
-          )).toList();
+      return results
+          .map((row) => AnalyticsRecord(
+                id: row['id'] as int?,
+                timestamp: DateTime.parse(row['timestamp'] as String),
+                model: row['model'] as String,
+                messageLength: row['message_length'] as int,
+                responseTime: (row['response_time'] as num).toDouble(),
+                tokensUsed: row['tokens_used'] as int,
+                promptTokens: row['prompt_tokens'] as int?,
+                completionTokens: row['completion_tokens'] as int?,
+                cost: (row['cost'] as num?)?.toDouble(),
+              ))
+          .toList();
     } catch (e) {
       return [];
     }
@@ -602,17 +612,16 @@ class ChatCache {
   Future<Map<String, Map<String, int>>> getModelStatistics() async {
     try {
       final db = await _db;
-      
+
       // Проверяем, существует ли таблица
       final tables = await db.rawQuery(
-        "SELECT name FROM sqlite_master WHERE type='table' AND name='analytics_messages'"
-      );
-      
+          "SELECT name FROM sqlite_master WHERE type='table' AND name='analytics_messages'");
+
       if (tables.isEmpty) {
         // Таблица не существует, возвращаем пустую статистику
         return {};
       }
-      
+
       final results = await db.rawQuery('''
         SELECT 
           model,
@@ -623,15 +632,17 @@ class ChatCache {
       ''');
 
       final statistics = <String, Map<String, int>>{};
-      debugPrint('ChatCache.getModelStatistics: Found ${results.length} model groups');
-      
+      debugPrint(
+          'ChatCache.getModelStatistics: Found ${results.length} model groups');
+
       for (final row in results) {
         final model = row['model'] as String?;
         final count = row['count'] as int?;
         final tokens = row['tokens'] as num?;
-        
-        debugPrint('ChatCache.getModelStatistics: model=$model, count=$count, tokens=$tokens');
-        
+
+        debugPrint(
+            'ChatCache.getModelStatistics: model=$model, count=$count, tokens=$tokens');
+
         if (model != null && count != null && tokens != null) {
           statistics[model] = {
             'count': count,
@@ -640,7 +651,8 @@ class ChatCache {
         }
       }
 
-      debugPrint('ChatCache.getModelStatistics: Returning ${statistics.length} models');
+      debugPrint(
+          'ChatCache.getModelStatistics: Returning ${statistics.length} models');
       return statistics;
     } catch (e, stackTrace) {
       // Логируем ошибку для отладки

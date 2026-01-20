@@ -158,7 +158,10 @@ class LoadingWithMessage extends StatelessWidget {
           Text(
             message,
             style: TextStyle(
-              color: Theme.of(context).colorScheme.onSurface.withValues(alpha: 0.7),
+              color: Theme.of(context)
+                  .colorScheme
+                  .onSurface
+                  .withValues(alpha: 0.7),
               fontSize: 14,
             ),
             textAlign: TextAlign.center,

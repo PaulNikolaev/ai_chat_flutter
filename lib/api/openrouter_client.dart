@@ -122,10 +122,10 @@ class OpenRouterClient {
       'Authorization': 'Bearer $apiKey',
       'Content-Type': 'application/json',
     };
-    
+
     // Для VSEGPT используем минимальный набор заголовков
     // User-Agent может вызывать проблемы с некоторыми серверами
-    
+
     return headers;
   }
 
@@ -185,13 +185,14 @@ class OpenRouterClient {
       if (decoded is! Map<String, dynamic>) {
         throw const FormatException('Response is not a JSON object');
       }
-      
+
       // Логируем структуру ответа для диагностики
       // VSEGPT может возвращать модели в другом формате
       dynamic data;
       if (provider == 'vsegpt') {
         // Пробуем разные варианты структуры ответа VSEGPT
-        data = decoded['data'] ?? decoded['models'] ?? decoded['list'] ?? decoded;
+        data =
+            decoded['data'] ?? decoded['models'] ?? decoded['list'] ?? decoded;
         // Если data это не список, но это Map, пробуем извлечь список из него
         if (data is Map<String, dynamic>) {
           data = data['items'] ?? data['models'] ?? data['data'];
@@ -199,9 +200,10 @@ class OpenRouterClient {
       } else {
         data = decoded['data'];
       }
-      
+
       if (data is! List) {
-        throw FormatException('Response does not contain a data list. Got: ${data.runtimeType}');
+        throw FormatException(
+            'Response does not contain a data list. Got: ${data.runtimeType}');
       }
 
       final models = data
@@ -212,19 +214,19 @@ class OpenRouterClient {
       // Удаляем дубликаты по id (могут быть одинаковые модели с разными форматами)
       final uniqueModels = <String, ModelInfo>{};
       final duplicateIds = <String>[];
-      
+
       for (final model in models) {
         if (model.id.isEmpty) {
           continue;
         }
-        
+
         if (!uniqueModels.containsKey(model.id)) {
           uniqueModels[model.id] = model;
         } else {
           duplicateIds.add(model.id);
         }
       }
-      
+
       final deduplicatedModels = uniqueModels.values.toList();
 
       _modelCache = deduplicatedModels;
@@ -254,11 +256,13 @@ class OpenRouterClient {
       final baseUri = Uri.parse(baseUrl);
       debugPrint('[OpenRouterClient] VSEGPT baseUrl: $baseUrl');
       debugPrint('[OpenRouterClient] Parsed baseUri path: ${baseUri.path}');
-      
+
       // Если baseUrl уже содержит полный путь /v1/chat/completions, используем его как есть
-      if (baseUri.path == '/v1/chat/completions' || baseUri.path.endsWith('/v1/chat/completions')) {
+      if (baseUri.path == '/v1/chat/completions' ||
+          baseUri.path.endsWith('/v1/chat/completions')) {
         uri = baseUri;
-      } else if (baseUri.path == '/v1/chat' || baseUri.path.endsWith('/v1/chat')) {
+      } else if (baseUri.path == '/v1/chat' ||
+          baseUri.path.endsWith('/v1/chat')) {
         // Если baseUrl заканчивается на /v1/chat, добавляем /completions
         // Например: https://api.vsegpt.ru/v1/chat -> https://api.vsegpt.ru/v1/chat/completions
         uri = Uri(
@@ -328,7 +332,8 @@ class OpenRouterClient {
 
     if (response.statusCode != 200) {
       // Пытаемся извлечь сообщение об ошибке из ответа
-      String errorMessage = 'Failed to send message: HTTP ${response.statusCode}';
+      String errorMessage =
+          'Failed to send message: HTTP ${response.statusCode}';
       try {
         final decoded = jsonDecode(response.body) as Map<String, dynamic>?;
         if (decoded != null) {
@@ -347,7 +352,7 @@ class OpenRouterClient {
       } catch (e) {
         // Если не удалось распарсить, используем стандартное сообщение
       }
-      
+
       // Для VSEGPT добавляем дополнительную информацию об ошибке 404
       if (provider == 'vsegpt' && response.statusCode == 404) {
         final modelId = body['model'] as String? ?? 'unknown';
@@ -355,14 +360,15 @@ class OpenRouterClient {
             'Пожалуйста, выберите другую модель из списка доступных. '
             'Ошибка: $errorMessage';
       }
-      
+
       throw OpenRouterException(errorMessage);
     }
 
     try {
       final dynamic decoded = jsonDecode(response.body);
       if (decoded is! Map<String, dynamic>) {
-        debugPrint('[OpenRouterClient] Response is not a JSON object: ${decoded.runtimeType}');
+        debugPrint(
+            '[OpenRouterClient] Response is not a JSON object: ${decoded.runtimeType}');
         throw const FormatException('Response is not a JSON object');
       }
 
@@ -381,13 +387,16 @@ class OpenRouterClient {
 
       if (choices is! List || choices.isEmpty) {
         debugPrint('[OpenRouterClient] Response structure: ${decoded.keys}');
-        debugPrint('[OpenRouterClient] Choices type: ${choices.runtimeType}, value: $choices');
-        throw FormatException('Response does not contain choices. Response keys: ${decoded.keys}');
+        debugPrint(
+            '[OpenRouterClient] Choices type: ${choices.runtimeType}, value: $choices');
+        throw FormatException(
+            'Response does not contain choices. Response keys: ${decoded.keys}');
       }
 
       final first = choices.first;
       if (first is! Map<String, dynamic>) {
-        debugPrint('[OpenRouterClient] First choice type: ${first.runtimeType}');
+        debugPrint(
+            '[OpenRouterClient] First choice type: ${first.runtimeType}');
         throw const FormatException('First choice is not an object');
       }
 
@@ -412,19 +421,21 @@ class OpenRouterClient {
       if (content == null || content.isEmpty) {
         debugPrint('[OpenRouterClient] First choice keys: ${first.keys}');
         debugPrint('[OpenRouterClient] First choice: $first');
-        throw FormatException('Could not extract content from response. Choice keys: ${first.keys}');
+        throw FormatException(
+            'Could not extract content from response. Choice keys: ${first.keys}');
       }
 
       // Извлекаем информацию о токенах, если она присутствует.
       final usage = decoded['usage'] as Map<String, dynamic>?;
-      final totalTokens = usage?['total_tokens'] as int? ?? 
-                         usage?['totalTokens'] as int?;
-      final promptTokens = usage?['prompt_tokens'] as int? ?? 
-                          usage?['promptTokens'] as int?;
-      final completionTokens = usage?['completion_tokens'] as int? ?? 
-                               usage?['completionTokens'] as int?;
+      final totalTokens =
+          usage?['total_tokens'] as int? ?? usage?['totalTokens'] as int?;
+      final promptTokens =
+          usage?['prompt_tokens'] as int? ?? usage?['promptTokens'] as int?;
+      final completionTokens = usage?['completion_tokens'] as int? ??
+          usage?['completionTokens'] as int?;
 
-      debugPrint('[OpenRouterClient] Successfully parsed response. Content length: ${content.length}');
+      debugPrint(
+          '[OpenRouterClient] Successfully parsed response. Content length: ${content.length}');
 
       return ChatCompletionResult(
         text: content,
@@ -497,30 +508,30 @@ class OpenRouterClient {
       }
 
       double balance;
-      
+
       if (provider == 'vsegpt') {
         // Для VSEGPT извлекаем баланс из различных форматов
-        balance = (decoded['balance'] as num?)?.toDouble() ?? 
-                  (decoded['credits'] as num?)?.toDouble() ?? 
-                  0.0;
-        
+        balance = (decoded['balance'] as num?)?.toDouble() ??
+            (decoded['credits'] as num?)?.toDouble() ??
+            0.0;
+
         // Проверяем вложенные форматы
         if (balance == 0.0 && decoded.containsKey('data')) {
           final data = decoded['data'] as Map<String, dynamic>?;
           if (data != null) {
-            balance = (data['balance'] as num?)?.toDouble() ?? 
-                     (data['credits'] as num?)?.toDouble() ?? 
-                     0.0;
+            balance = (data['balance'] as num?)?.toDouble() ??
+                (data['credits'] as num?)?.toDouble() ??
+                0.0;
           }
         }
-        
+
         if (balance == 0.0 && decoded.containsKey('account')) {
           final account = decoded['account'] as Map<String, dynamic>?;
           if (account != null) {
             balance = (account['balance'] as num?)?.toDouble() ?? 0.0;
           }
         }
-        
+
         final formatted = balance.toStringAsFixed(2);
         _cachedBalance = formatted;
         _balanceUpdatedAt = DateTime.now();
@@ -596,16 +607,19 @@ class OpenRouterClient {
     while (true) {
       attempt += 1;
       try {
-        debugPrint('[OpenRouterClient] POST attempt $attempt/$maxRetries to $uri');
+        debugPrint(
+            '[OpenRouterClient] POST attempt $attempt/$maxRetries to $uri');
         debugPrint('[OpenRouterClient] Headers: $_defaultHeaders');
-        
+
         // Проверяем, что клиент не закрыт перед использованием
         // Для VSEGPT не используем encoding параметр, так как он может вызывать проблемы
-        final response = await _client.post(
+        final response = await _client
+            .post(
           uri,
           headers: _defaultHeaders,
           body: jsonEncode(body),
-        ).timeout(
+        )
+            .timeout(
           const Duration(seconds: 60),
           onTimeout: () {
             debugPrint('[OpenRouterClient] Request timeout after 60 seconds');
@@ -613,7 +627,8 @@ class OpenRouterClient {
           },
         );
 
-        debugPrint('[OpenRouterClient] Response received: ${response.statusCode}');
+        debugPrint(
+            '[OpenRouterClient] Response received: ${response.statusCode}');
 
         // Повторяем только при 5xx ошибках, остальные возвращаем сразу.
         if (response.statusCode >= 500 && response.statusCode < 600) {
@@ -629,13 +644,15 @@ class OpenRouterClient {
 
         return response;
       } on http.ClientException catch (e) {
-        debugPrint('[OpenRouterClient] ClientException on attempt $attempt: $e');
+        debugPrint(
+            '[OpenRouterClient] ClientException on attempt $attempt: $e');
         if (attempt >= maxRetries) {
-          debugPrint('[OpenRouterClient] Max retries reached, rethrowing exception');
+          debugPrint(
+              '[OpenRouterClient] Max retries reached, rethrowing exception');
           rethrow;
         }
         // Если клиент закрыт, не пытаемся повторять
-        if (e.toString().contains('already closed') || 
+        if (e.toString().contains('already closed') ||
             e.toString().contains('Connection closed')) {
           debugPrint('[OpenRouterClient] Connection closed, not retrying');
           rethrow;
@@ -643,7 +660,8 @@ class OpenRouterClient {
         debugPrint('[OpenRouterClient] Retrying after delay...');
         await Future<void>.delayed(Duration(milliseconds: 300 * attempt));
       } catch (e) {
-        debugPrint('[OpenRouterClient] Unexpected error on attempt $attempt: $e');
+        debugPrint(
+            '[OpenRouterClient] Unexpected error on attempt $attempt: $e');
         if (attempt >= maxRetries) {
           rethrow;
         }
@@ -661,7 +679,9 @@ class OpenRouterClient {
       if (provider == 'vsegpt') {
         // Пробуем извлечь context_length с учетом того, что он может быть строкой
         int? contextLength;
-        final contextLengthValue = json['context_length'] ?? json['contextLength'] ?? json['max_tokens'];
+        final contextLengthValue = json['context_length'] ??
+            json['contextLength'] ??
+            json['max_tokens'];
         if (contextLengthValue != null) {
           if (contextLengthValue is int) {
             contextLength = contextLengthValue;
@@ -671,23 +691,29 @@ class OpenRouterClient {
             contextLength = contextLengthValue.toInt();
           }
         }
-        
+
         // Парсим цены с учетом возможных форматов
         final pricing = json['pricing'] as Map<String, dynamic>?;
         double? promptPrice;
         double? completionPrice;
-        
+
         if (pricing != null) {
           promptPrice = _parsePrice(pricing['prompt'] ?? pricing['input']);
-          completionPrice = _parsePrice(pricing['completion'] ?? pricing['output']);
+          completionPrice =
+              _parsePrice(pricing['completion'] ?? pricing['output']);
         } else {
-          promptPrice = _parsePrice(json['prompt_price'] ?? json['promptPrice']);
-          completionPrice = _parsePrice(json['completion_price'] ?? json['completionPrice']);
+          promptPrice =
+              _parsePrice(json['prompt_price'] ?? json['promptPrice']);
+          completionPrice =
+              _parsePrice(json['completion_price'] ?? json['completionPrice']);
         }
-        
+
         return ModelInfo(
           id: json['id'] as String? ?? json['model'] as String? ?? '',
-          name: json['name'] as String? ?? json['id'] as String? ?? json['model'] as String? ?? '',
+          name: json['name'] as String? ??
+              json['id'] as String? ??
+              json['model'] as String? ??
+              '',
           description: json['description'] as String?,
           contextLength: contextLength,
           promptPrice: promptPrice,
@@ -701,7 +727,10 @@ class OpenRouterClient {
       // Возвращаем базовую модель с минимальными данными
       return ModelInfo(
         id: json['id']?.toString() ?? json['model']?.toString() ?? 'unknown',
-        name: json['name']?.toString() ?? json['id']?.toString() ?? json['model']?.toString() ?? 'Unknown Model',
+        name: json['name']?.toString() ??
+            json['id']?.toString() ??
+            json['model']?.toString() ??
+            'Unknown Model',
         description: json['description']?.toString(),
       );
     }
@@ -758,4 +787,3 @@ class OpenRouterException implements Exception {
   @override
   String toString() => 'OpenRouterException: $message';
 }
-

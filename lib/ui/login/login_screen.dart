@@ -124,21 +124,21 @@ class _LoginScreenState extends State<LoginScreen> {
   /// Форматирует сообщение об ошибке для лучшего отображения пользователю.
   String _formatErrorMessage(String errorMessage) {
     // Улучшаем отображение различных типов ошибок
-    if (errorMessage.contains('Invalid API key format') || 
+    if (errorMessage.contains('Invalid API key format') ||
         errorMessage.contains('must start with')) {
       return '❌ Неверный формат API ключа\n\n'
           'Ключ должен начинаться с:\n'
           '• sk-or-v1-... (OpenRouter)\n'
           '• sk-or-vv-... (VSEGPT)';
     }
-    
-    if (errorMessage.contains('Invalid API key') || 
+
+    if (errorMessage.contains('Invalid API key') ||
         errorMessage.contains('Unauthorized') ||
         errorMessage.contains('401')) {
       return '❌ Неверный API ключ\n\n'
           'Проверьте правильность ключа и убедитесь, что он не был отозван.';
     }
-    
+
     if (errorMessage.contains('Network error') ||
         errorMessage.contains('network') ||
         errorMessage.contains('Connection')) {
@@ -146,14 +146,13 @@ class _LoginScreenState extends State<LoginScreen> {
           'Не удалось подключиться к серверу API.\n'
           'Проверьте подключение к интернету и попробуйте снова.';
     }
-    
-    if (errorMessage.contains('timeout') || 
-        errorMessage.contains('Timeout')) {
+
+    if (errorMessage.contains('timeout') || errorMessage.contains('Timeout')) {
       return '⏱️ Превышено время ожидания\n\n'
           'Сервер не ответил вовремя.\n'
           'Проверьте подключение к интернету и попробуйте снова.';
     }
-    
+
     if (errorMessage.contains('server error') ||
         errorMessage.contains('500') ||
         errorMessage.contains('502') ||
@@ -162,28 +161,27 @@ class _LoginScreenState extends State<LoginScreen> {
           'Сервер API временно недоступен.\n'
           'Попробуйте позже.';
     }
-    
-    if (errorMessage.contains('429') || 
-        errorMessage.contains('rate limit')) {
+
+    if (errorMessage.contains('429') || errorMessage.contains('rate limit')) {
       return '⏳ Превышен лимит запросов\n\n'
           'Слишком много запросов к API.\n'
           'Подождите немного и попробуйте снова.';
     }
-    
+
     if (errorMessage.contains('Insufficient balance') ||
         errorMessage.contains('negative balance')) {
       return '💳 Недостаточно средств\n\n'
           'Баланс вашего аккаунта отрицательный.\n'
           'Пополните баланс перед продолжением.';
     }
-    
+
     if (errorMessage.contains('Failed to save') ||
         errorMessage.contains('database')) {
       return '❌ Ошибка сохранения данных\n\n'
           'Не удалось сохранить данные аутентификации.\n'
           'Попробуйте снова.';
     }
-    
+
     // Для остальных ошибок возвращаем оригинальное сообщение
     return '❌ $errorMessage';
   }
@@ -195,26 +193,26 @@ class _LoginScreenState extends State<LoginScreen> {
       return '❌ Неверный формат PIN\n\n'
           'PIN должен содержать ровно 4 цифры (1000-9999).';
     }
-    
+
     if (errorMessage.contains('Invalid PIN') ||
         errorMessage.contains('неверный')) {
       return '❌ Неверный PIN код\n\n'
           'Проверьте правильность введенного PIN и попробуйте снова.';
     }
-    
+
     if (errorMessage.contains('Error verifying PIN') ||
         errorMessage.contains('Error retrieving')) {
       return '❌ Ошибка при проверке данных\n\n'
           'Не удалось проверить PIN код.\n'
           'Попробуйте снова или используйте API ключ для входа.';
     }
-    
+
     if (errorMessage.contains('Authentication data not found') ||
         errorMessage.contains('not found')) {
       return '❌ Данные аутентификации не найдены\n\n'
           'Войдите с помощью API ключа для восстановления доступа.';
     }
-    
+
     // Для остальных ошибок возвращаем оригинальное сообщение
     return '❌ $errorMessage';
   }
@@ -252,7 +250,7 @@ class _LoginScreenState extends State<LoginScreen> {
           // Успешный вход: показываем PIN и баланс
           final pin = result.message;
           final balance = result.balance.isNotEmpty ? result.balance : '0.00';
-          
+
           _showStatus(
             '✅ Успешная авторизация!\n\n'
             '🔐 Ваш PIN код: $pin\n'
@@ -449,7 +447,7 @@ class _LoginScreenState extends State<LoginScreen> {
     final buttonHeight = AppStyles.getButtonHeight(context);
     final inputHeight = AppStyles.getInputHeight(context);
     final maxContentWidth = AppStyles.getMaxContentWidth(context);
-    
+
     // Адаптивная ширина контейнера
     double? containerWidth;
     if (isMobile) {
@@ -474,167 +472,179 @@ class _LoginScreenState extends State<LoginScreen> {
               padding: EdgeInsets.all(padding * 1.5),
               decoration: AppStyles.loginWindowDecoration,
               child: Form(
-              key: _formKey,
-              child: Column(
-                mainAxisSize: MainAxisSize.min,
-                crossAxisAlignment: CrossAxisAlignment.stretch,
-                children: [
-                  Text(
-                    _isFirstLogin ? 'Первичная авторизация' : 'Вход в приложение',
-                    style: Theme.of(context).textTheme.headlineMedium,
-                    textAlign: TextAlign.center,
-                  ),
-                  const SizedBox(height: AppStyles.padding),
-                  // Повторный вход: отображаем поля для PIN и API ключа
-                  if (!_isFirstLogin) ...[
-                    // Поле для ввода PIN кода
-                    // PIN скрывается при вводе (obscureText: true) для безопасности
+                key: _formKey,
+                child: Column(
+                  mainAxisSize: MainAxisSize.min,
+                  crossAxisAlignment: CrossAxisAlignment.stretch,
+                  children: [
+                    Text(
+                      _isFirstLogin
+                          ? 'Первичная авторизация'
+                          : 'Вход в приложение',
+                      style: Theme.of(context).textTheme.headlineMedium,
+                      textAlign: TextAlign.center,
+                    ),
+                    const SizedBox(height: AppStyles.padding),
+                    // Повторный вход: отображаем поля для PIN и API ключа
+                    if (!_isFirstLogin) ...[
+                      // Поле для ввода PIN кода
+                      // PIN скрывается при вводе (obscureText: true) для безопасности
+                      SizedBox(
+                        height: inputHeight,
+                        child: TextFormField(
+                          controller: _pinController,
+                          decoration: const InputDecoration(
+                            labelText: 'PIN',
+                            hintText: 'Введите 4-значный PIN',
+                            prefixIcon: Icon(Icons.lock),
+                          ),
+                          keyboardType: TextInputType.number,
+                          maxLength: 4,
+                          obscureText:
+                              true, // PIN скрывается при вводе для безопасности
+                          textInputAction: TextInputAction.next,
+                          style: AppStyles.primaryTextStyle,
+                          validator: (value) {
+                            if (!_isFirstLogin &&
+                                value != null &&
+                                value.isNotEmpty) {
+                              // Валидация формата PIN: должен быть ровно 4 цифры
+                              if (value.length != 4) {
+                                return 'PIN должен содержать ровно 4 цифры (1000-9999)';
+                              }
+                              if (!RegExp(r'^\d{4}$').hasMatch(value)) {
+                                return 'PIN должен содержать только цифры';
+                              }
+                              // Проверяем диапазон (1000-9999)
+                              final pinValue = int.tryParse(value);
+                              if (pinValue == null ||
+                                  pinValue < 1000 ||
+                                  pinValue > 9999) {
+                                return 'PIN должен быть числом от 1000 до 9999';
+                              }
+                            }
+                            return null;
+                          },
+                        ),
+                      ),
+                      const SizedBox(height: AppStyles.paddingSmall),
+                      // Разделитель между полями PIN и API ключа
+                      const Row(
+                        children: [
+                          Expanded(
+                              child: Divider(color: AppStyles.borderColor)),
+                          Padding(
+                            padding: EdgeInsets.symmetric(
+                              horizontal: AppStyles.paddingSmall,
+                            ),
+                            child: Text(
+                              'Или',
+                              style: TextStyle(
+                                color: AppStyles.textSecondary,
+                                fontSize: AppStyles.fontSizeHint,
+                              ),
+                            ),
+                          ),
+                          Expanded(
+                              child: Divider(color: AppStyles.borderColor)),
+                        ],
+                      ),
+                      const SizedBox(height: AppStyles.paddingSmall),
+                    ],
                     SizedBox(
                       height: inputHeight,
                       child: TextFormField(
-                        controller: _pinController,
+                        controller: _apiKeyController,
                         decoration: const InputDecoration(
-                          labelText: 'PIN',
-                          hintText: 'Введите 4-значный PIN',
-                          prefixIcon: Icon(Icons.lock),
+                          labelText: 'API Key',
+                          hintText: 'Введите ключ OpenRouter или VSEGPT API',
+                          prefixIcon: Icon(Icons.key),
                         ),
-                        keyboardType: TextInputType.number,
-                        maxLength: 4,
-                        obscureText: true, // PIN скрывается при вводе для безопасности
-                        textInputAction: TextInputAction.next,
+                        obscureText: true,
+                        textInputAction: TextInputAction.done,
                         style: AppStyles.primaryTextStyle,
+                        onFieldSubmitted: (_) => _handleLogin(),
                         validator: (value) {
-                          if (!_isFirstLogin && value != null && value.isNotEmpty) {
-                            // Валидация формата PIN: должен быть ровно 4 цифры
-                            if (value.length != 4) {
-                              return 'PIN должен содержать ровно 4 цифры (1000-9999)';
+                          if (_isFirstLogin &&
+                              (value == null || value.isEmpty)) {
+                            return 'Введите API ключ';
+                          }
+                          // Валидация формата API ключа при вводе
+                          if (value != null && value.isNotEmpty) {
+                            final trimmed = value.trim();
+                            if (!trimmed.startsWith('sk-or-')) {
+                              return 'Ключ должен начинаться с "sk-or-v1-" (OpenRouter) или "sk-or-vv-" (VSEGPT)';
                             }
-                            if (!RegExp(r'^\d{4}$').hasMatch(value)) {
-                              return 'PIN должен содержать только цифры';
+                            if (!trimmed.startsWith('sk-or-v1-') &&
+                                !trimmed.startsWith('sk-or-vv-')) {
+                              return 'Неверный формат ключа. Используйте "sk-or-v1-..." или "sk-or-vv-..."';
                             }
-                            // Проверяем диапазон (1000-9999)
-                            final pinValue = int.tryParse(value);
-                            if (pinValue == null || pinValue < 1000 || pinValue > 9999) {
-                              return 'PIN должен быть числом от 1000 до 9999';
+                            // Минимальная длина ключа (примерно)
+                            if (trimmed.length < 20) {
+                              return 'API ключ слишком короткий. Проверьте правильность ввода';
                             }
                           }
                           return null;
                         },
                       ),
                     ),
-                    const SizedBox(height: AppStyles.paddingSmall),
-                    // Разделитель между полями PIN и API ключа
-                    const Row(
-                      children: [
-                        Expanded(child: Divider(color: AppStyles.borderColor)),
-                        Padding(
-                          padding: EdgeInsets.symmetric(
-                            horizontal: AppStyles.paddingSmall,
-                          ),
-                          child: Text(
-                            'Или',
-                            style: TextStyle(
-                              color: AppStyles.textSecondary,
-                              fontSize: AppStyles.fontSizeHint,
-                            ),
-                          ),
-                        ),
-                        Expanded(child: Divider(color: AppStyles.borderColor)),
-                      ],
-                    ),
-                    const SizedBox(height: AppStyles.paddingSmall),
-                  ],
-                  SizedBox(
-                    height: inputHeight,
-                    child: TextFormField(
-                      controller: _apiKeyController,
-                      decoration: const InputDecoration(
-                        labelText: 'API Key',
-                        hintText: 'Введите ключ OpenRouter или VSEGPT API',
-                        prefixIcon: Icon(Icons.key),
-                      ),
-                      obscureText: true,
-                      textInputAction: TextInputAction.done,
-                      style: AppStyles.primaryTextStyle,
-                      onFieldSubmitted: (_) => _handleLogin(),
-                      validator: (value) {
-                        if (_isFirstLogin && (value == null || value.isEmpty)) {
-                          return 'Введите API ключ';
-                        }
-                        // Валидация формата API ключа при вводе
-                        if (value != null && value.isNotEmpty) {
-                          final trimmed = value.trim();
-                          if (!trimmed.startsWith('sk-or-')) {
-                            return 'Ключ должен начинаться с "sk-or-v1-" (OpenRouter) или "sk-or-vv-" (VSEGPT)';
-                          }
-                          if (!trimmed.startsWith('sk-or-v1-') && !trimmed.startsWith('sk-or-vv-')) {
-                            return 'Неверный формат ключа. Используйте "sk-or-v1-..." или "sk-or-vv-..."';
-                          }
-                          // Минимальная длина ключа (примерно)
-                          if (trimmed.length < 20) {
-                            return 'API ключ слишком короткий. Проверьте правильность ввода';
-                          }
-                        }
-                        return null;
-                      },
-                    ),
-                  ),
-                  if (_statusMessage != null) ...[
-                    const SizedBox(height: AppStyles.paddingSmall),
-                    Container(
-                      padding: EdgeInsets.all(_isFirstLogin && !_isError 
-                          ? AppStyles.padding 
-                          : AppStyles.paddingSmall),
-                      decoration: BoxDecoration(
-                        color: _isError
-                            ? AppStyles.errorColor.withValues(alpha: 0.1)
-                            : AppStyles.successColor.withValues(alpha: 0.1),
-                        borderRadius: BorderRadius.circular(AppStyles.borderRadius),
-                        border: Border.all(
+                    if (_statusMessage != null) ...[
+                      const SizedBox(height: AppStyles.paddingSmall),
+                      Container(
+                        padding: EdgeInsets.all(_isFirstLogin && !_isError
+                            ? AppStyles.padding
+                            : AppStyles.paddingSmall),
+                        decoration: BoxDecoration(
                           color: _isError
-                              ? AppStyles.errorColor
-                              : AppStyles.successColor,
-                          width: _isFirstLogin && !_isError ? 2 : 1,
-                        ),
-                      ),
-                      child: Text(
-                        _statusMessage!,
-                        style: TextStyle(
-                          color: _isError
-                              ? AppStyles.errorColor
-                              : AppStyles.successColor,
-                          fontSize: _isFirstLogin && !_isError
-                              ? AppStyles.fontSizeDefault
-                              : AppStyles.fontSizeHint,
-                          fontWeight: _isFirstLogin && !_isError
-                              ? FontWeight.w600
-                              : FontWeight.normal,
-                        ),
-                        textAlign: TextAlign.center,
-                      ),
-                    ),
-                  ],
-                  if (_isLoading && _isFirstLogin) ...[
-                    const SizedBox(height: AppStyles.paddingSmall),
-                    const Center(
-                      child: Column(
-                        children: [
-                          CircularProgressIndicator(),
-                          SizedBox(height: AppStyles.paddingSmall),
-                          Text(
-                            'Проверка API ключа...',
-                            style: TextStyle(
-                              color: AppStyles.textSecondary,
-                              fontSize: AppStyles.fontSizeHint,
-                            ),
+                              ? AppStyles.errorColor.withValues(alpha: 0.1)
+                              : AppStyles.successColor.withValues(alpha: 0.1),
+                          borderRadius:
+                              BorderRadius.circular(AppStyles.borderRadius),
+                          border: Border.all(
+                            color: _isError
+                                ? AppStyles.errorColor
+                                : AppStyles.successColor,
+                            width: _isFirstLogin && !_isError ? 2 : 1,
                           ),
-                        ],
+                        ),
+                        child: Text(
+                          _statusMessage!,
+                          style: TextStyle(
+                            color: _isError
+                                ? AppStyles.errorColor
+                                : AppStyles.successColor,
+                            fontSize: _isFirstLogin && !_isError
+                                ? AppStyles.fontSizeDefault
+                                : AppStyles.fontSizeHint,
+                            fontWeight: _isFirstLogin && !_isError
+                                ? FontWeight.w600
+                                : FontWeight.normal,
+                          ),
+                          textAlign: TextAlign.center,
+                        ),
                       ),
-                    ),
-                  ],
-                  const SizedBox(height: AppStyles.padding),
-                  (isMobile || (isTablet && isLandscape))
-                      ? // Вертикальный layout для мобильных и планшетов в landscape
+                    ],
+                    if (_isLoading && _isFirstLogin) ...[
+                      const SizedBox(height: AppStyles.paddingSmall),
+                      const Center(
+                        child: Column(
+                          children: [
+                            CircularProgressIndicator(),
+                            SizedBox(height: AppStyles.paddingSmall),
+                            Text(
+                              'Проверка API ключа...',
+                              style: TextStyle(
+                                color: AppStyles.textSecondary,
+                                fontSize: AppStyles.fontSizeHint,
+                              ),
+                            ),
+                          ],
+                        ),
+                      ),
+                    ],
+                    const SizedBox(height: AppStyles.padding),
+                    (isMobile || (isTablet && isLandscape))
+                        ? // Вертикальный layout для мобильных и планшетов в landscape
                         Column(
                             mainAxisSize: MainAxisSize.min,
                             crossAxisAlignment: CrossAxisAlignment.stretch,
@@ -647,7 +657,8 @@ class _LoginScreenState extends State<LoginScreen> {
                                       ? const SizedBox(
                                           width: 16,
                                           height: 16,
-                                          child: CircularProgressIndicator(strokeWidth: 2),
+                                          child: CircularProgressIndicator(
+                                              strokeWidth: 2),
                                         )
                                       : const Icon(Icons.login),
                                   label: const Text('Войти'),
@@ -667,7 +678,7 @@ class _LoginScreenState extends State<LoginScreen> {
                               ],
                             ],
                           )
-                      : // Горизонтальный layout для десктопов и планшетов в portrait
+                        : // Горизонтальный layout для десктопов и планшетов в portrait
                         Row(
                             mainAxisAlignment: MainAxisAlignment.center,
                             children: [
@@ -679,7 +690,8 @@ class _LoginScreenState extends State<LoginScreen> {
                                       ? const SizedBox(
                                           width: 16,
                                           height: 16,
-                                          child: CircularProgressIndicator(strokeWidth: 2),
+                                          child: CircularProgressIndicator(
+                                              strokeWidth: 2),
                                         )
                                       : const Icon(Icons.login),
                                   label: const Text('Войти'),
@@ -700,9 +712,9 @@ class _LoginScreenState extends State<LoginScreen> {
                               ],
                             ],
                           ),
-                ],
+                  ],
+                ),
               ),
-            ),
             ),
           ),
         ),

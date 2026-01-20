@@ -88,7 +88,7 @@ class AppRouter {
   static Route<dynamic>? onGenerateRoute(RouteSettings settings) {
     // Определяем тип перехода в зависимости от платформы
     final isMobile = PlatformUtils.isMobile();
-    
+
     switch (settings.name) {
       case AppRoutes.home:
         return isMobile
@@ -143,5 +143,4 @@ class AppRouter {
         );
     }
   }
-
 }

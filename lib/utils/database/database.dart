@@ -37,7 +37,7 @@ class DatabaseHelper {
   /// Создает файл базы данных, если его нет, и выполняет миграции.
   Future<Database> _initDatabase() async {
     String path;
-    
+
     // Для десктопных платформ используем getDatabasesPath из sqflite_common_ffi
     if (Platform.isWindows || Platform.isLinux || Platform.isMacOS) {
       final dbPath = await getDatabasesPath();
@@ -72,11 +72,10 @@ class DatabaseHelper {
     // Миграция с версии 1 на версию 2: добавление поля provider в таблицу auth
     if (oldVersion < 2) {
       // Проверяем, существует ли колонка provider
-      final tableInfo = await db.rawQuery(
-        'PRAGMA table_info(auth)'
-      );
-      final hasProviderColumn = tableInfo.any((column) => column['name'] == 'provider');
-      
+      final tableInfo = await db.rawQuery('PRAGMA table_info(auth)');
+      final hasProviderColumn =
+          tableInfo.any((column) => column['name'] == 'provider');
+
       if (!hasProviderColumn) {
         // Добавляем колонку provider с значением по умолчанию 'openrouter'
         await db.execute('''
@@ -84,28 +83,28 @@ class DatabaseHelper {
         ''');
       }
     }
-    
+
     // Миграция с версии 2 на версию 3: добавление полей для токенов и стоимости
     if (oldVersion < 3) {
-      final tableInfo = await db.rawQuery(
-        'PRAGMA table_info(analytics_messages)'
-      );
-      final columnNames = tableInfo.map((column) => column['name'] as String).toList();
-      
+      final tableInfo =
+          await db.rawQuery('PRAGMA table_info(analytics_messages)');
+      final columnNames =
+          tableInfo.map((column) => column['name'] as String).toList();
+
       // Добавляем prompt_tokens если его нет
       if (!columnNames.contains('prompt_tokens')) {
         await db.execute('''
           ALTER TABLE analytics_messages ADD COLUMN prompt_tokens INTEGER
         ''');
       }
-      
+
       // Добавляем completion_tokens если его нет
       if (!columnNames.contains('completion_tokens')) {
         await db.execute('''
           ALTER TABLE analytics_messages ADD COLUMN completion_tokens INTEGER
         ''');
       }
-      
+
       // Добавляем cost если его нет
       if (!columnNames.contains('cost')) {
         await db.execute('''
@@ -113,7 +112,7 @@ class DatabaseHelper {
         ''');
       }
     }
-    
+
     // Миграция с версии 3 на версию 4: поддержка нескольких API ключей от разных провайдеров
     if (oldVersion < 4) {
       // Создаем новую таблицу auth_keys для хранения нескольких ключей
@@ -128,7 +127,7 @@ class DatabaseHelper {
           UNIQUE(provider)
         )
       ''');
-      
+
       // Мигрируем существующие данные из auth в auth_keys
       final existingAuth = await db.query('auth', limit: 1);
       if (existingAuth.isNotEmpty) {
@@ -137,11 +136,12 @@ class DatabaseHelper {
           'api_key': record['api_key'],
           'provider': record['provider'] ?? 'openrouter',
           'pin_hash': record['pin_hash'],
-          'created_at': record['created_at'] ?? DateTime.now().toIso8601String(),
+          'created_at':
+              record['created_at'] ?? DateTime.now().toIso8601String(),
           'last_used': record['last_used'],
         });
       }
-      
+
       // Удаляем старую таблицу auth (после миграции данных)
       await db.execute('DROP TABLE IF EXISTS auth');
     }
@@ -252,7 +252,7 @@ class DatabaseHelper {
       CREATE INDEX IF NOT EXISTS idx_auth_keys_provider 
       ON auth_keys(provider)
     ''');
-    
+
     // Создаем индекс для поиска по pin_hash
     await db.execute('''
       CREATE INDEX IF NOT EXISTS idx_auth_keys_pin_hash 
@@ -274,14 +274,14 @@ class DatabaseHelper {
   /// **Внимание:** Удаляет все данные!
   Future<void> deleteDatabase() async {
     String path;
-    
+
     if (Platform.isWindows || Platform.isLinux || Platform.isMacOS) {
       final dbPath = await getDatabasesPath();
       path = join(dbPath, _databaseName);
     } else {
       path = join(await getDatabasesPath(), _databaseName);
     }
-    
+
     await databaseFactory.deleteDatabase(path);
     _database = null;
   }

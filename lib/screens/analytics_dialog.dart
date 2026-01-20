@@ -174,7 +174,7 @@ class _AnalyticsDialogState extends State<AnalyticsDialog> {
   /// Загружает статистику использования моделей.
   Future<void> _loadStatistics() async {
     final analytics = widget.analytics ?? Analytics();
-    
+
     setState(() {
       _isLoadingStatistics = true;
     });
@@ -182,7 +182,8 @@ class _AnalyticsDialogState extends State<AnalyticsDialog> {
     try {
       final statistics = await analytics.getModelStatistics();
       // Отладочная информация
-      debugPrint('AnalyticsDialog: Loaded statistics: ${statistics.length} models');
+      debugPrint(
+          'AnalyticsDialog: Loaded statistics: ${statistics.length} models');
       if (mounted) {
         setState(() {
           _modelStatistics = statistics;
@@ -204,7 +205,7 @@ class _AnalyticsDialogState extends State<AnalyticsDialog> {
   /// Загружает метрики производительности.
   Future<void> _loadPerformanceMetrics() async {
     final monitor = widget.performanceMonitor ?? PerformanceMonitor();
-    
+
     setState(() {
       _isLoadingMetrics = true;
     });
@@ -310,7 +311,7 @@ class _AnalyticsDialogState extends State<AnalyticsDialog> {
               ],
             ),
             const SizedBox(height: AppStyles.padding),
-            
+
             // Скроллируемая область с контентом
             Flexible(
               child: SingleChildScrollView(
@@ -320,11 +321,11 @@ class _AnalyticsDialogState extends State<AnalyticsDialog> {
                     // Баланс
                     _buildBalanceSection(),
                     const SizedBox(height: AppStyles.padding),
-                    
+
                     // Статистика моделей
                     _buildModelStatisticsSection(),
                     const SizedBox(height: AppStyles.padding),
-                    
+
                     // Метрики производительности
                     if (_performanceMetrics != null) ...[
                       _buildPerformanceMetricsSection(),
@@ -334,7 +335,7 @@ class _AnalyticsDialogState extends State<AnalyticsDialog> {
                 ),
               ),
             ),
-            
+
             // Кнопки управления
             const SizedBox(height: AppStyles.paddingSmall),
             Row(
@@ -361,7 +362,8 @@ class _AnalyticsDialogState extends State<AnalyticsDialog> {
                         vertical: AppStyles.paddingSmall,
                       ),
                       shape: RoundedRectangleBorder(
-                        borderRadius: BorderRadius.circular(AppStyles.borderRadius),
+                        borderRadius:
+                            BorderRadius.circular(AppStyles.borderRadius),
                       ),
                     ),
                   ),

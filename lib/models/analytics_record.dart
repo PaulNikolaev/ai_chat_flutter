@@ -65,12 +65,16 @@ class AnalyticsRecord {
           ? DateTime.parse(json['timestamp'] as String)
           : DateTime.fromMillisecondsSinceEpoch(json['timestamp'] as int),
       model: json['model'] as String,
-      messageLength: json['message_length'] as int? ?? json['messageLength'] as int,
-      responseTime: (json['response_time'] as num?)?.toDouble() ?? 
-                   (json['responseTime'] as num?)?.toDouble() ?? 0.0,
+      messageLength:
+          json['message_length'] as int? ?? json['messageLength'] as int,
+      responseTime: (json['response_time'] as num?)?.toDouble() ??
+          (json['responseTime'] as num?)?.toDouble() ??
+          0.0,
       tokensUsed: json['tokens_used'] as int? ?? json['tokensUsed'] as int,
-      promptTokens: json['prompt_tokens'] as int? ?? json['promptTokens'] as int?,
-      completionTokens: json['completion_tokens'] as int? ?? json['completionTokens'] as int?,
+      promptTokens:
+          json['prompt_tokens'] as int? ?? json['promptTokens'] as int?,
+      completionTokens:
+          json['completion_tokens'] as int? ?? json['completionTokens'] as int?,
       cost: (json['cost'] as num?)?.toDouble(),
     );
   }
@@ -120,8 +124,8 @@ class AnalyticsRecord {
   @override
   String toString() {
     return 'AnalyticsRecord(id: $id, model: $model, timestamp: $timestamp, '
-           'tokensUsed: $tokensUsed, promptTokens: $promptTokens, '
-           'completionTokens: $completionTokens, cost: $cost, responseTime: ${responseTime}s)';
+        'tokensUsed: $tokensUsed, promptTokens: $promptTokens, '
+        'completionTokens: $completionTokens, cost: $cost, responseTime: ${responseTime}s)';
   }
 
   @override

@@ -39,14 +39,14 @@ class AuthResult {
 /// **Пример использования:**
 /// ```dart
 /// final manager = AuthManager();
-/// 
+///
 /// // Первый вход
 /// final result = await manager.handleFirstLogin('sk-or-v1-...');
 /// if (result.success) {
 ///   print('PIN: ${result.message}');
 ///   print('Balance: ${result.balance}');
 /// }
-/// 
+///
 /// // Повторный вход по PIN
 /// final pinResult = await manager.handlePinLogin('1234');
 /// if (pinResult.success) {
@@ -126,7 +126,8 @@ class AuthManager {
     if (!trimmedKey.startsWith('sk-or-')) {
       return const AuthResult(
         success: false,
-        message: 'Invalid API key format. Key must start with "sk-or-vv-" (VSEGPT) or "sk-or-v1-" (OpenRouter).',
+        message:
+            'Invalid API key format. Key must start with "sk-or-vv-" (VSEGPT) or "sk-or-v1-" (OpenRouter).',
       );
     }
 
@@ -140,52 +141,58 @@ class AuthManager {
       // Обработка неожиданных ошибок при валидации
       return AuthResult(
         success: false,
-        message: 'Unexpected error during API key validation: $e. Please try again.',
+        message:
+            'Unexpected error during API key validation: $e. Please try again.',
       );
     }
 
     // Обработка неверного формата ключа
     if (!validationResult.isValid) {
       final errorMessage = validationResult.message;
-      
+
       // Проверяем, является ли это ошибкой формата ключа
-      if (validationResult.provider == 'unknown' || 
+      if (validationResult.provider == 'unknown' ||
           errorMessage.contains('Invalid API key format') ||
           errorMessage.contains('must start with')) {
         return const AuthResult(
           success: false,
-          message: 'Invalid API key format. Key must start with "sk-or-vv-" (VSEGPT) or "sk-or-v1-" (OpenRouter).',
+          message:
+              'Invalid API key format. Key must start with "sk-or-vv-" (VSEGPT) or "sk-or-v1-" (OpenRouter).',
         );
       }
-      
+
       // Обработка неверного ключа (401 Unauthorized)
-      if (errorMessage.contains('401') || 
+      if (errorMessage.contains('401') ||
           errorMessage.contains('Unauthorized') ||
           errorMessage.contains('Invalid') && errorMessage.contains('key')) {
         return const AuthResult(
           success: false,
-          message: 'Invalid API key. Please check that your key is correct and has not been revoked.',
+          message:
+              'Invalid API key. Please check that your key is correct and has not been revoked.',
         );
       }
-      
+
       // Обработка сетевых ошибок
       if (errorMessage.contains('Network error') ||
           errorMessage.contains('network') ||
           errorMessage.contains('Connection')) {
         return const AuthResult(
           success: false,
-          message: 'Network error: Unable to connect to the API server. Please check your internet connection and try again.',
+          message:
+              'Network error: Unable to connect to the API server. Please check your internet connection and try again.',
         );
       }
-      
+
       // Обработка таймаута
-      if (errorMessage.contains('timeout') || errorMessage.contains('Timeout')) {
+      if (errorMessage.contains('timeout') ||
+          errorMessage.contains('Timeout')) {
         return const AuthResult(
           success: false,
-          message: 'Request timeout: The server did not respond in time. Please check your internet connection and try again.',
+          message:
+              'Request timeout: The server did not respond in time. Please check your internet connection and try again.',
         );
       }
-      
+
       // Обработка ошибок сервера (5xx)
       if (errorMessage.contains('server error') ||
           errorMessage.contains('500') ||
@@ -193,18 +200,20 @@ class AuthManager {
           errorMessage.contains('503')) {
         return const AuthResult(
           success: false,
-          message: 'Server error: The API server is temporarily unavailable. Please try again later.',
+          message:
+              'Server error: The API server is temporarily unavailable. Please try again later.',
         );
       }
-      
+
       // Обработка rate limit (429)
       if (errorMessage.contains('429') || errorMessage.contains('rate limit')) {
         return const AuthResult(
           success: false,
-          message: 'Rate limit exceeded: Too many requests. Please wait a moment and try again.',
+          message:
+              'Rate limit exceeded: Too many requests. Please wait a moment and try again.',
         );
       }
-      
+
       // Для всех остальных ошибок возвращаем оригинальное сообщение
       return AuthResult(
         success: false,
@@ -213,11 +222,12 @@ class AuthManager {
     }
 
     // Проверяем, что провайдер определен корректно
-    if (validationResult.provider != 'openrouter' && 
+    if (validationResult.provider != 'openrouter' &&
         validationResult.provider != 'vsegpt') {
       return const AuthResult(
         success: false,
-        message: 'Invalid provider detected. Supported providers: openrouter, vsegpt',
+        message:
+            'Invalid provider detected. Supported providers: openrouter, vsegpt',
       );
     }
 
@@ -227,10 +237,11 @@ class AuthManager {
     if (validationResult.balance < 0) {
       return AuthResult(
         success: false,
-        message: 'Insufficient balance: Your account balance is negative (${validationResult.balance.toStringAsFixed(2)}). Please add funds to your account before continuing.',
+        message:
+            'Insufficient balance: Your account balance is negative (${validationResult.balance.toStringAsFixed(2)}). Please add funds to your account before continuing.',
       );
     }
-    
+
     // Информируем о нулевом балансе (но разрешаем подключение)
     if (validationResult.balance == 0) {
       // Это информационное сообщение, но не ошибка - продолжаем выполнение
@@ -255,7 +266,8 @@ class AuthManager {
     if (!saved) {
       return const AuthResult(
         success: false,
-        message: 'Failed to save authentication data to database. Please check database permissions and try again.',
+        message:
+            'Failed to save authentication data to database. Please check database permissions and try again.',
       );
     }
 
@@ -266,14 +278,16 @@ class AuthManager {
     } catch (e) {
       return AuthResult(
         success: false,
-        message: 'Error verifying saved authentication data: $e. Please try again.',
+        message:
+            'Error verifying saved authentication data: $e. Please try again.',
       );
     }
-    
+
     if (!hasAuthData) {
       return const AuthResult(
         success: false,
-        message: 'Authentication data was not saved correctly. Please try again.',
+        message:
+            'Authentication data was not saved correctly. Please try again.',
       );
     }
 
@@ -341,18 +355,19 @@ class AuthManager {
     try {
       // Получаем список всех доступных ключей, отсортированных по last_used
       final allKeys = await storage.getAllApiKeys();
-      
+
       if (allKeys.isEmpty) {
         return const AuthResult(
           success: false,
-          message: 'No API keys found in database. Please log in with your API key again.',
+          message:
+              'No API keys found in database. Please log in with your API key again.',
         );
       }
-      
+
       // Выбираем активного провайдера (последнего использованного)
       // Список уже отсортирован по last_used DESC в getAllApiKeys()
       provider = allKeys.first['provider'];
-      
+
       // Если провайдер не найден в первой записи, берем любого доступного
       if (provider == null || provider.isEmpty) {
         // Ищем первого провайдера с непустым значением
@@ -364,28 +379,31 @@ class AuthManager {
           }
         }
       }
-      
+
       // Если все еще не нашли провайдера, это ошибка
       if (provider == null || provider.isEmpty) {
         return const AuthResult(
           success: false,
-          message: 'Invalid provider data in database. Please log in with your API key again.',
+          message:
+              'Invalid provider data in database. Please log in with your API key again.',
         );
       }
-      
+
       // Получаем API ключ для найденного провайдера
       apiKey = await storage.getApiKey(provider: provider);
     } catch (e) {
       return AuthResult(
         success: false,
-        message: 'Error retrieving API key from database: $e. Please try again.',
+        message:
+            'Error retrieving API key from database: $e. Please try again.',
       );
     }
 
     if (apiKey == null || apiKey.isEmpty) {
       return const AuthResult(
         success: false,
-        message: 'Authentication data not found in database. Please log in with your API key again.',
+        message:
+            'Authentication data not found in database. Please log in with your API key again.',
       );
     }
 
@@ -429,7 +447,8 @@ class AuthManager {
     } catch (e) {
       return AuthResult(
         success: false,
-        message: 'Unexpected error during API key validation: $e. Please try again.',
+        message:
+            'Unexpected error during API key validation: $e. Please try again.',
       );
     }
 
@@ -442,11 +461,12 @@ class AuthManager {
     }
 
     // Проверяем, что провайдер определен корректно
-    if (validationResult.provider != 'openrouter' && 
+    if (validationResult.provider != 'openrouter' &&
         validationResult.provider != 'vsegpt') {
       return const AuthResult(
         success: false,
-        message: 'Invalid provider detected. Supported providers: openrouter, vsegpt',
+        message:
+            'Invalid provider detected. Supported providers: openrouter, vsegpt',
       );
     }
 
@@ -455,7 +475,8 @@ class AuthManager {
     if (validationResult.balance < 0) {
       return AuthResult(
         success: false,
-        message: 'Insufficient balance: Your account balance is negative (${validationResult.balance.toStringAsFixed(2)}). Please add funds to your account before continuing.',
+        message:
+            'Insufficient balance: Your account balance is negative (${validationResult.balance.toStringAsFixed(2)}). Please add funds to your account before continuing.',
       );
     }
 
@@ -466,7 +487,8 @@ class AuthManager {
     } catch (e) {
       return AuthResult(
         success: false,
-        message: 'Error checking existing authentication data: $e. Please try again.',
+        message:
+            'Error checking existing authentication data: $e. Please try again.',
       );
     }
 
@@ -513,14 +535,16 @@ class AuthManager {
     } catch (e) {
       return AuthResult(
         success: false,
-        message: 'Error saving authentication data to database: $e. Please try again.',
+        message:
+            'Error saving authentication data to database: $e. Please try again.',
       );
     }
 
     if (!saved) {
       return const AuthResult(
         success: false,
-        message: 'Failed to save authentication data to database. Please check database permissions and try again.',
+        message:
+            'Failed to save authentication data to database. Please check database permissions and try again.',
       );
     }
 
@@ -537,7 +561,8 @@ class AuthManager {
     if (!hasAuthData) {
       return const AuthResult(
         success: false,
-        message: 'Authentication data was not saved correctly. Please try again.',
+        message:
+            'Authentication data was not saved correctly. Please try again.',
       );
     }
 
@@ -577,7 +602,7 @@ class AuthManager {
     try {
       // Очищаем данные аутентификации из БД и старых хранилищ
       final cleared = await storage.clearAuth();
-      
+
       if (!cleared) {
         // Если очистка не удалась, возвращаем false
         return false;
@@ -626,14 +651,14 @@ class AuthManager {
     final apiKey = await storage.getApiKey(provider: provider);
     return apiKey ?? '';
   }
-  
+
   /// Получает все сохраненные API ключи.
   ///
   /// Возвращает список Map, каждый содержит 'api_key', 'provider', 'created_at', 'last_used'.
   Future<List<Map<String, String>>> getAllStoredApiKeys() async {
     return await storage.getAllApiKeys();
   }
-  
+
   /// Удаляет API ключ для указанного провайдера.
   ///
   /// Параметры:
@@ -643,7 +668,7 @@ class AuthManager {
   Future<bool> deleteApiKey(String provider) async {
     return await storage.deleteApiKey(provider);
   }
-  
+
   /// Обновляет дату последнего использования для указанного провайдера.
   ///
   /// Параметры:
@@ -683,7 +708,8 @@ class AuthManager {
     if (apiKey == null || apiKey.isEmpty) {
       return AuthResult(
         success: false,
-        message: 'API key for $newProvider not found. Please add an API key for this provider first.',
+        message:
+            'API key for $newProvider not found. Please add an API key for this provider first.',
       );
     }
 
@@ -701,7 +727,7 @@ class AuthManager {
       message: 'Provider switched to $newProvider',
     );
   }
-  
+
   /// Добавляет новый API ключ от другого провайдера.
   ///
   /// Валидирует ключ и добавляет его к существующим ключам под тем же PIN.
@@ -719,7 +745,8 @@ class AuthManager {
     } catch (e) {
       return AuthResult(
         success: false,
-        message: 'Unexpected error during API key validation: $e. Please try again.',
+        message:
+            'Unexpected error during API key validation: $e. Please try again.',
       );
     }
 
@@ -731,11 +758,12 @@ class AuthManager {
     }
 
     // Проверяем, что провайдер определен корректно
-    if (validationResult.provider != 'openrouter' && 
+    if (validationResult.provider != 'openrouter' &&
         validationResult.provider != 'vsegpt') {
       return const AuthResult(
         success: false,
-        message: 'Invalid provider detected. Supported providers: openrouter, vsegpt',
+        message:
+            'Invalid provider detected. Supported providers: openrouter, vsegpt',
       );
     }
 
@@ -743,7 +771,8 @@ class AuthManager {
     if (validationResult.balance < 0) {
       return AuthResult(
         success: false,
-        message: 'Insufficient balance: Your account balance is negative (${validationResult.balance.toStringAsFixed(2)}). Please add funds to your account before continuing.',
+        message:
+            'Insufficient balance: Your account balance is negative (${validationResult.balance.toStringAsFixed(2)}). Please add funds to your account before continuing.',
       );
     }
 
@@ -751,7 +780,7 @@ class AuthManager {
     String pinHash;
     String? generatedPin;
     bool isNewAuth = false;
-    
+
     try {
       final existingPinHash = await storage.getPinHash();
       if (existingPinHash != null && existingPinHash.isNotEmpty) {

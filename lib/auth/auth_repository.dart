@@ -28,20 +28,20 @@ import 'package:ai_chat/utils/utils.dart';
 /// **Пример использования:**
 /// ```dart
 /// final repository = AuthRepository();
-/// 
+///
 /// // Сохранение данных
 /// await repository.saveAuth(
 ///   apiKey: 'sk-or-v1-...',
 ///   pinHash: AuthRepository.hashPin('1234'),
 ///   provider: 'openrouter',
 /// );
-/// 
+///
 /// // Получение API ключа
 /// final apiKey = await repository.getApiKey();
-/// 
+///
 /// // Проверка PIN
 /// final isValid = await repository.verifyPin('1234');
-/// 
+///
 /// // Проверка наличия данных
 /// final hasAuth = await repository.hasAuth();
 /// ```
@@ -100,11 +100,11 @@ class AuthRepository {
   }) async {
     try {
       final db = await _db;
-      
+
       // Шифруем API ключ перед сохранением
       final encryptedApiKey = _encryptApiKey(apiKey);
       final now = DateTime.now().toIso8601String();
-      
+
       // Используем транзакцию для атомарности операции
       return await db.transaction((txn) async {
         // Проверяем существование ключа для данного провайдера
@@ -120,7 +120,7 @@ class AuthRepository {
           // Обновляем существующую запись для этого провайдера
           final existingId = existing.first['id'] as int;
           final existingCreatedAt = existing.first['created_at'] as String?;
-          
+
           // Обновляем pin_hash для всех ключей, если он изменился
           // (это нужно для синхронизации всех ключей под одним PIN)
           final existingPinHash = existing.first['pin_hash'] as String?;
@@ -132,13 +132,14 @@ class AuthRepository {
               whereArgs: [existingPinHash],
             );
           }
-          
+
           final result = await txn.update(
             'auth_keys',
             {
               'api_key': encryptedApiKey,
               'pin_hash': pinHash,
-              'created_at': existingCreatedAt ?? now, // Сохраняем оригинальную дату создания
+              'created_at': existingCreatedAt ??
+                  now, // Сохраняем оригинальную дату создания
               'last_used': now,
             },
             where: 'id = ?',
@@ -166,7 +167,7 @@ class AuthRepository {
               );
             }
           }
-          
+
           // Создаем новую запись для нового провайдера с синхронизированным pin_hash
           final result = await txn.insert(
             'auth_keys',
@@ -208,7 +209,7 @@ class AuthRepository {
 
       final record = records.first;
       final encryptedApiKey = record['api_key'] as String?;
-      
+
       if (encryptedApiKey == null) {
         return null;
       }
@@ -231,7 +232,7 @@ class AuthRepository {
       return null;
     }
   }
-  
+
   /// Получает все API ключи из базы данных.
   ///
   /// Возвращает список Map, каждый содержит 'api_key', 'provider', 'created_at', 'last_used'.
@@ -246,8 +247,9 @@ class AuthRepository {
 
       return records.map((record) {
         final encryptedApiKey = record['api_key'] as String?;
-        final apiKey = encryptedApiKey != null ? _decryptApiKey(encryptedApiKey) : '';
-        
+        final apiKey =
+            encryptedApiKey != null ? _decryptApiKey(encryptedApiKey) : '';
+
         return {
           'api_key': apiKey,
           'provider': record['provider'] as String? ?? '',
@@ -350,7 +352,7 @@ class AuthRepository {
       return null;
     }
   }
-  
+
   /// Обновляет дату последнего использования для указанного провайдера.
   ///
   /// Параметры:
@@ -372,7 +374,7 @@ class AuthRepository {
       return false;
     }
   }
-  
+
   /// Удаляет API ключ для указанного провайдера.
   ///
   /// Параметры:
@@ -460,11 +462,11 @@ class AuthRepository {
       final result = await db.rawQuery(
         'SELECT COUNT(*) as count FROM auth_keys WHERE api_key IS NOT NULL AND pin_hash IS NOT NULL',
       );
-      
+
       if (result.isEmpty) {
         return false;
       }
-      
+
       final count = result.first['count'] as int?;
       return count != null && count > 0;
     } catch (e) {

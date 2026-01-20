@@ -52,9 +52,13 @@ class Analytics {
     if (promptPrice != null && completionPrice != null) {
       final promptTokensValue = promptTokens ?? 0;
       final completionTokensValue = completionTokens ?? 0;
-      cost = (promptTokensValue * promptPrice) + (completionTokensValue * completionPrice);
-    } else if (promptTokens != null && completionTokens != null && 
-               promptTokens == 0 && completionTokens == 0 && tokensUsed > 0) {
+      cost = (promptTokensValue * promptPrice) +
+          (completionTokensValue * completionPrice);
+    } else if (promptTokens != null &&
+        completionTokens != null &&
+        promptTokens == 0 &&
+        completionTokens == 0 &&
+        tokensUsed > 0) {
       // Если токены не разделены, но есть общее количество, используем только completionPrice если доступен
       if (completionPrice != null) {
         cost = tokensUsed * completionPrice;

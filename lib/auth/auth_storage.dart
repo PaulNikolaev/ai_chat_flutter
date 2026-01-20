@@ -37,17 +37,17 @@ class _AuthKeys {
 /// **Пример использования:**
 /// ```dart
 /// final storage = AuthStorage();
-/// 
+///
 /// // Сохранение данных
 /// await storage.saveAuth(
 ///   apiKey: 'sk-or-v1-...',
 ///   pinHash: AuthStorage.hashPin('1234'),
 ///   provider: 'openrouter',
 /// );
-/// 
+///
 /// // Получение API ключа
 /// final apiKey = await storage.getApiKey();
-/// 
+///
 /// // Проверка PIN
 /// final isValid = await storage.verifyPin('1234');
 /// ```
@@ -112,13 +112,16 @@ class AuthStorage {
 
       // Проверяем наличие данных в старых хранилищах
       await _ensureLegacyPrefs();
-      
-      final legacyApiKey = await _legacySecureStorage?.read(key: _AuthKeys.apiKey);
+
+      final legacyApiKey =
+          await _legacySecureStorage?.read(key: _AuthKeys.apiKey);
       final legacyPinHash = _legacyPrefs?.getString(_AuthKeys.pinHash);
       final legacyProvider = _legacyPrefs?.getString(_AuthKeys.provider);
 
       // Если есть данные в старых хранилищах, мигрируем их
-      if (legacyApiKey != null && legacyPinHash != null && legacyProvider != null) {
+      if (legacyApiKey != null &&
+          legacyPinHash != null &&
+          legacyProvider != null) {
         final migrated = await _repository.saveAuth(
           apiKey: legacyApiKey,
           pinHash: legacyPinHash,
@@ -187,7 +190,7 @@ class AuthStorage {
       return null;
     }
   }
-  
+
   /// Получает все сохраненные API ключи.
   ///
   /// Возвращает список Map, каждый содержит 'api_key', 'provider', 'created_at', 'last_used'.
@@ -199,7 +202,7 @@ class AuthStorage {
       return [];
     }
   }
-  
+
   /// Удаляет API ключ для указанного провайдера.
   ///
   /// Параметры:
@@ -214,7 +217,7 @@ class AuthStorage {
       return false;
     }
   }
-  
+
   /// Обновляет дату последнего использования для указанного провайдера.
   ///
   /// Параметры:
@@ -313,10 +316,10 @@ class AuthStorage {
       } catch (_) {
         // Игнорируем ошибки миграции при очистке
       }
-      
+
       // Очищаем данные из БД
       final dbCleared = await _repository.clearAuth();
-      
+
       // Также очищаем старые хранилища на всякий случай
       try {
         await _legacySecureStorage?.delete(key: _AuthKeys.apiKey);

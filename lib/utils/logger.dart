@@ -9,13 +9,13 @@ import 'platform.dart';
 enum LogLevel {
   /// Детальная отладочная информация.
   debug,
-  
+
   /// Информационные сообщения о работе приложения.
   info,
-  
+
   /// Предупреждения о потенциальных проблемах.
   warning,
-  
+
   /// Ошибки и критические проблемы.
   error,
 }
@@ -38,25 +38,25 @@ enum LogLevel {
 class AppLogger {
   /// Экземпляр logger для форматирования и вывода.
   late final Logger _logger;
-  
+
   /// Директория для хранения лог-файлов.
   Directory? _logsDirectory;
-  
+
   /// Текущий файл лога.
   File? _currentLogFile;
-  
+
   /// Поток для записи в файл.
   IOSink? _fileSink;
-  
+
   /// Флаг, указывающий, включена ли запись в файл.
   bool _fileLoggingEnabled = false;
-  
+
   /// Текущий уровень логирования.
   LogLevel _currentLevel = LogLevel.debug;
-  
+
   /// Формат даты для имен файлов: YYYY-MM-DD.
   static final DateFormat _dateFormat = DateFormat('yyyy-MM-dd');
-  
+
   /// Формат времени для логов: YYYY-MM-DD HH:MM:SS.
   static final DateFormat _timeFormat = DateFormat('yyyy-MM-dd HH:mm:ss');
 
@@ -91,13 +91,14 @@ class AppLogger {
     try {
       // Определяем директорию для логов
       _logsDirectory = await _getLogsDirectory();
-      
+
       // Создаем директорию, если не существует
       if (_logsDirectory != null && await _ensureLogsDirectory()) {
         // Создаем файл лога с текущей датой: chat_app_YYYY-MM-DD.log
         final currentDate = _dateFormat.format(DateTime.now());
-        _currentLogFile = File('${_logsDirectory!.path}/chat_app_$currentDate.log');
-        
+        _currentLogFile =
+            File('${_logsDirectory!.path}/chat_app_$currentDate.log');
+
         // Открываем файл для записи
         _fileSink = _currentLogFile!.openWrite(mode: FileMode.append);
         _fileLoggingEnabled = true;
@@ -153,7 +154,7 @@ class AppLogger {
   /// Возвращает true, если директория доступна и доступна для записи, иначе false.
   Future<bool> _ensureLogsDirectory() async {
     if (_logsDirectory == null) return false;
-    
+
     try {
       // Проверяем, существует ли директория
       if (!await _logsDirectory!.exists()) {
@@ -315,19 +316,19 @@ class _CustomLogPrinter extends LogPrinter {
     final time = AppLogger._timeFormat.format(DateTime.now());
     final level = _getLevelString(event.level);
     final message = event.message;
-    
+
     String logLine = '$time - $level - $message';
-    
+
     // Добавляем информацию об ошибке, если есть
     if (event.error != null) {
       logLine += '\nError: ${event.error}';
     }
-    
+
     // Добавляем stack trace, если есть
     if (event.stackTrace != null) {
       logLine += '\n${event.stackTrace}';
     }
-    
+
     return [logLine];
   }
 

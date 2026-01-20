@@ -47,18 +47,20 @@ class ModelInfo {
   /// ```
   factory ModelInfo.fromJson(Map<String, dynamic> json) {
     final pricing = json['pricing'] as Map<String, dynamic>?;
-    
+
     return ModelInfo(
       id: json['id'] as String,
       name: json['name'] as String? ?? json['id'] as String,
       description: json['description'] as String?,
-      contextLength: json['context_length'] as int? ?? json['contextLength'] as int?,
+      contextLength:
+          json['context_length'] as int? ?? json['contextLength'] as int?,
       promptPrice: pricing != null
           ? (double.tryParse(pricing['prompt']?.toString() ?? '0') ?? 0.0)
           : json['prompt_price'] as double? ?? json['promptPrice'] as double?,
       completionPrice: pricing != null
           ? (double.tryParse(pricing['completion']?.toString() ?? '0') ?? 0.0)
-          : json['completion_price'] as double? ?? json['completionPrice'] as double?,
+          : json['completion_price'] as double? ??
+              json['completionPrice'] as double?,
     );
   }
 
@@ -111,11 +113,11 @@ class ModelInfo {
     if (id.contains(':free')) {
       return true;
     }
-    
+
     // Проверяем цены
     final promptIsFree = promptPrice == null || promptPrice == 0.0;
     final completionIsFree = completionPrice == null || completionPrice == 0.0;
-    
+
     return promptIsFree && completionIsFree;
   }
 
@@ -127,7 +129,7 @@ class ModelInfo {
     if (isFree) {
       return 'Бесплатно';
     }
-    
+
     if (promptPrice != null && completionPrice != null) {
       return '${promptPrice!.toStringAsFixed(4)} / ${completionPrice!.toStringAsFixed(4)}';
     } else if (promptPrice != null) {
@@ -135,7 +137,7 @@ class ModelInfo {
     } else if (completionPrice != null) {
       return completionPrice!.toStringAsFixed(4);
     }
-    
+
     return 'Цена не указана';
   }
 

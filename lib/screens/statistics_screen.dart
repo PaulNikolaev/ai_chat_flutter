@@ -61,14 +61,14 @@ class _CachedStatistics {
   final int totalRequests;
   final int totalTokens;
   final DateTime timestamp;
-  
+
   _CachedStatistics({
     required this.statistics,
     required this.totalRequests,
     required this.totalTokens,
     required this.timestamp,
   });
-  
+
   /// Проверяет, актуален ли кэш (не старше 5 секунд).
   bool get isValid {
     return DateTime.now().difference(timestamp).inSeconds < 5;
@@ -82,30 +82,30 @@ class StatisticsScreenState extends State<StatisticsScreen> {
   bool _isLoadingStatistics = false;
   Map<String, dynamic>? _performanceMetrics;
   bool _isLoadingMetrics = false;
-  
+
   // Фильтры и сортировка
   String? _selectedModelFilter;
   DateTime? _startDateFilter;
   DateTime? _endDateFilter;
   SortType _sortType = SortType.tokens;
   SortDirection _sortDirection = SortDirection.descending;
-  
+
   // Общая статистика
   int _totalRequests = 0;
   int _totalTokens = 0;
-  
+
   // Кэш для статистики (ключ - строка фильтров, значение - кэшированные данные)
   final Map<String, _CachedStatistics> _statisticsCache = {};
-  
+
   // Флаг для предотвращения параллельных загрузок
   bool _isLoadingStatisticsInProgress = false;
-  
+
   // Таймер для автообновления баланса
   Timer? _balanceRefreshTimer;
-  
+
   // Флаг для отслеживания первого вызова didChangeDependencies
   bool _isFirstBuild = true;
-  
+
   // Время последнего обновления статистики
   DateTime? _lastStatisticsUpdate;
 
@@ -124,7 +124,7 @@ class StatisticsScreenState extends State<StatisticsScreen> {
     if (!_isFirstBuild) {
       // Обновляем статистику только если прошло больше 1 секунды с последнего обновления
       final now = DateTime.now();
-      if (_lastStatisticsUpdate == null || 
+      if (_lastStatisticsUpdate == null ||
           now.difference(_lastStatisticsUpdate!).inSeconds > 1) {
         _lastStatisticsUpdate = now;
         // Принудительно обновляем статистику при входе на страницу
@@ -275,7 +275,7 @@ class StatisticsScreenState extends State<StatisticsScreen> {
     if (_isLoadingStatisticsInProgress && !forceRefresh) {
       return;
     }
-    
+
     // Проверяем кэш
     if (!forceRefresh) {
       final cacheKey = _getCacheKey();
@@ -286,10 +286,10 @@ class StatisticsScreenState extends State<StatisticsScreen> {
         return;
       }
     }
-    
+
     _isLoadingStatisticsInProgress = true;
     final analytics = widget.analytics ?? Analytics();
-    
+
     if (mounted) {
       setState(() {
         _isLoadingStatistics = true;
@@ -304,14 +304,14 @@ class StatisticsScreenState extends State<StatisticsScreen> {
         startDate: _startDateFilter,
         endDate: _endDateFilter,
       );
-      
+
       // Параллельно получаем общую статистику (только COUNT, без загрузки всех записей)
       final totalCountFuture = analytics.getHistoryCount(
         model: _selectedModelFilter,
         startDate: _startDateFilter,
         endDate: _endDateFilter,
       );
-      
+
       // Получаем SUM токенов напрямую из БД через оптимизированный запрос
       // Вместо загрузки 10000 записей, используем SQL SUM
       final totalTokensFuture = analytics.getTotalTokens(
@@ -319,18 +319,18 @@ class StatisticsScreenState extends State<StatisticsScreen> {
         startDate: _startDateFilter,
         endDate: _endDateFilter,
       );
-      
+
       // Ждем выполнения всех запросов параллельно
       final results = await Future.wait([
         statisticsFuture,
         totalCountFuture,
         totalTokensFuture,
       ]);
-      
+
       final statistics = results[0] as Map<String, Map<String, int>>;
       final totalCount = results[1] as int;
       final totalTokens = results[2] as int;
-      
+
       // Сортируем статистику
       final sortedEntries = statistics.entries.toList();
       sortedEntries.sort((a, b) {
@@ -340,17 +340,22 @@ class StatisticsScreenState extends State<StatisticsScreen> {
             comparison = a.key.compareTo(b.key);
             break;
           case SortType.count:
-            comparison = (a.value['count'] ?? 0).compareTo(b.value['count'] ?? 0);
+            comparison =
+                (a.value['count'] ?? 0).compareTo(b.value['count'] ?? 0);
             break;
           case SortType.tokens:
-            comparison = (a.value['tokens'] ?? 0).compareTo(b.value['tokens'] ?? 0);
+            comparison =
+                (a.value['tokens'] ?? 0).compareTo(b.value['tokens'] ?? 0);
             break;
         }
-        return _sortDirection == SortDirection.ascending ? comparison : -comparison;
+        return _sortDirection == SortDirection.ascending
+            ? comparison
+            : -comparison;
       });
-      
-      final sortedStatistics = Map<String, Map<String, int>>.fromEntries(sortedEntries);
-      
+
+      final sortedStatistics =
+          Map<String, Map<String, int>>.fromEntries(sortedEntries);
+
       // Сохраняем в кэш
       final cacheKey = _getCacheKey();
       _statisticsCache[cacheKey] = _CachedStatistics(
@@ -359,13 +364,13 @@ class StatisticsScreenState extends State<StatisticsScreen> {
         totalTokens: totalTokens,
         timestamp: DateTime.now(),
       );
-      
+
       // Очищаем старый кэш (оставляем только последние 5 записей)
       if (_statisticsCache.length > 5) {
         final oldestKey = _statisticsCache.keys.first;
         _statisticsCache.remove(oldestKey);
       }
-      
+
       if (mounted) {
         setState(() {
           _modelStatistics = sortedStatistics;
@@ -389,7 +394,7 @@ class StatisticsScreenState extends State<StatisticsScreen> {
       _isLoadingStatisticsInProgress = false;
     }
   }
-  
+
   /// Применяет кэшированные данные статистики.
   void _applyCachedStatistics(_CachedStatistics cached) {
     if (mounted) {
@@ -401,7 +406,7 @@ class StatisticsScreenState extends State<StatisticsScreen> {
       });
     }
   }
-  
+
   /// Публичный метод для принудительного обновления данных при входе на страницу.
   /// Вызывается из HomeScreen при переключении вкладок.
   void refreshData() {
@@ -410,12 +415,12 @@ class StatisticsScreenState extends State<StatisticsScreen> {
     _loadPerformanceMetrics();
     _lastStatisticsUpdate = DateTime.now();
   }
-  
+
   /// Применяет фильтры и перезагружает статистику.
   void _applyFilters() {
     _loadStatistics(forceRefresh: true);
   }
-  
+
   /// Сбрасывает все фильтры.
   void _resetFilters() {
     setState(() {
@@ -427,7 +432,7 @@ class StatisticsScreenState extends State<StatisticsScreen> {
     });
     _loadStatistics(forceRefresh: true);
   }
-  
+
   /// Изменяет тип сортировки.
   void _changeSortType(SortType type) {
     setState(() {
@@ -445,7 +450,7 @@ class StatisticsScreenState extends State<StatisticsScreen> {
     // Но обновляем UI для применения новой сортировки
     _applySorting();
   }
-  
+
   /// Применяет сортировку к текущим данным статистики.
   void _applySorting() {
     final sortedEntries = _modelStatistics.entries.toList();
@@ -459,14 +464,18 @@ class StatisticsScreenState extends State<StatisticsScreen> {
           comparison = (a.value['count'] ?? 0).compareTo(b.value['count'] ?? 0);
           break;
         case SortType.tokens:
-          comparison = (a.value['tokens'] ?? 0).compareTo(b.value['tokens'] ?? 0);
+          comparison =
+              (a.value['tokens'] ?? 0).compareTo(b.value['tokens'] ?? 0);
           break;
       }
-      return _sortDirection == SortDirection.ascending ? comparison : -comparison;
+      return _sortDirection == SortDirection.ascending
+          ? comparison
+          : -comparison;
     });
-    
-    final sortedStatistics = Map<String, Map<String, int>>.fromEntries(sortedEntries);
-    
+
+    final sortedStatistics =
+        Map<String, Map<String, int>>.fromEntries(sortedEntries);
+
     if (mounted) {
       setState(() {
         _modelStatistics = sortedStatistics;
@@ -477,7 +486,7 @@ class StatisticsScreenState extends State<StatisticsScreen> {
   /// Загружает метрики производительности.
   Future<void> _loadPerformanceMetrics() async {
     final monitor = widget.performanceMonitor ?? PerformanceMonitor();
-    
+
     setState(() {
       _isLoadingMetrics = true;
     });
@@ -601,19 +610,19 @@ class StatisticsScreenState extends State<StatisticsScreen> {
                       // Баланс
                       _buildBalanceSection(),
                       const SizedBox(height: AppStyles.padding),
-                      
+
                       // Общая статистика
                       _buildTotalStatisticsSection(),
                       const SizedBox(height: AppStyles.padding),
-                      
+
                       // Фильтры и сортировка
                       _buildFiltersSection(),
                       const SizedBox(height: AppStyles.padding),
-                      
+
                       // Статистика моделей
                       _buildModelStatisticsSection(),
                       const SizedBox(height: AppStyles.padding),
-                      
+
                       // Метрики производительности
                       if (_performanceMetrics != null) ...[
                         _buildPerformanceMetricsSection(),
@@ -691,85 +700,85 @@ class StatisticsScreenState extends State<StatisticsScreen> {
       builder: (context, constraints) {
         final screenSize = PlatformUtils.getScreenSize(context);
         final isSmall = screenSize == 'small';
-        
+
         return Container(
-      padding: const EdgeInsets.all(AppStyles.padding),
-      decoration: BoxDecoration(
-        color: AppStyles.cardColor,
-        borderRadius: BorderRadius.circular(AppStyles.borderRadius),
-        border: Border.all(color: AppStyles.borderColor),
-        boxShadow: [
-          BoxShadow(
-            color: Colors.black.withValues(alpha: 0.1),
-            blurRadius: 4,
-            offset: const Offset(0, 2),
-          ),
-        ],
-      ),
-      child: Column(
-        crossAxisAlignment: CrossAxisAlignment.start,
-        children: [
-          const Row(
-            children: [
-              Icon(
-                Icons.dashboard,
-                color: AppStyles.accentColor,
-                size: 24,
-              ),
-              SizedBox(width: 8),
-              Text(
-                'Общая статистика',
-                style: TextStyle(
-                  fontSize: 18,
-                  fontWeight: FontWeight.bold,
-                  color: AppStyles.textPrimary,
-                ),
+          padding: const EdgeInsets.all(AppStyles.padding),
+          decoration: BoxDecoration(
+            color: AppStyles.cardColor,
+            borderRadius: BorderRadius.circular(AppStyles.borderRadius),
+            border: Border.all(color: AppStyles.borderColor),
+            boxShadow: [
+              BoxShadow(
+                color: Colors.black.withValues(alpha: 0.1),
+                blurRadius: 4,
+                offset: const Offset(0, 2),
               ),
             ],
           ),
-          const SizedBox(height: AppStyles.padding),
-          isSmall
-              ? Column(
-                  children: [
-                    _buildStatCard(
-                      icon: Icons.message,
-                      label: 'Всего запросов',
-                      value: _totalRequests.toString(),
-                      color: AppStyles.accentColor,
+          child: Column(
+            crossAxisAlignment: CrossAxisAlignment.start,
+            children: [
+              const Row(
+                children: [
+                  Icon(
+                    Icons.dashboard,
+                    color: AppStyles.accentColor,
+                    size: 24,
+                  ),
+                  SizedBox(width: 8),
+                  Text(
+                    'Общая статистика',
+                    style: TextStyle(
+                      fontSize: 18,
+                      fontWeight: FontWeight.bold,
+                      color: AppStyles.textPrimary,
                     ),
-                    const SizedBox(height: AppStyles.paddingSmall),
-                    _buildStatCard(
-                      icon: Icons.token,
-                      label: 'Всего токенов',
-                      value: _formatTokens(_totalTokens),
-                      color: AppStyles.successColor,
+                  ),
+                ],
+              ),
+              const SizedBox(height: AppStyles.padding),
+              isSmall
+                  ? Column(
+                      children: [
+                        _buildStatCard(
+                          icon: Icons.message,
+                          label: 'Всего запросов',
+                          value: _totalRequests.toString(),
+                          color: AppStyles.accentColor,
+                        ),
+                        const SizedBox(height: AppStyles.paddingSmall),
+                        _buildStatCard(
+                          icon: Icons.token,
+                          label: 'Всего токенов',
+                          value: _formatTokens(_totalTokens),
+                          color: AppStyles.successColor,
+                        ),
+                      ],
+                    )
+                  : Row(
+                      children: [
+                        Expanded(
+                          child: _buildStatCard(
+                            icon: Icons.message,
+                            label: 'Всего запросов',
+                            value: _totalRequests.toString(),
+                            color: AppStyles.accentColor,
+                          ),
+                        ),
+                        const SizedBox(width: AppStyles.padding),
+                        Expanded(
+                          child: _buildStatCard(
+                            icon: Icons.token,
+                            label: 'Всего токенов',
+                            value: _formatTokens(_totalTokens),
+                            color: AppStyles.successColor,
+                          ),
+                        ),
+                      ],
                     ),
-                  ],
-                )
-              : Row(
-                  children: [
-                    Expanded(
-                      child: _buildStatCard(
-                        icon: Icons.message,
-                        label: 'Всего запросов',
-                        value: _totalRequests.toString(),
-                        color: AppStyles.accentColor,
-                      ),
-                    ),
-                    const SizedBox(width: AppStyles.padding),
-                    Expanded(
-                      child: _buildStatCard(
-                        icon: Icons.token,
-                        label: 'Всего токенов',
-                        value: _formatTokens(_totalTokens),
-                        color: AppStyles.successColor,
-                      ),
-                    ),
-                  ],
-                ),
-        ],
-      ),
-    );
+            ],
+          ),
+        );
       },
     );
   }
@@ -824,7 +833,7 @@ class StatisticsScreenState extends State<StatisticsScreen> {
   /// Строит секцию фильтров и сортировки.
   Widget _buildFiltersSection() {
     final analytics = widget.analytics ?? Analytics();
-    
+
     return Container(
       padding: const EdgeInsets.all(AppStyles.padding),
       decoration: BoxDecoration(
@@ -865,42 +874,44 @@ class StatisticsScreenState extends State<StatisticsScreen> {
             builder: (context, constraints) {
               final screenSize = PlatformUtils.getScreenSize(context);
               final isSmall = screenSize == 'small';
-              
+
               // Фильтр по модели
               final modelFilter = FutureBuilder<Map<String, Map<String, int>>>(
                 future: analytics.getModelStatistics(),
                 builder: (context, snapshot) {
-              final allModels = snapshot.data?.keys.toList() ?? [];
-              return DropdownButtonFormField<String>(
-                decoration: InputDecoration(
-                  labelText: 'Модель',
-                  prefixIcon: const Icon(Icons.model_training),
-                  border: OutlineInputBorder(
-                    borderRadius: BorderRadius.circular(AppStyles.borderRadius),
-                  ),
-                ),
-                isExpanded: true,
-                initialValue: _selectedModelFilter,
-                items: [
-                  const DropdownMenuItem<String>(
-                    value: null,
-                    child: Text('Все модели', overflow: TextOverflow.ellipsis),
-                  ),
-                  ...allModels.map((model) => DropdownMenuItem<String>(
-                    value: model,
-                    child: Text(model, overflow: TextOverflow.ellipsis),
-                  )),
-                ],
-                onChanged: (value) {
-                  setState(() {
-                    _selectedModelFilter = value;
-                  });
-                  _applyFilters();
+                  final allModels = snapshot.data?.keys.toList() ?? [];
+                  return DropdownButtonFormField<String>(
+                    decoration: InputDecoration(
+                      labelText: 'Модель',
+                      prefixIcon: const Icon(Icons.model_training),
+                      border: OutlineInputBorder(
+                        borderRadius:
+                            BorderRadius.circular(AppStyles.borderRadius),
+                      ),
+                    ),
+                    isExpanded: true,
+                    initialValue: _selectedModelFilter,
+                    items: [
+                      const DropdownMenuItem<String>(
+                        value: null,
+                        child:
+                            Text('Все модели', overflow: TextOverflow.ellipsis),
+                      ),
+                      ...allModels.map((model) => DropdownMenuItem<String>(
+                            value: model,
+                            child: Text(model, overflow: TextOverflow.ellipsis),
+                          )),
+                    ],
+                    onChanged: (value) {
+                      setState(() {
+                        _selectedModelFilter = value;
+                      });
+                      _applyFilters();
+                    },
+                  );
                 },
               );
-                },
-              );
-              
+
               // Фильтр по дате
               final dateFilters = Row(
                 children: [
@@ -925,12 +936,14 @@ class StatisticsScreenState extends State<StatisticsScreen> {
                           labelText: 'Дата начала',
                           prefixIcon: const Icon(Icons.calendar_today),
                           border: OutlineInputBorder(
-                            borderRadius: BorderRadius.circular(AppStyles.borderRadius),
+                            borderRadius:
+                                BorderRadius.circular(AppStyles.borderRadius),
                           ),
                         ),
                         child: Text(
                           _startDateFilter != null
-                              ? DateFormat('yyyy-MM-dd').format(_startDateFilter!)
+                              ? DateFormat('yyyy-MM-dd')
+                                  .format(_startDateFilter!)
                               : 'Не выбрана',
                           overflow: TextOverflow.ellipsis,
                         ),
@@ -959,7 +972,8 @@ class StatisticsScreenState extends State<StatisticsScreen> {
                           labelText: 'Дата окончания',
                           prefixIcon: const Icon(Icons.calendar_today),
                           border: OutlineInputBorder(
-                            borderRadius: BorderRadius.circular(AppStyles.borderRadius),
+                            borderRadius:
+                                BorderRadius.circular(AppStyles.borderRadius),
                           ),
                         ),
                         child: Text(
@@ -973,7 +987,7 @@ class StatisticsScreenState extends State<StatisticsScreen> {
                   ),
                 ],
               );
-              
+
               // Сортировка
               final sortControls = Row(
                 children: [
@@ -1026,16 +1040,17 @@ class StatisticsScreenState extends State<StatisticsScreen> {
                         : 'По убыванию',
                     onPressed: () {
                       setState(() {
-                        _sortDirection = _sortDirection == SortDirection.ascending
-                            ? SortDirection.descending
-                            : SortDirection.ascending;
+                        _sortDirection =
+                            _sortDirection == SortDirection.ascending
+                                ? SortDirection.descending
+                                : SortDirection.ascending;
                       });
                       _applySorting();
                     },
                   ),
                 ],
               );
-              
+
               if (isSmall) {
                 return Column(
                   crossAxisAlignment: CrossAxisAlignment.stretch,
@@ -1179,10 +1194,11 @@ class StatisticsScreenState extends State<StatisticsScreen> {
     if (_modelStatistics.isEmpty) {
       return [];
     }
-    
+
     final isMobile = PlatformUtils.isMobile();
-    final totalTokens = _totalTokens > 0 ? _totalTokens : 1; // Избегаем деления на ноль
-    
+    final totalTokens =
+        _totalTokens > 0 ? _totalTokens : 1; // Избегаем деления на ноль
+
     return _modelStatistics.entries.map((entry) {
       final model = entry.key;
       final stats = entry.value;
@@ -1504,9 +1520,10 @@ class StatisticsScreenState extends State<StatisticsScreen> {
   }
 
   /// Показывает детальный диалог со статистикой по конкретной модели.
-  Future<void> _showModelDetailsDialog(BuildContext context, String model) async {
+  Future<void> _showModelDetailsDialog(
+      BuildContext context, String model) async {
     final analytics = widget.analytics ?? Analytics();
-    
+
     // Показываем индикатор загрузки
     if (!context.mounted) return;
     showDialog(
@@ -1516,7 +1533,7 @@ class StatisticsScreenState extends State<StatisticsScreen> {
         child: CircularProgressIndicator(),
       ),
     );
-    
+
     try {
       // Загружаем историю для этой модели с применением фильтров даты
       final records = await analytics.getHistoryFiltered(
@@ -1525,11 +1542,11 @@ class StatisticsScreenState extends State<StatisticsScreen> {
         endDate: _endDateFilter,
         limit: 10000, // Ограничиваем для производительности
       );
-      
+
       // Закрываем индикатор загрузки
       if (!context.mounted) return;
       Navigator.of(context).pop();
-      
+
       if (records.isEmpty) {
         if (context.mounted) {
           ScaffoldMessenger.of(context).showSnackBar(
@@ -1540,170 +1557,179 @@ class StatisticsScreenState extends State<StatisticsScreen> {
         }
         return;
       }
-    
-    // Рассчитываем статистику
-    final totalRequests = records.length;
-    final totalTokens = records.fold<int>(0, (sum, record) => sum + record.tokensUsed);
-    final avgTokens = totalTokens / totalRequests;
-    final avgResponseTime = records.fold<double>(0, (sum, record) => sum + record.responseTime) / totalRequests;
-    final avgMessageLength = records.fold<int>(0, (sum, record) => sum + record.messageLength) / totalRequests;
-    
-    final minResponseTime = records.map((r) => r.responseTime).reduce((a, b) => a < b ? a : b);
-    final maxResponseTime = records.map((r) => r.responseTime).reduce((a, b) => a > b ? a : b);
-    
-    final minTokens = records.map((r) => r.tokensUsed).reduce((a, b) => a < b ? a : b);
-    final maxTokens = records.map((r) => r.tokensUsed).reduce((a, b) => a > b ? a : b);
-    
-    final firstUse = records.first.timestamp;
-    final lastUse = records.last.timestamp;
-    
-    if (!context.mounted) return;
-    
-    showDialog(
-      context: context,
-      builder: (context) => Dialog(
-        backgroundColor: AppStyles.cardColor,
-        shape: RoundedRectangleBorder(
-          borderRadius: BorderRadius.circular(AppStyles.borderRadius),
-        ),
-        child: Container(
-          constraints: const BoxConstraints(maxWidth: 600),
-          padding: const EdgeInsets.all(AppStyles.padding),
-          child: SingleChildScrollView(
-            child: Column(
-              mainAxisSize: MainAxisSize.min,
-              crossAxisAlignment: CrossAxisAlignment.start,
-              children: [
-                Row(
-                  mainAxisAlignment: MainAxisAlignment.spaceBetween,
-                  children: [
-                    Expanded(
-                      child: Row(
-                        children: [
-                          const Icon(
-                            Icons.info,
-                            color: AppStyles.accentColor,
-                            size: 24,
-                          ),
-                          const SizedBox(width: 8),
-                          Expanded(
-                            child: Text(
-                              model,
-                              style: const TextStyle(
-                                fontSize: 20,
-                                fontWeight: FontWeight.bold,
-                                color: AppStyles.textPrimary,
-                              ),
-                              overflow: TextOverflow.ellipsis,
+
+      // Рассчитываем статистику
+      final totalRequests = records.length;
+      final totalTokens =
+          records.fold<int>(0, (sum, record) => sum + record.tokensUsed);
+      final avgTokens = totalTokens / totalRequests;
+      final avgResponseTime =
+          records.fold<double>(0, (sum, record) => sum + record.responseTime) /
+              totalRequests;
+      final avgMessageLength =
+          records.fold<int>(0, (sum, record) => sum + record.messageLength) /
+              totalRequests;
+
+      final minResponseTime =
+          records.map((r) => r.responseTime).reduce((a, b) => a < b ? a : b);
+      final maxResponseTime =
+          records.map((r) => r.responseTime).reduce((a, b) => a > b ? a : b);
+
+      final minTokens =
+          records.map((r) => r.tokensUsed).reduce((a, b) => a < b ? a : b);
+      final maxTokens =
+          records.map((r) => r.tokensUsed).reduce((a, b) => a > b ? a : b);
+
+      final firstUse = records.first.timestamp;
+      final lastUse = records.last.timestamp;
+
+      if (!context.mounted) return;
+
+      showDialog(
+        context: context,
+        builder: (context) => Dialog(
+          backgroundColor: AppStyles.cardColor,
+          shape: RoundedRectangleBorder(
+            borderRadius: BorderRadius.circular(AppStyles.borderRadius),
+          ),
+          child: Container(
+            constraints: const BoxConstraints(maxWidth: 600),
+            padding: const EdgeInsets.all(AppStyles.padding),
+            child: SingleChildScrollView(
+              child: Column(
+                mainAxisSize: MainAxisSize.min,
+                crossAxisAlignment: CrossAxisAlignment.start,
+                children: [
+                  Row(
+                    mainAxisAlignment: MainAxisAlignment.spaceBetween,
+                    children: [
+                      Expanded(
+                        child: Row(
+                          children: [
+                            const Icon(
+                              Icons.info,
+                              color: AppStyles.accentColor,
+                              size: 24,
                             ),
-                          ),
-                        ],
+                            const SizedBox(width: 8),
+                            Expanded(
+                              child: Text(
+                                model,
+                                style: const TextStyle(
+                                  fontSize: 20,
+                                  fontWeight: FontWeight.bold,
+                                  color: AppStyles.textPrimary,
+                                ),
+                                overflow: TextOverflow.ellipsis,
+                              ),
+                            ),
+                          ],
+                        ),
                       ),
-                    ),
-                    IconButton(
-                      icon: const Icon(Icons.close),
-                      onPressed: () => Navigator.of(context).pop(),
-                    ),
-                  ],
-                ),
-                const SizedBox(height: AppStyles.padding),
-                const Divider(),
-                const SizedBox(height: AppStyles.padding),
-                // Общая статистика
-                _buildDetailStatRow(
-                  'Всего запросов',
-                  totalRequests.toString(),
-                  Icons.message,
-                ),
-                _buildDetailStatRow(
-                  'Всего токенов',
-                  _formatTokens(totalTokens),
-                  Icons.token,
-                ),
-                _buildDetailStatRow(
-                  'Среднее токенов на запрос',
-                  _formatTokens(avgTokens.round()),
-                  Icons.trending_up,
-                ),
-                const SizedBox(height: AppStyles.paddingSmall),
-                const Divider(),
-                const SizedBox(height: AppStyles.paddingSmall),
-                // Время ответа
-                _buildDetailStatRow(
-                  'Среднее время ответа',
-                  '${avgResponseTime.toStringAsFixed(2)} сек',
-                  Icons.speed,
-                ),
-                _buildDetailStatRow(
-                  'Минимальное время',
-                  '${minResponseTime.toStringAsFixed(2)} сек',
-                  Icons.arrow_downward,
-                ),
-                _buildDetailStatRow(
-                  'Максимальное время',
-                  '${maxResponseTime.toStringAsFixed(2)} сек',
-                  Icons.arrow_upward,
-                ),
-                const SizedBox(height: AppStyles.paddingSmall),
-                const Divider(),
-                const SizedBox(height: AppStyles.paddingSmall),
-                // Токены
-                _buildDetailStatRow(
-                  'Минимум токенов',
-                  _formatTokens(minTokens),
-                  Icons.remove_circle_outline,
-                ),
-                _buildDetailStatRow(
-                  'Максимум токенов',
-                  _formatTokens(maxTokens),
-                  Icons.add_circle_outline,
-                ),
-                const SizedBox(height: AppStyles.paddingSmall),
-                const Divider(),
-                const SizedBox(height: AppStyles.paddingSmall),
-                // Дополнительная информация
-                _buildDetailStatRow(
-                  'Средняя длина сообщения',
-                  '${avgMessageLength.round()} символов',
-                  Icons.text_fields,
-                ),
-                _buildDetailStatRow(
-                  'Первый запрос',
-                  DateFormat('yyyy-MM-dd HH:mm').format(firstUse),
-                  Icons.event_available,
-                ),
-                _buildDetailStatRow(
-                  'Последний запрос',
-                  DateFormat('yyyy-MM-dd HH:mm').format(lastUse),
-                  Icons.event,
-                ),
-                const SizedBox(height: AppStyles.padding),
-                Row(
-                  mainAxisAlignment: MainAxisAlignment.end,
-                  children: [
-                    TextButton.icon(
-                      onPressed: () async {
-                        await _exportModelStatistics(model, records);
-                        if (context.mounted) {
-                          Navigator.of(context).pop();
-                        }
-                      },
-                      icon: const Icon(Icons.download),
-                      label: const Text('Экспорт модели'),
-                    ),
-                    const SizedBox(width: AppStyles.paddingSmall),
-                    ElevatedButton(
-                      onPressed: () => Navigator.of(context).pop(),
-                      child: const Text('Закрыть'),
-                    ),
-                  ],
-                ),
-              ],
+                      IconButton(
+                        icon: const Icon(Icons.close),
+                        onPressed: () => Navigator.of(context).pop(),
+                      ),
+                    ],
+                  ),
+                  const SizedBox(height: AppStyles.padding),
+                  const Divider(),
+                  const SizedBox(height: AppStyles.padding),
+                  // Общая статистика
+                  _buildDetailStatRow(
+                    'Всего запросов',
+                    totalRequests.toString(),
+                    Icons.message,
+                  ),
+                  _buildDetailStatRow(
+                    'Всего токенов',
+                    _formatTokens(totalTokens),
+                    Icons.token,
+                  ),
+                  _buildDetailStatRow(
+                    'Среднее токенов на запрос',
+                    _formatTokens(avgTokens.round()),
+                    Icons.trending_up,
+                  ),
+                  const SizedBox(height: AppStyles.paddingSmall),
+                  const Divider(),
+                  const SizedBox(height: AppStyles.paddingSmall),
+                  // Время ответа
+                  _buildDetailStatRow(
+                    'Среднее время ответа',
+                    '${avgResponseTime.toStringAsFixed(2)} сек',
+                    Icons.speed,
+                  ),
+                  _buildDetailStatRow(
+                    'Минимальное время',
+                    '${minResponseTime.toStringAsFixed(2)} сек',
+                    Icons.arrow_downward,
+                  ),
+                  _buildDetailStatRow(
+                    'Максимальное время',
+                    '${maxResponseTime.toStringAsFixed(2)} сек',
+                    Icons.arrow_upward,
+                  ),
+                  const SizedBox(height: AppStyles.paddingSmall),
+                  const Divider(),
+                  const SizedBox(height: AppStyles.paddingSmall),
+                  // Токены
+                  _buildDetailStatRow(
+                    'Минимум токенов',
+                    _formatTokens(minTokens),
+                    Icons.remove_circle_outline,
+                  ),
+                  _buildDetailStatRow(
+                    'Максимум токенов',
+                    _formatTokens(maxTokens),
+                    Icons.add_circle_outline,
+                  ),
+                  const SizedBox(height: AppStyles.paddingSmall),
+                  const Divider(),
+                  const SizedBox(height: AppStyles.paddingSmall),
+                  // Дополнительная информация
+                  _buildDetailStatRow(
+                    'Средняя длина сообщения',
+                    '${avgMessageLength.round()} символов',
+                    Icons.text_fields,
+                  ),
+                  _buildDetailStatRow(
+                    'Первый запрос',
+                    DateFormat('yyyy-MM-dd HH:mm').format(firstUse),
+                    Icons.event_available,
+                  ),
+                  _buildDetailStatRow(
+                    'Последний запрос',
+                    DateFormat('yyyy-MM-dd HH:mm').format(lastUse),
+                    Icons.event,
+                  ),
+                  const SizedBox(height: AppStyles.padding),
+                  Row(
+                    mainAxisAlignment: MainAxisAlignment.end,
+                    children: [
+                      TextButton.icon(
+                        onPressed: () async {
+                          await _exportModelStatistics(model, records);
+                          if (context.mounted) {
+                            Navigator.of(context).pop();
+                          }
+                        },
+                        icon: const Icon(Icons.download),
+                        label: const Text('Экспорт модели'),
+                      ),
+                      const SizedBox(width: AppStyles.paddingSmall),
+                      ElevatedButton(
+                        onPressed: () => Navigator.of(context).pop(),
+                        child: const Text('Закрыть'),
+                      ),
+                    ],
+                  ),
+                ],
+              ),
             ),
           ),
         ),
-      ),
-    );
+      );
     } catch (e) {
       // Закрываем индикатор загрузки в случае ошибки
       if (context.mounted) {
@@ -1751,11 +1777,11 @@ class StatisticsScreenState extends State<StatisticsScreen> {
   /// Экспортирует всю статистику в файлы (JSON и CSV).
   Future<void> _exportStatistics() async {
     final analytics = widget.analytics ?? Analytics();
-    
+
     try {
       // Получаем всю историю
       final history = await analytics.getHistory();
-      
+
       if (history.isEmpty) {
         if (!mounted) return;
         ScaffoldMessenger.of(context).showSnackBar(
@@ -1765,7 +1791,7 @@ class StatisticsScreenState extends State<StatisticsScreen> {
         );
         return;
       }
-      
+
       // Получаем директорию для сохранения
       Directory? directory;
       try {
@@ -1778,9 +1804,10 @@ class StatisticsScreenState extends State<StatisticsScreen> {
       } catch (e) {
         directory = Directory.current;
       }
-      
-      final timestamp = DateFormat('yyyy-MM-dd_HH-mm-ss').format(DateTime.now());
-      
+
+      final timestamp =
+          DateFormat('yyyy-MM-dd_HH-mm-ss').format(DateTime.now());
+
       // Экспортируем в JSON
       final jsonFile = File('${directory.path}/statistics_$timestamp.json');
       final jsonData = {
@@ -1792,12 +1819,13 @@ class StatisticsScreenState extends State<StatisticsScreen> {
       await jsonFile.writeAsString(
         const JsonEncoder.withIndent('  ').convert(jsonData),
       );
-      
+
       // Экспортируем в CSV
       final csvFile = File('${directory.path}/statistics_$timestamp.csv');
       final csvBuffer = StringBuffer();
       // Заголовки CSV
-      csvBuffer.writeln('ID,Timestamp,Model,Message Length,Response Time (s),Tokens Used');
+      csvBuffer.writeln(
+          'ID,Timestamp,Model,Message Length,Response Time (s),Tokens Used');
       // Данные
       for (final record in history) {
         csvBuffer.writeln(
@@ -1810,11 +1838,12 @@ class StatisticsScreenState extends State<StatisticsScreen> {
         );
       }
       await csvFile.writeAsString(csvBuffer.toString());
-      
+
       if (!mounted) return;
       ScaffoldMessenger.of(context).showSnackBar(
         SnackBar(
-          content: Text('Статистика экспортирована:\n${jsonFile.path}\n${csvFile.path}'),
+          content: Text(
+              'Статистика экспортирована:\n${jsonFile.path}\n${csvFile.path}'),
           duration: const Duration(seconds: 5),
           action: SnackBarAction(
             label: 'OK',
@@ -1835,7 +1864,8 @@ class StatisticsScreenState extends State<StatisticsScreen> {
   }
 
   /// Экспортирует статистику конкретной модели.
-  Future<void> _exportModelStatistics(String model, List<AnalyticsRecord> records) async {
+  Future<void> _exportModelStatistics(
+      String model, List<AnalyticsRecord> records) async {
     try {
       Directory? directory;
       try {
@@ -1848,12 +1878,14 @@ class StatisticsScreenState extends State<StatisticsScreen> {
       } catch (e) {
         directory = Directory.current;
       }
-      
-      final timestamp = DateFormat('yyyy-MM-dd_HH-mm-ss').format(DateTime.now());
+
+      final timestamp =
+          DateFormat('yyyy-MM-dd_HH-mm-ss').format(DateTime.now());
       final safeModelName = model.replaceAll(RegExp(r'[^\w\-_.]'), '_');
-      
+
       // Экспортируем в JSON
-      final jsonFile = File('${directory.path}/model_${safeModelName}_$timestamp.json');
+      final jsonFile =
+          File('${directory.path}/model_${safeModelName}_$timestamp.json');
       final jsonData = {
         'export_date': DateTime.now().toIso8601String(),
         'model': model,
@@ -1863,11 +1895,13 @@ class StatisticsScreenState extends State<StatisticsScreen> {
       await jsonFile.writeAsString(
         const JsonEncoder.withIndent('  ').convert(jsonData),
       );
-      
+
       // Экспортируем в CSV
-      final csvFile = File('${directory.path}/model_${safeModelName}_$timestamp.csv');
+      final csvFile =
+          File('${directory.path}/model_${safeModelName}_$timestamp.csv');
       final csvBuffer = StringBuffer();
-      csvBuffer.writeln('ID,Timestamp,Message Length,Response Time (s),Tokens Used');
+      csvBuffer
+          .writeln('ID,Timestamp,Message Length,Response Time (s),Tokens Used');
       for (final record in records) {
         csvBuffer.writeln(
           '${record.id ?? ""},'
@@ -1878,7 +1912,7 @@ class StatisticsScreenState extends State<StatisticsScreen> {
         );
       }
       await csvFile.writeAsString(csvBuffer.toString());
-      
+
       if (!mounted) return;
       ScaffoldMessenger.of(context).showSnackBar(
         SnackBar(
