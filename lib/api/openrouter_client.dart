@@ -25,7 +25,13 @@ class OpenRouterClient {
 
   final http.Client _client;
 
+  /// Флаг для отслеживания состояния dispose.
+  bool _isDisposed = false;
+
   /// Кэш списка моделей.
+  ///
+  /// Кэшируется до вызова [clearModelCache] или [dispose].
+  /// Используется для уменьшения количества запросов к API.
   List<ModelInfo>? _modelCache;
 
   /// Кэш баланса.
@@ -52,7 +58,9 @@ class OpenRouterClient {
   ///
   /// Должен вызываться при завершении работы с клиентом для предотвращения утечек памяти.
   /// Очищает кэши моделей и баланса для освобождения памяти.
+  /// Устанавливает флаг _isDisposed для предотвращения новых запросов.
   void dispose() {
+    _isDisposed = true;
     _client.close();
     _modelCache = null;
     clearBalanceCache();
@@ -578,13 +586,22 @@ class OpenRouterClient {
     }
   }
 
-  /// Выполняет GET запрос с простой retry логикой и обработкой rate limits.
+  /// Выполняет GET запрос с экспоненциальным backoff и обработкой rate limits.
+  ///
+  /// Использует экспоненциальный backoff для retry: задержка увеличивается
+  /// как 2^attempt * baseDelay миллисекунд.
+  /// Для rate limits (429) уважает заголовок Retry-After от сервера.
   Future<http.Response> _getWithRetry(
     Uri uri, {
     int maxRetries = 3,
+    int baseDelayMs = 300,
   }) async {
     int attempt = 0;
     while (true) {
+      if (_isDisposed) {
+        throw const OpenRouterException('Client has been disposed');
+      }
+
       attempt += 1;
       try {
         final response = await _client.get(uri, headers: _defaultHeaders);
@@ -603,7 +620,9 @@ class OpenRouterClient {
             final seconds = int.tryParse(retryAfterHeader);
             delay = Duration(seconds: seconds ?? 1);
           } else {
-            delay = Duration(milliseconds: 300 * attempt);
+            // Экспоненциальный backoff: 2^attempt * baseDelay
+            final delayMs = baseDelayMs * (1 << (attempt - 1));
+            delay = Duration(milliseconds: delayMs);
           }
 
           await Future<void>.delayed(delay);
@@ -612,20 +631,31 @@ class OpenRouterClient {
 
         return response;
       } on http.ClientException {
-        if (attempt >= maxRetries) rethrow;
-        await Future<void>.delayed(Duration(milliseconds: 300 * attempt));
+        if (_isDisposed || attempt >= maxRetries) rethrow;
+        // Экспоненциальный backoff для сетевых ошибок
+        final delayMs = baseDelayMs * (1 << (attempt - 1));
+        await Future<void>.delayed(Duration(milliseconds: delayMs));
       }
     }
   }
 
-  /// Выполняет POST запрос с простой retry логикой для сетевых и 5xx ошибок.
+  /// Выполняет POST запрос с экспоненциальным backoff для сетевых, 5xx и rate limit ошибок.
+  ///
+  /// Использует экспоненциальный backoff для retry: задержка увеличивается
+  /// как 2^attempt * baseDelay миллисекунд.
+  /// Для rate limits (429) уважает заголовок Retry-After от сервера.
   Future<http.Response> _postWithRetry(
     Uri uri, {
     required Map<String, dynamic> body,
     int maxRetries = 3,
+    int baseDelayMs = 300,
   }) async {
     int attempt = 0;
     while (true) {
+      if (_isDisposed) {
+        throw const OpenRouterException('Client has been disposed');
+      }
+
       attempt += 1;
       try {
         debugPrint(
@@ -654,15 +684,28 @@ class OpenRouterClient {
         debugPrint(
             '[OpenRouterClient] Response received: ${response.statusCode}');
 
-        // Повторяем только при 5xx ошибках, остальные возвращаем сразу.
-        if (response.statusCode >= 500 && response.statusCode < 600) {
+        // Обработка rate limits (429) и 5xx ошибок.
+        if (response.statusCode == 429 ||
+            (response.statusCode >= 500 && response.statusCode < 600)) {
           if (attempt >= maxRetries) {
-            debugPrint('[OpenRouterClient] Max retries reached for 5xx error');
+            debugPrint('[OpenRouterClient] Max retries reached');
             return response;
           }
 
-          debugPrint('[OpenRouterClient] Retrying after delay...');
-          await Future<void>.delayed(Duration(milliseconds: 300 * attempt));
+          // Если сервер вернул Retry-After, уважаем его.
+          final retryAfterHeader = response.headers['retry-after'];
+          Duration delay;
+          if (retryAfterHeader != null) {
+            final seconds = int.tryParse(retryAfterHeader);
+            delay = Duration(seconds: seconds ?? 1);
+          } else {
+            // Экспоненциальный backoff: 2^attempt * baseDelay
+            final delayMs = baseDelayMs * (1 << (attempt - 1));
+            delay = Duration(milliseconds: delayMs);
+          }
+
+          debugPrint('[OpenRouterClient] Retrying after delay: $delay');
+          await Future<void>.delayed(delay);
           continue;
         }
 
@@ -670,9 +713,9 @@ class OpenRouterClient {
       } on http.ClientException catch (e) {
         debugPrint(
             '[OpenRouterClient] ClientException on attempt $attempt: $e');
-        if (attempt >= maxRetries) {
+        if (_isDisposed || attempt >= maxRetries) {
           debugPrint(
-              '[OpenRouterClient] Max retries reached, rethrowing exception');
+              '[OpenRouterClient] Max retries reached or disposed, rethrowing exception');
           rethrow;
         }
         // Если клиент закрыт, не пытаемся повторять
@@ -681,15 +724,19 @@ class OpenRouterClient {
           debugPrint('[OpenRouterClient] Connection closed, not retrying');
           rethrow;
         }
-        debugPrint('[OpenRouterClient] Retrying after delay...');
-        await Future<void>.delayed(Duration(milliseconds: 300 * attempt));
+        // Экспоненциальный backoff для сетевых ошибок
+        final delayMs = baseDelayMs * (1 << (attempt - 1));
+        debugPrint('[OpenRouterClient] Retrying after delay: ${delayMs}ms');
+        await Future<void>.delayed(Duration(milliseconds: delayMs));
       } catch (e) {
         debugPrint(
             '[OpenRouterClient] Unexpected error on attempt $attempt: $e');
-        if (attempt >= maxRetries) {
+        if (_isDisposed || attempt >= maxRetries) {
           rethrow;
         }
-        await Future<void>.delayed(Duration(milliseconds: 300 * attempt));
+        // Экспоненциальный backoff для неожиданных ошибок
+        final delayMs = baseDelayMs * (1 << (attempt - 1));
+        await Future<void>.delayed(Duration(milliseconds: delayMs));
       }
     }
   }
