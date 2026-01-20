@@ -563,6 +563,9 @@ class _ExpensesScreenState extends State<ExpensesScreen> {
             ],
           ),
           const SizedBox(height: AppStyles.padding),
+          // Легенда графика
+          if (_expensesData.isNotEmpty) _buildChartLegend(),
+          const SizedBox(height: AppStyles.paddingSmall),
           if (_expensesData.isEmpty)
             const Center(
               child: Padding(
@@ -672,12 +675,47 @@ class _ExpensesScreenState extends State<ExpensesScreen> {
                   periodLabel = DateFormat('MMM yyyy').format(period.startDate);
                   break;
               }
+              
+              // Формируем детальную информацию с разбивкой по моделям
+              final tooltipLines = <String>[
+                periodLabel,
+                'Общие расходы: ${_formatCost(rod.toY)}',
+                'Запросов: ${period.requestCount}',
+              ];
+              
+              // Добавляем разбивку по моделям, если есть данные
+              if (period.costsByModel.isNotEmpty) {
+                tooltipLines.add('');
+                tooltipLines.add('По моделям:');
+                final sortedModels = period.costsByModel.entries.toList()
+                  ..sort((a, b) => b.value.compareTo(a.value));
+                
+                // Показываем топ-5 моделей, чтобы не перегружать tooltip
+                final modelsToShow = sortedModels.take(5);
+                for (final modelEntry in modelsToShow) {
+                  final percentage = period.totalCost > 0
+                      ? (modelEntry.value / period.totalCost * 100).toStringAsFixed(1)
+                      : '0.0';
+                  tooltipLines.add(
+                    '  • ${modelEntry.key}: ${_formatCost(modelEntry.value)} ($percentage%)',
+                  );
+                }
+                
+                if (sortedModels.length > 5) {
+                  final remainingCost = sortedModels.skip(5)
+                      .fold<double>(0.0, (sum, e) => sum + e.value);
+                  tooltipLines.add(
+                    '  • Прочие: ${_formatCost(remainingCost)}',
+                  );
+                }
+              }
+              
               return BarTooltipItem(
-                '$periodLabel\n${_formatCost(rod.toY)}\n${period.requestCount} запросов',
+                tooltipLines.join('\n'),
                 const TextStyle(
                   color: AppStyles.textPrimary,
                   fontWeight: FontWeight.bold,
-                  fontSize: 12,
+                  fontSize: 11,
                 ),
               );
             },
@@ -693,6 +731,17 @@ class _ExpensesScreenState extends State<ExpensesScreen> {
             sideTitles: SideTitles(showTitles: false),
           ),
           bottomTitles: AxisTitles(
+            axisNameWidget: const Padding(
+              padding: EdgeInsets.only(top: 8),
+              child: Text(
+                'Период',
+                style: TextStyle(
+                  color: AppStyles.textSecondary,
+                  fontSize: 12,
+                  fontWeight: FontWeight.w500,
+                ),
+              ),
+            ),
             sideTitles: SideTitles(
               showTitles: true,
               getTitlesWidget: (value, meta) {
@@ -723,13 +772,27 @@ class _ExpensesScreenState extends State<ExpensesScreen> {
                   ),
                 );
               },
-              reservedSize: 40,
+              reservedSize: 50,
             ),
           ),
           leftTitles: AxisTitles(
+            axisNameWidget: const Padding(
+              padding: EdgeInsets.only(right: 8),
+              child: RotatedBox(
+                quarterTurns: 3,
+                child: Text(
+                  'Расходы (\$)',
+                  style: TextStyle(
+                    color: AppStyles.textSecondary,
+                    fontSize: 12,
+                    fontWeight: FontWeight.w500,
+                  ),
+                ),
+              ),
+            ),
             sideTitles: SideTitles(
               showTitles: true,
-              reservedSize: 50,
+              reservedSize: 60,
               getTitlesWidget: (value, meta) {
                 if (value < 0) return const Text('');
                 return Padding(
@@ -766,6 +829,59 @@ class _ExpensesScreenState extends State<ExpensesScreen> {
           ),
         ),
         barGroups: barGroups,
+      ),
+    );
+  }
+
+  /// Строит легенду графика.
+  Widget _buildChartLegend() {
+    return Container(
+      padding: const EdgeInsets.symmetric(
+        horizontal: AppStyles.paddingSmall,
+        vertical: AppStyles.paddingSmall / 2,
+      ),
+      decoration: BoxDecoration(
+        color: AppStyles.surfaceColor,
+        borderRadius: BorderRadius.circular(AppStyles.borderRadius / 2),
+        border: Border.all(
+          color: AppStyles.borderColor.withValues(alpha: 0.5),
+        ),
+      ),
+      child: Row(
+        mainAxisAlignment: MainAxisAlignment.center,
+        children: [
+          Container(
+            width: 16,
+            height: 16,
+            decoration: BoxDecoration(
+              color: AppStyles.accentColor,
+              borderRadius: BorderRadius.circular(4),
+            ),
+          ),
+          const SizedBox(width: 8),
+          const Text(
+            'Общие расходы за период',
+            style: TextStyle(
+              color: AppStyles.textSecondary,
+              fontSize: 12,
+            ),
+          ),
+          const SizedBox(width: 16),
+          const Icon(
+            Icons.info_outline,
+            size: 14,
+            color: AppStyles.textSecondary,
+          ),
+          const SizedBox(width: 4),
+          const Text(
+            'Нажмите на столбец для деталей',
+            style: TextStyle(
+              color: AppStyles.textSecondary,
+              fontSize: 11,
+              fontStyle: FontStyle.italic,
+            ),
+          ),
+        ],
       ),
     );
   }
