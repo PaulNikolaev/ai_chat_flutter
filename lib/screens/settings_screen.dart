@@ -2,6 +2,7 @@ import 'package:flutter/material.dart';
 
 import '../auth/auth_manager.dart';
 import '../ui/styles.dart';
+import '../utils/platform.dart';
 
 /// Страница настроек провайдера и API ключей.
 ///
@@ -260,38 +261,22 @@ class _SettingsScreenState extends State<SettingsScreen> {
     return '$prefix...$suffix';
   }
 
-  /// Получает иконку провайдера.
-  IconData _getProviderIcon(String? provider) {
-    switch (provider) {
-      case 'openrouter':
-        return Icons.cloud;
-      case 'vsegpt':
-        return Icons.router;
-      default:
-        return Icons.help_outline;
-    }
-  }
-
-  /// Получает цвет для провайдера.
-  Color _getProviderColor(String? provider) {
-    switch (provider) {
-      case 'openrouter':
-        return AppStyles.accentColor;
-      case 'vsegpt':
-        return AppStyles.successColor;
-      default:
-        return AppStyles.textSecondary;
-    }
-  }
-
   @override
   Widget build(BuildContext context) {
+    final isMobile = PlatformUtils.isMobile();
     final padding = AppStyles.getPadding(context);
     final maxContentWidth = AppStyles.getMaxContentWidth(context);
 
     return Scaffold(
       appBar: AppBar(
-        title: const Text('Настройки'),
+        title: const Row(
+          children: [
+            Icon(Icons.settings, size: 24),
+            SizedBox(width: 8),
+            Text('Настройки'),
+          ],
+        ),
+        elevation: 0,
       ),
       body: _isLoading
           ? const Center(
@@ -338,11 +323,50 @@ class _SettingsScreenState extends State<SettingsScreen> {
                       child: Column(
                         crossAxisAlignment: CrossAxisAlignment.stretch,
                         children: [
-                          // Секция информации о провайдере
+                          // Заголовок страницы
+                          if (!isMobile) ...[
+                            const Row(
+                              children: [
+                                Icon(
+                                  Icons.account_circle,
+                                  size: 32,
+                                  color: AppStyles.accentColor,
+                                ),
+                                SizedBox(width: 12),
+                                Text(
+                                  'Настройки аккаунта',
+                                  style: TextStyle(
+                                    fontSize: 24,
+                                    fontWeight: FontWeight.bold,
+                                    color: AppStyles.textPrimary,
+                                  ),
+                                ),
+                              ],
+                            ),
+                            const SizedBox(height: AppStyles.paddingLarge),
+                          ],
+                          
+                          // Раздел: Провайдер
+                          _buildSectionHeader(
+                            icon: Icons.cloud_circle,
+                            title: 'Провайдер API',
+                            subtitle: 'Выберите провайдера для подключения',
+                          ),
+                          const SizedBox(height: AppStyles.paddingSmall),
                           _buildProviderSection(),
-                          const SizedBox(height: AppStyles.padding),
+                          const SizedBox(height: AppStyles.paddingLarge),
 
-                          // Секция API ключа
+                          // Разделитель
+                          const Divider(color: AppStyles.borderColor, thickness: 1),
+                          const SizedBox(height: AppStyles.paddingLarge),
+
+                          // Раздел: API ключ
+                          _buildSectionHeader(
+                            icon: Icons.security,
+                            title: 'API Ключ',
+                            subtitle: 'Управление ключом доступа',
+                          ),
+                          const SizedBox(height: AppStyles.paddingSmall),
                           _buildApiKeySection(),
                         ],
                       ),
@@ -352,49 +376,90 @@ class _SettingsScreenState extends State<SettingsScreen> {
     );
   }
 
-  /// Строит секцию с информацией о провайдере.
-  Widget _buildProviderSection() {
-    return Container(
-      padding: const EdgeInsets.all(AppStyles.padding),
-      decoration: BoxDecoration(
-        color: AppStyles.cardColor,
-        borderRadius: BorderRadius.circular(AppStyles.borderRadius),
-        border: Border.all(color: AppStyles.borderColor),
-      ),
-      child: Column(
-        crossAxisAlignment: CrossAxisAlignment.start,
-        children: [
-          Row(
+  /// Строит заголовок секции с иконкой и описанием.
+  Widget _buildSectionHeader({
+    required IconData icon,
+    required String title,
+    required String subtitle,
+  }) {
+    return Row(
+      children: [
+        Container(
+          padding: const EdgeInsets.all(8),
+          decoration: BoxDecoration(
+            color: AppStyles.accentColor.withValues(alpha: 0.1),
+            borderRadius: BorderRadius.circular(AppStyles.borderRadius),
+          ),
+          child: Icon(
+            icon,
+            color: AppStyles.accentColor,
+            size: 24,
+          ),
+        ),
+        const SizedBox(width: 12),
+        Expanded(
+          child: Column(
+            crossAxisAlignment: CrossAxisAlignment.start,
             children: [
-              Icon(
-                _getProviderIcon(_provider),
-                color: _getProviderColor(_provider),
-                size: 24,
-              ),
-              const SizedBox(width: AppStyles.paddingSmall),
-              const Text(
-                'Провайдер',
-                style: TextStyle(
-                  fontSize: 18,
+              Text(
+                title,
+                style: const TextStyle(
+                  fontSize: 20,
                   fontWeight: FontWeight.bold,
                   color: AppStyles.textPrimary,
                 ),
               ),
+              const SizedBox(height: 4),
+              Text(
+                subtitle,
+                style: const TextStyle(
+                  fontSize: 14,
+                  color: AppStyles.textSecondary,
+                ),
+              ),
             ],
           ),
-          const SizedBox(height: AppStyles.padding),
+        ),
+      ],
+    );
+  }
+
+  /// Строит секцию с информацией о провайдере.
+  Widget _buildProviderSection() {
+    final isMobile = PlatformUtils.isMobile();
+    
+    return Container(
+      padding: EdgeInsets.all(isMobile ? AppStyles.paddingSmall : AppStyles.padding),
+      decoration: BoxDecoration(
+        color: AppStyles.cardColor,
+        borderRadius: BorderRadius.circular(AppStyles.borderRadius),
+        border: Border.all(color: AppStyles.borderColor, width: 1),
+        boxShadow: [
+          BoxShadow(
+            color: Colors.black.withValues(alpha: 0.1),
+            blurRadius: 4,
+            offset: const Offset(0, 2),
+          ),
+        ],
+      ),
+      child: Column(
+        crossAxisAlignment: CrossAxisAlignment.start,
+        children: [
+          const SizedBox(height: AppStyles.paddingSmall),
           // Переключатель провайдера
           SegmentedButton<String>(
-            segments: const [
+            segments: [
               ButtonSegment<String>(
                 value: 'openrouter',
-                label: Text('OpenRouter'),
-                icon: Icon(Icons.cloud),
+                label: Text(isMobile ? 'OpenRouter' : 'OpenRouter'),
+                icon: const Icon(Icons.cloud, size: 20),
+                tooltip: 'OpenRouter API',
               ),
               ButtonSegment<String>(
                 value: 'vsegpt',
-                label: Text('VSEGPT'),
-                icon: Icon(Icons.router),
+                label: Text(isMobile ? 'VSEGPT' : 'VSEGPT'),
+                icon: const Icon(Icons.router, size: 20),
+                tooltip: 'VSEGPT API',
               ),
             ],
             selected: _provider != null ? {_provider!} : <String>{},
@@ -405,7 +470,13 @@ class _SettingsScreenState extends State<SettingsScreen> {
                       _handleProviderChange(newSelection.first);
                     }
                   },
-            selectedIcon: const Icon(Icons.check),
+            selectedIcon: const Icon(Icons.check, size: 18),
+            style: SegmentedButton.styleFrom(
+              padding: EdgeInsets.symmetric(
+                horizontal: isMobile ? 8 : 16,
+                vertical: isMobile ? 8 : 12,
+              ),
+            ),
           ),
           if (_isUpdatingProvider) ...[
             const SizedBox(height: AppStyles.paddingSmall),
@@ -500,35 +571,26 @@ class _SettingsScreenState extends State<SettingsScreen> {
 
   /// Строит секцию с информацией об API ключе.
   Widget _buildApiKeySection() {
+    final isMobile = PlatformUtils.isMobile();
+    
     return Container(
-      padding: const EdgeInsets.all(AppStyles.padding),
+      padding: EdgeInsets.all(isMobile ? AppStyles.paddingSmall : AppStyles.padding),
       decoration: BoxDecoration(
         color: AppStyles.cardColor,
         borderRadius: BorderRadius.circular(AppStyles.borderRadius),
-        border: Border.all(color: AppStyles.borderColor),
+        border: Border.all(color: AppStyles.borderColor, width: 1),
+        boxShadow: [
+          BoxShadow(
+            color: Colors.black.withValues(alpha: 0.1),
+            blurRadius: 4,
+            offset: const Offset(0, 2),
+          ),
+        ],
       ),
       child: Column(
         crossAxisAlignment: CrossAxisAlignment.start,
         children: [
-          const Row(
-            children: [
-              Icon(
-                Icons.vpn_key,
-                color: AppStyles.accentColor,
-                size: 24,
-              ),
-              SizedBox(width: AppStyles.paddingSmall),
-              Text(
-                'API Ключ',
-                style: TextStyle(
-                  fontSize: 18,
-                  fontWeight: FontWeight.bold,
-                  color: AppStyles.textPrimary,
-                ),
-              ),
-            ],
-          ),
-          const SizedBox(height: AppStyles.padding),
+          const SizedBox(height: AppStyles.paddingSmall),
           Container(
             padding: const EdgeInsets.all(AppStyles.paddingSmall),
             decoration: BoxDecoration(
