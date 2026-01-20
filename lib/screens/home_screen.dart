@@ -39,6 +39,9 @@ class HomeScreen extends StatefulWidget {
 class _HomeScreenState extends State<HomeScreen> {
   int _selectedIndex = 0;
 
+  /// Кэш виджетов страниц для сохранения состояния при переключении.
+  late final List<Widget> _pages;
+
   /// Список страниц приложения с их маршрутами.
   /// 
   /// Порядок элементов определяет порядок отображения в навигации.
@@ -87,6 +90,9 @@ class _HomeScreenState extends State<HomeScreen> {
     AppRouter.analytics = _analytics;
     AppRouter.performanceMonitor = _performanceMonitor;
     AppRouter.expensesCalculator = _expensesCalculator;
+    
+    // Инициализируем кэш страниц для сохранения состояния
+    _pages = _buildPages();
   }
 
   @override
@@ -95,6 +101,8 @@ class _HomeScreenState extends State<HomeScreen> {
     // Обновляем параметры в роутере при изменении виджета
     if (widget.apiClient != oldWidget.apiClient) {
       AppRouter.apiClient = widget.apiClient;
+      // Пересоздаем страницы при изменении API клиента
+      _pages = _buildPages();
     }
     if (widget.onLogout != oldWidget.onLogout) {
       AppRouter.onLogout = widget.onLogout;
@@ -116,33 +124,43 @@ class _HomeScreenState extends State<HomeScreen> {
     });
   }
 
-  /// Получает текущую страницу в зависимости от выбранного индекса.
-  Widget _getPage(int index) {
-    final routeName = _navigationItems[index].route;
-    
-    // Для главной страницы возвращаем ChatScreen напрямую
-    if (routeName == AppRoutes.home) {
+  /// Создает список виджетов страниц для кэширования состояния.
+  /// 
+  /// Использует ключи для сохранения состояния при пересоздании виджетов.
+  List<Widget> _buildPages() {
+    return _navigationItems.map((item) {
+      final routeName = item.route;
+      
+      // Создаем уникальный ключ для каждой страницы для сохранения состояния
+      final pageKey = ValueKey('${routeName}_${widget.apiClient?.hashCode ?? 'null'}');
+      
+      // Для главной страницы возвращаем ChatScreen напрямую
+      if (routeName == AppRoutes.home) {
+        return ChatScreen(
+          key: pageKey,
+          apiClient: widget.apiClient,
+          onLogout: widget.onLogout,
+        );
+      }
+      
+      // Для остальных страниц используем генератор роутов
+      final routeSettings = RouteSettings(name: routeName);
+      final route = AppRouter.onGenerateRoute(routeSettings);
+      
+      if (route != null && route is MaterialPageRoute) {
+        return Builder(
+          key: pageKey,
+          builder: (context) => route.builder(context),
+        );
+      }
+      
+      // Fallback на главную страницу
       return ChatScreen(
+        key: pageKey,
         apiClient: widget.apiClient,
         onLogout: widget.onLogout,
       );
-    }
-    
-    // Для остальных страниц используем генератор роутов
-    final routeSettings = RouteSettings(name: routeName);
-    final route = AppRouter.onGenerateRoute(routeSettings);
-    
-    if (route != null && route is MaterialPageRoute) {
-      return Builder(
-        builder: (context) => route.builder(context),
-      );
-    }
-    
-    // Fallback на главную страницу
-    return ChatScreen(
-      apiClient: widget.apiClient,
-      onLogout: widget.onLogout,
-    );
+    }).toList();
   }
 
   @override
@@ -154,10 +172,7 @@ class _HomeScreenState extends State<HomeScreen> {
       return Scaffold(
         body: IndexedStack(
           index: _selectedIndex,
-          children: _navigationItems.asMap().entries.map((entry) {
-            final index = entry.key;
-            return _getPage(index);
-          }).toList(),
+          children: _pages,
         ),
         bottomNavigationBar: BottomNavigationBar(
           type: BottomNavigationBarType.fixed,
@@ -202,10 +217,7 @@ class _HomeScreenState extends State<HomeScreen> {
           Expanded(
             child: IndexedStack(
               index: _selectedIndex,
-              children: _navigationItems.asMap().entries.map((entry) {
-                final index = entry.key;
-                return _getPage(index);
-              }).toList(),
+              children: _pages,
             ),
           ),
         ],

@@ -1,7 +1,7 @@
 import 'package:flutter/material.dart';
 
-import '../screens/chat_screen.dart';
 import '../screens/expenses_screen.dart';
+import '../screens/home_screen.dart';
 import '../screens/settings_screen.dart';
 import '../screens/statistics_screen.dart';
 import '../ui/login/login_screen.dart';
@@ -84,7 +84,7 @@ class AppRouter {
     switch (settings.name) {
       case AppRoutes.home:
         return MaterialPageRoute(
-          builder: (context) => ChatScreen(
+          builder: (context) => HomeScreen(
             apiClient: apiClient,
             onLogout: onLogout ?? () {},
           ),
