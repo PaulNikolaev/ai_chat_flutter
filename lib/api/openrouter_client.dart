@@ -419,12 +419,19 @@ class OpenRouterClient {
         // Если не удалось распарсить, используем стандартное сообщение
       }
 
-      // Для VSEGPT добавляем дополнительную информацию об ошибке 404
-      if (provider == 'vsegpt' && response.statusCode == 404) {
+      // Для VSEGPT добавляем дополнительную информацию об ошибках 400 и 404
+      if (provider == 'vsegpt' && (response.statusCode == 400 || response.statusCode == 404)) {
         final modelId = body['model'] as String? ?? 'unknown';
-        errorMessage = 'Модель "$modelId" недоступна в VSEGPT. '
-            'Пожалуйста, выберите другую модель из списка доступных. '
-            'Ошибка: $errorMessage';
+        if (errorMessage.toLowerCase().contains('subscription') ||
+            errorMessage.toLowerCase().contains('plan')) {
+          errorMessage = 'Модель "$modelId" недоступна на вашем тарифном плане VSEGPT. '
+              'Пожалуйста, обновите тарифный план или выберите другую модель. '
+              'Тарифы: https://vsegpt.ru/Docs/Tariffs';
+        } else {
+          errorMessage = 'Модель "$modelId" недоступна в VSEGPT. '
+              'Пожалуйста, выберите другую модель из списка доступных. '
+              'Ошибка: $errorMessage';
+        }
       }
 
       throw OpenRouterException(errorMessage);
@@ -755,13 +762,14 @@ class OpenRouterClient {
               '[OpenRouterClient] Max retries reached or disposed, rethrowing exception');
           rethrow;
         }
-        // Если клиент закрыт, не пытаемся повторять
-        if (e.toString().contains('already closed') ||
-            e.toString().contains('Connection closed')) {
-          debugPrint('[OpenRouterClient] Connection closed, not retrying');
+        // Проверяем, не был ли клиент явно закрыт (disposed)
+        // "already closed" означает, что клиент был закрыт программно
+        // "Connection closed" ошибки - это временные сетевые проблемы, их нужно повторять
+        if (e.toString().contains('already closed')) {
+          debugPrint('[OpenRouterClient] Client already closed, not retrying');
           rethrow;
         }
-        // Экспоненциальный backoff для сетевых ошибок
+        // Экспоненциальный backoff для сетевых ошибок (включая "Connection closed")
         final delayMs = baseDelayMs * (1 << (attempt - 1));
         debugPrint('[OpenRouterClient] Retrying after delay: ${delayMs}ms');
         await Future<void>.delayed(Duration(milliseconds: delayMs));
