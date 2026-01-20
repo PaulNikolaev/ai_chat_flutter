@@ -29,6 +29,11 @@ ENV/
 .vscode/
 *.swp
 *.swo
+*.iml
+*.ipr
+*.iws
+*.code-workspace
+*.sublime-*
 
 # Build outputs
 bin/
@@ -45,16 +50,27 @@ temp/
 /build/
 *.apk
 *.aab
+*.ipa
+*.app
+*.dmg
+*.deb
+*.rpm
+*.snap
 export/
 .metadata
 
 # Platform build artifacts
 android/build/
 android/.gradle/
+android/.kotlin/
 android/app/build/
 android/app/.cxx/
+android/app/src/main/java/
 android/local.properties
 android/.idea/
+*.keystore
+*.jks
+*.hprof
 ios/build/
 ios/Pods/
 ios/.symlinks/
@@ -73,9 +89,12 @@ macos/Flutter/Flutter-Release.xcconfig
 macos/Flutter/GeneratedPluginRegistrant.swift
 web/build/
 windows/build/
+windows/flutter/ephemeral/
 windows/flutter/generated_plugin_registrant.cc
 windows/flutter/generated_plugin_registrant.h
 windows/flutter/generated_plugins.cmake
+*.msix
+*.appx
 
 # Environment variables
 .env
@@ -103,3 +122,9 @@ chat_cache.db
 .Trashes
 ehthumbs.db
 Thumbs.db
+Desktop.ini
+
+# Backup files
+*.orig
+*.rej
+*~
