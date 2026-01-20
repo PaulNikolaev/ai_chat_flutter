@@ -549,9 +549,12 @@ class _StatisticsScreenState extends State<StatisticsScreen> {
 
   /// Строит секцию с общей статистикой.
   Widget _buildTotalStatisticsSection() {
-    final isMobile = PlatformUtils.isMobile();
-    
-    return Container(
+    return LayoutBuilder(
+      builder: (context, constraints) {
+        final screenSize = PlatformUtils.getScreenSize(context);
+        final isSmall = screenSize == 'small';
+        
+        return Container(
       padding: const EdgeInsets.all(AppStyles.padding),
       decoration: BoxDecoration(
         color: AppStyles.cardColor,
@@ -587,7 +590,7 @@ class _StatisticsScreenState extends State<StatisticsScreen> {
             ],
           ),
           const SizedBox(height: AppStyles.padding),
-          isMobile
+          isSmall
               ? Column(
                   children: [
                     _buildStatCard(
@@ -628,6 +631,8 @@ class _StatisticsScreenState extends State<StatisticsScreen> {
                 ),
         ],
       ),
+    );
+      },
     );
   }
 
@@ -718,169 +723,214 @@ class _StatisticsScreenState extends State<StatisticsScreen> {
             ],
           ),
           const SizedBox(height: AppStyles.padding),
-          // Фильтр по модели
-          FutureBuilder<Map<String, Map<String, int>>>(
-            future: analytics.getModelStatistics(),
-            builder: (context, snapshot) {
-              final allModels = snapshot.data?.keys.toList() ?? [];
-              return DropdownButtonFormField<String>(
-                decoration: InputDecoration(
-                  labelText: 'Модель',
-                  prefixIcon: const Icon(Icons.model_training),
-                  border: OutlineInputBorder(
-                    borderRadius: BorderRadius.circular(AppStyles.borderRadius),
-                  ),
-                ),
-                initialValue: _selectedModelFilter,
-                items: [
-                  const DropdownMenuItem<String>(
-                    value: null,
-                    child: Text('Все модели'),
-                  ),
-                  ...allModels.map((model) => DropdownMenuItem<String>(
-                    value: model,
-                    child: Text(model),
-                  )),
-                ],
-                onChanged: (value) {
-                  setState(() {
-                    _selectedModelFilter = value;
-                  });
-                  _applyFilters();
+          LayoutBuilder(
+            builder: (context, constraints) {
+              final screenSize = PlatformUtils.getScreenSize(context);
+              final isSmall = screenSize == 'small';
+              
+              // Фильтр по модели
+              final modelFilter = FutureBuilder<Map<String, Map<String, int>>>(
+                future: analytics.getModelStatistics(),
+                builder: (context, snapshot) {
+                  final allModels = snapshot.data?.keys.toList() ?? [];
+                  return DropdownButtonFormField<String>(
+                    decoration: InputDecoration(
+                      labelText: 'Модель',
+                      prefixIcon: const Icon(Icons.model_training),
+                      border: OutlineInputBorder(
+                        borderRadius: BorderRadius.circular(AppStyles.borderRadius),
+                      ),
+                    ),
+                    initialValue: _selectedModelFilter,
+                    items: [
+                      const DropdownMenuItem<String>(
+                        value: null,
+                        child: Text('Все модели'),
+                      ),
+                      ...allModels.map((model) => DropdownMenuItem<String>(
+                        value: model,
+                        child: Text(model),
+                      )),
+                    ],
+                    onChanged: (value) {
+                      setState(() {
+                        _selectedModelFilter = value;
+                      });
+                      _applyFilters();
+                    },
+                  );
                 },
               );
-            },
-          ),
-          const SizedBox(height: AppStyles.paddingSmall),
-          // Фильтр по дате
-          Row(
-            children: [
-              Expanded(
-                child: InkWell(
-                  onTap: () async {
-                    final date = await showDatePicker(
-                      context: context,
-                      initialDate: _startDateFilter ?? DateTime.now(),
-                      firstDate: DateTime(2000),
-                      lastDate: DateTime.now(),
-                    );
-                    if (date != null) {
-                      setState(() {
-                        _startDateFilter = date;
-                      });
-                      _applyFilters();
-                    }
-                  },
-                  child: InputDecorator(
-                    decoration: InputDecoration(
-                      labelText: 'Дата начала',
-                      prefixIcon: const Icon(Icons.calendar_today),
-                      border: OutlineInputBorder(
-                        borderRadius: BorderRadius.circular(AppStyles.borderRadius),
+              
+              // Фильтр по дате
+              final dateFilters = Row(
+                children: [
+                  Expanded(
+                    child: InkWell(
+                      onTap: () async {
+                        final date = await showDatePicker(
+                          context: context,
+                          initialDate: _startDateFilter ?? DateTime.now(),
+                          firstDate: DateTime(2000),
+                          lastDate: DateTime.now(),
+                        );
+                        if (date != null) {
+                          setState(() {
+                            _startDateFilter = date;
+                          });
+                          _applyFilters();
+                        }
+                      },
+                      child: InputDecorator(
+                        decoration: InputDecoration(
+                          labelText: 'Дата начала',
+                          prefixIcon: const Icon(Icons.calendar_today),
+                          border: OutlineInputBorder(
+                            borderRadius: BorderRadius.circular(AppStyles.borderRadius),
+                          ),
+                        ),
+                        child: Text(
+                          _startDateFilter != null
+                              ? DateFormat('yyyy-MM-dd').format(_startDateFilter!)
+                              : 'Не выбрана',
+                        ),
                       ),
                     ),
-                    child: Text(
-                      _startDateFilter != null
-                          ? DateFormat('yyyy-MM-dd').format(_startDateFilter!)
-                          : 'Не выбрана',
-                    ),
                   ),
-                ),
-              ),
-              const SizedBox(width: AppStyles.paddingSmall),
-              Expanded(
-                child: InkWell(
-                  onTap: () async {
-                    final date = await showDatePicker(
-                      context: context,
-                      initialDate: _endDateFilter ?? DateTime.now(),
-                      firstDate: _startDateFilter ?? DateTime(2000),
-                      lastDate: DateTime.now(),
-                    );
-                    if (date != null) {
-                      setState(() {
-                        _endDateFilter = date;
-                      });
-                      _applyFilters();
-                    }
-                  },
-                  child: InputDecorator(
-                    decoration: InputDecoration(
-                      labelText: 'Дата окончания',
-                      prefixIcon: const Icon(Icons.calendar_today),
-                      border: OutlineInputBorder(
-                        borderRadius: BorderRadius.circular(AppStyles.borderRadius),
+                  const SizedBox(width: AppStyles.paddingSmall),
+                  Expanded(
+                    child: InkWell(
+                      onTap: () async {
+                        final date = await showDatePicker(
+                          context: context,
+                          initialDate: _endDateFilter ?? DateTime.now(),
+                          firstDate: _startDateFilter ?? DateTime(2000),
+                          lastDate: DateTime.now(),
+                        );
+                        if (date != null) {
+                          setState(() {
+                            _endDateFilter = date;
+                          });
+                          _applyFilters();
+                        }
+                      },
+                      child: InputDecorator(
+                        decoration: InputDecoration(
+                          labelText: 'Дата окончания',
+                          prefixIcon: const Icon(Icons.calendar_today),
+                          border: OutlineInputBorder(
+                            borderRadius: BorderRadius.circular(AppStyles.borderRadius),
+                          ),
+                        ),
+                        child: Text(
+                          _endDateFilter != null
+                              ? DateFormat('yyyy-MM-dd').format(_endDateFilter!)
+                              : 'Не выбрана',
+                        ),
                       ),
                     ),
-                    child: Text(
-                      _endDateFilter != null
-                          ? DateFormat('yyyy-MM-dd').format(_endDateFilter!)
-                          : 'Не выбрана',
-                    ),
                   ),
-                ),
-              ),
-            ],
-          ),
-          const SizedBox(height: AppStyles.paddingSmall),
-          // Сортировка
-          Row(
-            children: [
-              const Text(
-                'Сортировать по:',
-                style: TextStyle(
-                  color: AppStyles.textSecondary,
-                  fontSize: 14,
-                ),
-              ),
-              const SizedBox(width: AppStyles.paddingSmall),
-              Expanded(
-                child: SegmentedButton<SortType>(
-                  segments: const [
-                    ButtonSegment<SortType>(
-                      value: SortType.model,
-                      label: Text('Модель'),
-                      icon: Icon(Icons.sort_by_alpha, size: 16),
+                ],
+              );
+              
+              // Сортировка
+              final sortControls = Row(
+                children: [
+                  if (!isSmall) ...[
+                    const Text(
+                      'Сортировать по:',
+                      style: TextStyle(
+                        color: AppStyles.textSecondary,
+                        fontSize: 14,
+                      ),
                     ),
-                    ButtonSegment<SortType>(
-                      value: SortType.count,
-                      label: Text('Запросы'),
-                      icon: Icon(Icons.numbers, size: 16),
-                    ),
-                    ButtonSegment<SortType>(
-                      value: SortType.tokens,
-                      label: Text('Токены'),
-                      icon: Icon(Icons.token, size: 16),
-                    ),
+                    const SizedBox(width: AppStyles.paddingSmall),
                   ],
-                  selected: {_sortType},
-                  onSelectionChanged: (Set<SortType> selection) {
-                    if (selection.isNotEmpty) {
-                      _changeSortType(selection.first);
-                    }
-                  },
-                ),
-              ),
-              const SizedBox(width: AppStyles.paddingSmall),
-              IconButton(
-                icon: Icon(
-                  _sortDirection == SortDirection.ascending
-                      ? Icons.arrow_upward
-                      : Icons.arrow_downward,
-                ),
-                tooltip: _sortDirection == SortDirection.ascending
-                    ? 'По возрастанию'
-                    : 'По убыванию',
-                onPressed: () {
-                  setState(() {
-                    _sortDirection = _sortDirection == SortDirection.ascending
-                        ? SortDirection.descending
-                        : SortDirection.ascending;
-                  });
-                  _loadStatistics();
-                },
-              ),
-            ],
+                  Expanded(
+                    child: SegmentedButton<SortType>(
+                      segments: const [
+                        ButtonSegment<SortType>(
+                          value: SortType.model,
+                          label: Text('Модель'),
+                          icon: Icon(Icons.sort_by_alpha, size: 16),
+                        ),
+                        ButtonSegment<SortType>(
+                          value: SortType.count,
+                          label: Text('Запросы'),
+                          icon: Icon(Icons.numbers, size: 16),
+                        ),
+                        ButtonSegment<SortType>(
+                          value: SortType.tokens,
+                          label: Text('Токены'),
+                          icon: Icon(Icons.token, size: 16),
+                        ),
+                      ],
+                      selected: {_sortType},
+                      onSelectionChanged: (Set<SortType> selection) {
+                        if (selection.isNotEmpty) {
+                          _changeSortType(selection.first);
+                        }
+                      },
+                    ),
+                  ),
+                  const SizedBox(width: AppStyles.paddingSmall),
+                  IconButton(
+                    icon: Icon(
+                      _sortDirection == SortDirection.ascending
+                          ? Icons.arrow_upward
+                          : Icons.arrow_downward,
+                    ),
+                    tooltip: _sortDirection == SortDirection.ascending
+                        ? 'По возрастанию'
+                        : 'По убыванию',
+                    onPressed: () {
+                      setState(() {
+                        _sortDirection = _sortDirection == SortDirection.ascending
+                            ? SortDirection.descending
+                            : SortDirection.ascending;
+                      });
+                      _loadStatistics();
+                    },
+                  ),
+                ],
+              );
+              
+              if (isSmall) {
+                return Column(
+                  crossAxisAlignment: CrossAxisAlignment.stretch,
+                  children: [
+                    modelFilter,
+                    const SizedBox(height: AppStyles.paddingSmall),
+                    dateFilters,
+                    const SizedBox(height: AppStyles.paddingSmall),
+                    sortControls,
+                  ],
+                );
+              } else {
+                // Для планшетов и больших экранов размещаем в две колонки
+                return Column(
+                  crossAxisAlignment: CrossAxisAlignment.stretch,
+                  children: [
+                    Row(
+                      crossAxisAlignment: CrossAxisAlignment.start,
+                      children: [
+                        Expanded(
+                          flex: 2,
+                          child: modelFilter,
+                        ),
+                        const SizedBox(width: AppStyles.padding),
+                        Expanded(
+                          flex: 3,
+                          child: dateFilters,
+                        ),
+                      ],
+                    ),
+                    const SizedBox(height: AppStyles.paddingSmall),
+                    sortControls,
+                  ],
+                );
+              }
+            },
           ),
           const SizedBox(height: AppStyles.paddingSmall),
           // Кнопка сброса фильтров

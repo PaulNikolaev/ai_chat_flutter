@@ -11,6 +11,7 @@ import '../models/model_info.dart';
 import '../ui/styles.dart';
 import '../utils/analytics.dart';
 import '../utils/expenses_calculator.dart';
+import '../utils/platform.dart';
 
 /// Тип периода для отображения расходов.
 enum ExpensesPeriodType {
@@ -526,67 +527,77 @@ class _ExpensesScreenState extends State<ExpensesScreen> {
             ],
           ),
           const SizedBox(height: AppStyles.padding),
-          // Выбор типа периода
-          const Text(
-            'Тип периода:',
-            style: TextStyle(
-              color: AppStyles.textSecondary,
-              fontSize: 14,
-            ),
-          ),
-          const SizedBox(height: AppStyles.paddingSmall),
-          SegmentedButton<ExpensesPeriodType>(
-            segments: const [
-              ButtonSegment<ExpensesPeriodType>(
-                value: ExpensesPeriodType.day,
-                label: Text('Дни'),
-                icon: Icon(Icons.calendar_today, size: 16),
-              ),
-              ButtonSegment<ExpensesPeriodType>(
-                value: ExpensesPeriodType.week,
-                label: Text('Недели'),
-                icon: Icon(Icons.date_range, size: 16),
-              ),
-              ButtonSegment<ExpensesPeriodType>(
-                value: ExpensesPeriodType.month,
-                label: Text('Месяцы'),
-                icon: Icon(Icons.calendar_month, size: 16),
-              ),
-            ],
-            selected: {_periodType},
-            onSelectionChanged: (Set<ExpensesPeriodType> selection) {
-              if (selection.isNotEmpty) {
-                setState(() {
-                  _periodType = selection.first;
-                });
-                _loadExpenses();
-              }
-            },
-          ),
-          const SizedBox(height: AppStyles.padding),
-          // Фильтр по дате
-          Row(
-            children: [
-              Expanded(
-                child: InkWell(
-                  onTap: () async {
-                    final date = await showDatePicker(
-                      context: context,
-                      initialDate: _startDate ?? DateTime.now(),
-                      firstDate: DateTime(2000),
-                      lastDate: _endDate ?? DateTime.now(),
-                    );
-                    if (date != null) {
-                      setState(() {
-                        _startDate = date;
-                      });
-                      _applyFilters();
-                    }
-                  },
-                  child: InputDecorator(
-                    decoration: InputDecoration(
-                      labelText: 'Дата начала',
-                      prefixIcon: const Icon(Icons.calendar_today),
+          LayoutBuilder(
+            builder: (context, constraints) {
+              final screenSize = PlatformUtils.getScreenSize(context);
+              final isSmall = screenSize == 'small';
+              
+              // Выбор типа периода
+              final periodTypeSelector = Column(
+                crossAxisAlignment: CrossAxisAlignment.start,
+                children: [
+                  const Text(
+                    'Тип периода:',
+                    style: TextStyle(
+                      color: AppStyles.textSecondary,
+                      fontSize: 14,
+                    ),
+                  ),
+                  const SizedBox(height: AppStyles.paddingSmall),
+                  SegmentedButton<ExpensesPeriodType>(
+                    segments: const [
+                      ButtonSegment<ExpensesPeriodType>(
+                        value: ExpensesPeriodType.day,
+                        label: Text('Дни'),
+                        icon: Icon(Icons.calendar_today, size: 16),
+                      ),
+                      ButtonSegment<ExpensesPeriodType>(
+                        value: ExpensesPeriodType.week,
+                        label: Text('Недели'),
+                        icon: Icon(Icons.date_range, size: 16),
+                      ),
+                      ButtonSegment<ExpensesPeriodType>(
+                        value: ExpensesPeriodType.month,
+                        label: Text('Месяцы'),
+                        icon: Icon(Icons.calendar_month, size: 16),
+                      ),
+                    ],
+                    selected: {_periodType},
+                    onSelectionChanged: (Set<ExpensesPeriodType> selection) {
+                      if (selection.isNotEmpty) {
+                        setState(() {
+                          _periodType = selection.first;
+                        });
+                        _loadExpenses();
+                      }
+                    },
+                  ),
+                ],
+              );
+              
+              // Фильтр по дате
+              final dateFilters = Row(
+                children: [
+                  Expanded(
+                    child: InkWell(
+                      onTap: () async {
+                        final date = await showDatePicker(
+                          context: context,
+                          initialDate: _startDate ?? DateTime.now(),
+                          firstDate: DateTime(2000),
+                          lastDate: _endDate ?? DateTime.now(),
+                        );
+                        if (date != null) {
+                          setState(() {
+                            _startDate = date;
+                          });
+                          _applyFilters();
+                        }
+                      },
+                      child: InputDecorator(
+                        decoration: InputDecoration(
+                          labelText: 'Дата начала',
+                          prefixIcon: const Icon(Icons.calendar_today),
                       border: OutlineInputBorder(
                         borderRadius: BorderRadius.circular(AppStyles.borderRadius),
                       ),
@@ -633,46 +644,88 @@ class _ExpensesScreenState extends State<ExpensesScreen> {
                 ),
               ),
             ],
-          ),
-          const SizedBox(height: AppStyles.paddingSmall),
-          // Фильтр по модели
-          DropdownButtonFormField<String>(
-            decoration: InputDecoration(
-              labelText: 'Модель',
-              prefixIcon: const Icon(Icons.model_training),
-              border: OutlineInputBorder(
-                borderRadius: BorderRadius.circular(AppStyles.borderRadius),
-              ),
-            ),
-            initialValue: _selectedModelFilter,
-            items: [
-              const DropdownMenuItem<String>(
-                value: null,
-                child: Text('Все модели'),
-              ),
-              ..._availableModels.map((model) => DropdownMenuItem<String>(
-                    value: model.id,
-                    child: Text(model.id),
-                  )),
-            ],
-            onChanged: (value) {
-              setState(() {
-                _selectedModelFilter = value;
-              });
-              _applyFilters();
+          );
+              
+              // Фильтр по модели
+              final modelFilter = DropdownButtonFormField<String>(
+                decoration: InputDecoration(
+                  labelText: 'Модель',
+                  prefixIcon: const Icon(Icons.model_training),
+                  border: OutlineInputBorder(
+                    borderRadius: BorderRadius.circular(AppStyles.borderRadius),
+                  ),
+                ),
+                initialValue: _selectedModelFilter,
+                items: [
+                  const DropdownMenuItem<String>(
+                    value: null,
+                    child: Text('Все модели'),
+                  ),
+                  ..._availableModels.map((model) => DropdownMenuItem<String>(
+                        value: model.id,
+                        child: Text(model.id),
+                      )),
+                ],
+                onChanged: (value) {
+                  setState(() {
+                    _selectedModelFilter = value;
+                  });
+                  _applyFilters();
+                },
+              );
+              
+              // Кнопка сброса фильтров
+              final resetButton = Row(
+                mainAxisAlignment: MainAxisAlignment.end,
+                children: [
+                  TextButton.icon(
+                    onPressed: _resetFilters,
+                    icon: const Icon(Icons.clear_all, size: 18),
+                    label: const Text('Сбросить фильтры'),
+                  ),
+                ],
+              );
+              
+              if (isSmall) {
+                return Column(
+                  crossAxisAlignment: CrossAxisAlignment.stretch,
+                  children: [
+                    periodTypeSelector,
+                    const SizedBox(height: AppStyles.padding),
+                    dateFilters,
+                    const SizedBox(height: AppStyles.paddingSmall),
+                    modelFilter,
+                    const SizedBox(height: AppStyles.paddingSmall),
+                    resetButton,
+                  ],
+                );
+              } else {
+                // Для планшетов и больших экранов размещаем в две колонки
+                return Column(
+                  crossAxisAlignment: CrossAxisAlignment.stretch,
+                  children: [
+                    periodTypeSelector,
+                    const SizedBox(height: AppStyles.padding),
+                    Row(
+                      crossAxisAlignment: CrossAxisAlignment.start,
+                      children: [
+                        Expanded(
+                          flex: 2,
+                          child: dateFilters,
+                        ),
+                        const SizedBox(width: AppStyles.padding),
+                        Expanded(
+                          flex: 1,
+                          child: modelFilter,
+                        ),
+                      ],
+                    ),
+                    const SizedBox(height: AppStyles.paddingSmall),
+                    resetButton,
+                  ],
+                );
+              }
             },
-          ),
-          const SizedBox(height: AppStyles.paddingSmall),
-          // Кнопка сброса фильтров
-          Row(
-            mainAxisAlignment: MainAxisAlignment.end,
-            children: [
-              TextButton.icon(
-                onPressed: _resetFilters,
-                icon: const Icon(Icons.clear_all, size: 18),
-                label: const Text('Сбросить фильтры'),
-              ),
-            ],
           ),
         ],
       ),
