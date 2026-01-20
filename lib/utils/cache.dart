@@ -213,7 +213,7 @@ class ChatCache {
   /// Сохраняет аналитическую запись в базу данных.
   ///
   /// Сохраняет метрики использования модели, включая время ответа,
-  /// длину сообщения и количество использованных токенов.
+  /// длину сообщения, количество использованных токенов и стоимость.
   ///
   /// Параметры:
   /// - [timestamp]: Временная метка записи.
@@ -221,6 +221,9 @@ class ChatCache {
   /// - [messageLength]: Длина сообщения в символах.
   /// - [responseTime]: Время ответа в секундах.
   /// - [tokensUsed]: Количество использованных токенов.
+  /// - [promptTokens]: Количество токенов в промпте (опционально).
+  /// - [completionTokens]: Количество токенов в завершении (опционально).
+  /// - [cost]: Стоимость запроса в долларах (опционально).
   ///
   /// Возвращает ID сохраненной записи или null в случае ошибки.
   Future<int?> saveAnalytics({
@@ -229,6 +232,9 @@ class ChatCache {
     required int messageLength,
     required double responseTime,
     required int tokensUsed,
+    int? promptTokens,
+    int? completionTokens,
+    double? cost,
   }) async {
     try {
       final db = await _db;
@@ -242,10 +248,13 @@ class ChatCache {
           'message_length': messageLength,
           'response_time': responseTime,
           'tokens_used': tokensUsed,
+          if (promptTokens != null) 'prompt_tokens': promptTokens,
+          if (completionTokens != null) 'completion_tokens': completionTokens,
+          if (cost != null) 'cost': cost,
         },
       );
       
-      debugPrint('ChatCache.saveAnalytics: Saved analytics record with id=$id, model=$model, tokens=$tokensUsed');
+      debugPrint('ChatCache.saveAnalytics: Saved analytics record with id=$id, model=$model, tokens=$tokensUsed, cost=$cost');
       return id;
     } catch (e, stackTrace) {
       debugPrint('ChatCache.saveAnalytics error: $e');
@@ -275,6 +284,9 @@ class ChatCache {
             messageLength: row['message_length'] as int,
             responseTime: (row['response_time'] as num).toDouble(),
             tokensUsed: row['tokens_used'] as int,
+            promptTokens: row['prompt_tokens'] as int?,
+            completionTokens: row['completion_tokens'] as int?,
+            cost: (row['cost'] as num?)?.toDouble(),
           )).toList();
     } catch (e) {
       return [];
@@ -342,6 +354,9 @@ class ChatCache {
             messageLength: row['message_length'] as int,
             responseTime: (row['response_time'] as num).toDouble(),
             tokensUsed: row['tokens_used'] as int,
+            promptTokens: row['prompt_tokens'] as int?,
+            completionTokens: row['completion_tokens'] as int?,
+            cost: (row['cost'] as num?)?.toDouble(),
           )).toList();
     } catch (e) {
       debugPrint('ChatCache.getAnalyticsHistoryFiltered error: $e');
@@ -501,6 +516,9 @@ class ChatCache {
             messageLength: row['message_length'] as int,
             responseTime: (row['response_time'] as num).toDouble(),
             tokensUsed: row['tokens_used'] as int,
+            promptTokens: row['prompt_tokens'] as int?,
+            completionTokens: row['completion_tokens'] as int?,
+            cost: (row['cost'] as num?)?.toDouble(),
           )).toList();
     } catch (e) {
       return [];

@@ -26,18 +26,52 @@ class Analytics {
   /// Фиксирует метрики для одного сообщения.
   ///
   /// Сохраняет запись в БД и обновляет статистику по модели.
+  /// Рассчитывает стоимость на основе цен модели, если они предоставлены.
+  ///
+  /// Параметры:
+  /// - [model]: Идентификатор модели AI.
+  /// - [messageLength]: Длина сообщения в символах.
+  /// - [responseTime]: Время ответа в секундах.
+  /// - [tokensUsed]: Общее количество использованных токенов.
+  /// - [promptTokens]: Количество токенов в промпте (опционально).
+  /// - [completionTokens]: Количество токенов в завершении (опционально).
+  /// - [promptPrice]: Цена за токен промпта (опционально, для расчета стоимости).
+  /// - [completionPrice]: Цена за токен завершения (опционально, для расчета стоимости).
   Future<void> trackMessage({
     required String model,
     required int messageLength,
     required double responseTime,
     required int tokensUsed,
+    int? promptTokens,
+    int? completionTokens,
+    double? promptPrice,
+    double? completionPrice,
   }) async {
+    // Рассчитываем стоимость, если есть все необходимые данные
+    double? cost;
+    if (promptPrice != null && completionPrice != null) {
+      final promptTokensValue = promptTokens ?? 0;
+      final completionTokensValue = completionTokens ?? 0;
+      cost = (promptTokensValue * promptPrice) + (completionTokensValue * completionPrice);
+    } else if (promptTokens != null && completionTokens != null && 
+               promptTokens == 0 && completionTokens == 0 && tokensUsed > 0) {
+      // Если токены не разделены, но есть общее количество, используем только completionPrice если доступен
+      if (completionPrice != null) {
+        cost = tokensUsed * completionPrice;
+      } else if (promptPrice != null) {
+        cost = tokensUsed * promptPrice;
+      }
+    }
+
     await _cache.saveAnalytics(
       timestamp: DateTime.now(),
       model: model,
       messageLength: messageLength,
       responseTime: responseTime,
       tokensUsed: tokensUsed,
+      promptTokens: promptTokens,
+      completionTokens: completionTokens,
+      cost: cost,
     );
   }
 

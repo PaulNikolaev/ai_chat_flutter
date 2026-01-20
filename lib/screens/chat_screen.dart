@@ -590,11 +590,21 @@ class _ChatScreenState extends State<ChatScreen> {
 
       // Отслеживаем метрики производительности и аналитику
       try {
+        // Находим информацию о модели для получения цен
+        final modelInfo = _models.firstWhere(
+          (m) => m.id == selectedModel,
+          orElse: () => ModelInfo(id: selectedModel, name: selectedModel),
+        );
+        
         await _analytics.trackMessage(
           model: selectedModel,
           messageLength: messageText.length,
           responseTime: responseTime,
           tokensUsed: tokensUsed,
+          promptTokens: result.promptTokens,
+          completionTokens: result.completionTokens,
+          promptPrice: modelInfo.promptPrice,
+          completionPrice: modelInfo.completionPrice,
         );
       } catch (e, stackTrace) {
         _logger?.error(

@@ -4,7 +4,7 @@ import 'package:sqflite_common_ffi/sqflite_ffi.dart';
 import 'package:path/path.dart';
 
 /// Версия базы данных для управления миграциями.
-const int _databaseVersion = 2;
+const int _databaseVersion = 3;
 
 /// Имя файла базы данных.
 const String _databaseName = 'chat_cache.db';
@@ -84,6 +84,35 @@ class DatabaseHelper {
         ''');
       }
     }
+    
+    // Миграция с версии 2 на версию 3: добавление полей для токенов и стоимости
+    if (oldVersion < 3) {
+      final tableInfo = await db.rawQuery(
+        'PRAGMA table_info(analytics_messages)'
+      );
+      final columnNames = tableInfo.map((column) => column['name'] as String).toList();
+      
+      // Добавляем prompt_tokens если его нет
+      if (!columnNames.contains('prompt_tokens')) {
+        await db.execute('''
+          ALTER TABLE analytics_messages ADD COLUMN prompt_tokens INTEGER
+        ''');
+      }
+      
+      // Добавляем completion_tokens если его нет
+      if (!columnNames.contains('completion_tokens')) {
+        await db.execute('''
+          ALTER TABLE analytics_messages ADD COLUMN completion_tokens INTEGER
+        ''');
+      }
+      
+      // Добавляем cost если его нет
+      if (!columnNames.contains('cost')) {
+        await db.execute('''
+          ALTER TABLE analytics_messages ADD COLUMN cost REAL
+        ''');
+      }
+    }
   }
 
   /// Создает таблицу `messages` для хранения сообщений чата.
@@ -129,6 +158,9 @@ class DatabaseHelper {
   /// - message_length: длина сообщения в символах
   /// - response_time: время ответа в секундах
   /// - tokens_used: количество использованных токенов
+  /// - prompt_tokens: количество токенов в промпте (опционально)
+  /// - completion_tokens: количество токенов в завершении (опционально)
+  /// - cost: стоимость запроса в долларах (опционально)
   Future<void> _createAnalyticsTable(Database db) async {
     await db.execute('''
       CREATE TABLE IF NOT EXISTS analytics_messages (
@@ -137,7 +169,10 @@ class DatabaseHelper {
         model TEXT NOT NULL,
         message_length INTEGER NOT NULL,
         response_time REAL NOT NULL,
-        tokens_used INTEGER NOT NULL DEFAULT 0
+        tokens_used INTEGER NOT NULL DEFAULT 0,
+        prompt_tokens INTEGER,
+        completion_tokens INTEGER,
+        cost REAL
       )
     ''');
 

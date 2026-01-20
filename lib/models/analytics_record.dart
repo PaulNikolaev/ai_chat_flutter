@@ -21,6 +21,15 @@ class AnalyticsRecord {
   /// Количество использованных токенов.
   final int tokensUsed;
 
+  /// Количество токенов в промпте (опционально).
+  final int? promptTokens;
+
+  /// Количество токенов в завершении (опционально).
+  final int? completionTokens;
+
+  /// Стоимость запроса в долларах (опционально).
+  final double? cost;
+
   /// Создает экземпляр [AnalyticsRecord].
   ///
   /// [id] может быть null для новых записей, которые еще не сохранены в БД.
@@ -31,6 +40,9 @@ class AnalyticsRecord {
     required this.messageLength,
     required this.responseTime,
     required this.tokensUsed,
+    this.promptTokens,
+    this.completionTokens,
+    this.cost,
   });
 
   /// Создает [AnalyticsRecord] из JSON.
@@ -57,6 +69,9 @@ class AnalyticsRecord {
       responseTime: (json['response_time'] as num?)?.toDouble() ?? 
                    (json['responseTime'] as num?)?.toDouble() ?? 0.0,
       tokensUsed: json['tokens_used'] as int? ?? json['tokensUsed'] as int,
+      promptTokens: json['prompt_tokens'] as int? ?? json['promptTokens'] as int?,
+      completionTokens: json['completion_tokens'] as int? ?? json['completionTokens'] as int?,
+      cost: (json['cost'] as num?)?.toDouble(),
     );
   }
 
@@ -71,6 +86,9 @@ class AnalyticsRecord {
       'message_length': messageLength,
       'response_time': responseTime,
       'tokens_used': tokensUsed,
+      if (promptTokens != null) 'prompt_tokens': promptTokens,
+      if (completionTokens != null) 'completion_tokens': completionTokens,
+      if (cost != null) 'cost': cost,
     };
   }
 
@@ -82,6 +100,9 @@ class AnalyticsRecord {
     int? messageLength,
     double? responseTime,
     int? tokensUsed,
+    int? promptTokens,
+    int? completionTokens,
+    double? cost,
   }) {
     return AnalyticsRecord(
       id: id ?? this.id,
@@ -90,13 +111,17 @@ class AnalyticsRecord {
       messageLength: messageLength ?? this.messageLength,
       responseTime: responseTime ?? this.responseTime,
       tokensUsed: tokensUsed ?? this.tokensUsed,
+      promptTokens: promptTokens ?? this.promptTokens,
+      completionTokens: completionTokens ?? this.completionTokens,
+      cost: cost ?? this.cost,
     );
   }
 
   @override
   String toString() {
     return 'AnalyticsRecord(id: $id, model: $model, timestamp: $timestamp, '
-           'tokensUsed: $tokensUsed, responseTime: ${responseTime}s)';
+           'tokensUsed: $tokensUsed, promptTokens: $promptTokens, '
+           'completionTokens: $completionTokens, cost: $cost, responseTime: ${responseTime}s)';
   }
 
   @override
@@ -108,7 +133,10 @@ class AnalyticsRecord {
         other.model == model &&
         other.messageLength == messageLength &&
         other.responseTime == responseTime &&
-        other.tokensUsed == tokensUsed;
+        other.tokensUsed == tokensUsed &&
+        other.promptTokens == promptTokens &&
+        other.completionTokens == completionTokens &&
+        other.cost == cost;
   }
 
   @override
@@ -120,6 +148,9 @@ class AnalyticsRecord {
       messageLength,
       responseTime,
       tokensUsed,
+      promptTokens,
+      completionTokens,
+      cost,
     );
   }
 }
