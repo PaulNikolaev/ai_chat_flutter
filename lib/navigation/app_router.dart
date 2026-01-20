@@ -6,6 +6,9 @@ import '../screens/settings_screen.dart';
 import '../screens/statistics_screen.dart';
 import '../ui/login/login_screen.dart';
 import '../api/openrouter_client.dart';
+import '../utils/analytics.dart';
+import '../utils/monitor.dart';
+import '../utils/expenses_calculator.dart';
 
 /// Константы для именованных маршрутов приложения.
 class AppRoutes {
@@ -48,6 +51,15 @@ class AppRouter {
   /// Callback для обработки выхода из приложения.
   static VoidCallback? onLogout;
 
+  /// Экземпляр аналитики для передачи в экраны.
+  static Analytics? analytics;
+
+  /// Экземпляр мониторинга производительности для передачи в экраны.
+  static PerformanceMonitor? performanceMonitor;
+
+  /// Экземпляр калькулятора расходов для передачи в экраны.
+  static ExpensesCalculator? expensesCalculator;
+
   /// Базовые маршруты приложения без параметров.
   ///
   /// Используется для экранов, которым не требуется передача параметров.
@@ -87,6 +99,8 @@ class AppRouter {
         return MaterialPageRoute(
           builder: (context) => StatisticsScreen(
             apiClient: apiClient,
+            analytics: analytics,
+            performanceMonitor: performanceMonitor,
           ),
         );
 
@@ -94,6 +108,8 @@ class AppRouter {
         return MaterialPageRoute(
           builder: (context) => ExpensesScreen(
             apiClient: apiClient,
+            analytics: analytics,
+            expensesCalculator: expensesCalculator,
           ),
         );
 

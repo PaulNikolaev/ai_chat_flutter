@@ -2,6 +2,9 @@ import 'package:flutter/material.dart';
 
 import '../navigation/app_router.dart';
 import '../utils/platform.dart';
+import '../utils/analytics.dart';
+import '../utils/monitor.dart';
+import '../utils/expenses_calculator.dart';
 import 'chat_screen.dart';
 import '../api/openrouter_client.dart';
 
@@ -37,47 +40,69 @@ class _HomeScreenState extends State<HomeScreen> {
   int _selectedIndex = 0;
 
   /// Список страниц приложения с их маршрутами.
+  /// 
+  /// Порядок элементов определяет порядок отображения в навигации.
+  /// Все страницы имеют иконки и названия для удобной навигации.
   final List<NavigationItem> _navigationItems = const [
     NavigationItem(
       route: AppRoutes.home,
       label: 'Чат',
-      icon: Icons.chat,
+      icon: Icons.chat_bubble_outline,
+      selectedIcon: Icons.chat_bubble,
     ),
     NavigationItem(
       route: AppRoutes.statistics,
       label: 'Статистика',
-      icon: Icons.analytics,
+      icon: Icons.analytics_outlined,
+      selectedIcon: Icons.analytics,
     ),
     NavigationItem(
       route: AppRoutes.expenses,
       label: 'Расходы',
-      icon: Icons.trending_up,
+      icon: Icons.trending_up_outlined,
+      selectedIcon: Icons.trending_up,
     ),
     NavigationItem(
       route: AppRoutes.settings,
       label: 'Настройки',
-      icon: Icons.settings,
+      icon: Icons.settings_outlined,
+      selectedIcon: Icons.settings,
     ),
   ];
+
+  // Экземпляры сервисов для передачи в дочерние экраны
+  final Analytics _analytics = Analytics();
+  final PerformanceMonitor _performanceMonitor = PerformanceMonitor();
+  late final ExpensesCalculator _expensesCalculator;
 
   @override
   void initState() {
     super.initState();
-    // Обновляем API клиент в роутере при инициализации
+    // Инициализируем калькулятор расходов
+    _expensesCalculator = ExpensesCalculator(analytics: _analytics);
+    
+    // Обновляем параметры в роутере при инициализации
     AppRouter.apiClient = widget.apiClient;
     AppRouter.onLogout = widget.onLogout;
+    AppRouter.analytics = _analytics;
+    AppRouter.performanceMonitor = _performanceMonitor;
+    AppRouter.expensesCalculator = _expensesCalculator;
   }
 
   @override
   void didUpdateWidget(HomeScreen oldWidget) {
     super.didUpdateWidget(oldWidget);
-    // Обновляем API клиент при изменении виджета
+    // Обновляем параметры в роутере при изменении виджета
     if (widget.apiClient != oldWidget.apiClient) {
       AppRouter.apiClient = widget.apiClient;
     }
     if (widget.onLogout != oldWidget.onLogout) {
       AppRouter.onLogout = widget.onLogout;
     }
+    // Всегда обновляем сервисы, так как они могут измениться
+    AppRouter.analytics = _analytics;
+    AppRouter.performanceMonitor = _performanceMonitor;
+    AppRouter.expensesCalculator = _expensesCalculator;
   }
 
   /// Обрабатывает изменение выбранного индекса навигации.
@@ -141,7 +166,11 @@ class _HomeScreenState extends State<HomeScreen> {
           items: _navigationItems.map((item) {
             return BottomNavigationBarItem(
               icon: Icon(item.icon),
+              activeIcon: item.selectedIcon != null 
+                  ? Icon(item.selectedIcon) 
+                  : Icon(item.icon),
               label: item.label,
+              tooltip: item.label,
             );
           }).toList(),
         ),
@@ -156,9 +185,14 @@ class _HomeScreenState extends State<HomeScreen> {
             selectedIndex: _selectedIndex,
             onDestinationSelected: _onItemTapped,
             labelType: NavigationRailLabelType.all,
+            extended: false,
             destinations: _navigationItems.map((item) {
               return NavigationRailDestination(
                 icon: Icon(item.icon),
+                selectedIcon: Icon(
+                  item.selectedIcon ?? item.icon,
+                  color: Theme.of(context).colorScheme.primary,
+                ),
                 label: Text(item.label),
               );
             }).toList(),
@@ -188,12 +222,16 @@ class NavigationItem {
   /// Отображаемое название.
   final String label;
 
-  /// Иконка элемента навигации.
+  /// Иконка элемента навигации (невыбранное состояние).
   final IconData icon;
+
+  /// Иконка элемента навигации (выбранное состояние).
+  final IconData? selectedIcon;
 
   const NavigationItem({
     required this.route,
     required this.label,
     required this.icon,
+    this.selectedIcon,
   });
 }
