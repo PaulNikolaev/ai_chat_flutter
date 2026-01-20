@@ -6,11 +6,33 @@ import 'package:shared_preferences/shared_preferences.dart';
 /// пользовательских настроек приложения. Использует Singleton паттерн
 /// для единообразного доступа к настройкам.
 ///
+/// **Возможности:**
+/// - Сохранение и получение строковых значений
+/// - Удаление отдельных ключей или всех настроек
+/// - Проверка существования ключей
+/// - Автоматическое создание SharedPreferences при первом обращении
+///
 /// **Пример использования:**
 /// ```dart
+/// // Получение экземпляра сервиса
 /// final prefs = PreferencesService.instance;
-/// await prefs.saveString('key', 'value');
-/// final value = await prefs.getString('key');
+///
+/// // Сохранение значения
+/// final saved = await prefs.saveString('selected_model', 'gpt-4');
+/// if (saved) {
+///   print('Модель сохранена');
+/// }
+///
+/// // Получение значения
+/// final model = await prefs.getString('selected_model');
+/// print('Выбранная модель: $model'); // Выбранная модель: gpt-4
+///
+/// // Удаление значения
+/// await prefs.remove('selected_model');
+///
+/// // Проверка существования
+/// final exists = await prefs.containsKey('selected_model');
+/// print('Ключ существует: $exists'); // Ключ существует: false
 /// ```
 class PreferencesService {
   /// Единственный экземпляр PreferencesService (Singleton).

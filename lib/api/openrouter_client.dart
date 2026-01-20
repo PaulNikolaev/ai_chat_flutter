@@ -49,6 +49,9 @@ class OpenRouterClient {
   }
 
   /// Очищает кэш баланса.
+  ///
+  /// Используется для принудительного обновления баланса при следующем вызове [getBalance].
+  /// Кэш баланса автоматически очищается при вызове [dispose].
   void clearBalanceCache() {
     _cachedBalance = null;
     _balanceUpdatedAt = null;
@@ -158,12 +161,46 @@ class OpenRouterClient {
 
   /// Получает список доступных моделей из API.
   ///
-  /// Возвращает список [ModelInfo]. В случае ошибки выбрасывает [OpenRouterException].
+  /// Загружает список всех доступных моделей AI для текущего провайдера
+  /// и возвращает информацию о них, включая цены, контекстные окна и другие характеристики.
   ///
-  /// Использует простой кэш: при повторных вызовах возвращает ранее загруженный
-  /// список моделей, если не запрошено [forceRefresh].
+  /// **Параметры:**
+  /// - [forceRefresh]: Если `true`, принудительно загружает модели из API,
+  ///   игнорируя кэш. По умолчанию `false` - использует кэш при наличии.
   ///
-  /// Для VSEGPT использует endpoint /v1/models, для OpenRouter - /models
+  /// **Возвращает:**
+  /// Список [ModelInfo] с информацией о каждой доступной модели:
+  /// - `id`: Идентификатор модели (например, 'openai/gpt-4')
+  /// - `name`: Отображаемое имя модели
+  /// - `contextLength`: Максимальный размер контекста
+  /// - `promptPrice`: Цена за токен промпта
+  /// - `completionPrice`: Цена за токен ответа
+  ///
+  /// **Выбрасывает:**
+  /// [OpenRouterException] в случае ошибки сети, неверного статуса ответа
+  /// или проблем с парсингом ответа.
+  ///
+  /// **Пример использования:**
+  /// ```dart
+  /// final client = OpenRouterClient(
+  ///   apiKey: 'sk-or-v1-...',
+  ///   baseUrl: 'https://openrouter.ai/api/v1',
+  /// );
+  ///
+  /// // Получение моделей (с кэшированием)
+  /// final models = await client.getModels();
+  /// for (final model in models) {
+  ///   print('${model.name}: ${model.id}');
+  /// }
+  ///
+  /// // Принудительное обновление
+  /// final freshModels = await client.getModels(forceRefresh: true);
+  /// ```
+  ///
+  /// **Примечания:**
+  /// - Для VSEGPT используется endpoint /v1/models
+  /// - Для OpenRouter используется endpoint /models
+  /// - Список моделей кэшируется до вызова [clearModelCache] или [dispose]
   Future<List<ModelInfo>> getModels({bool forceRefresh = false}) async {
     if (!forceRefresh && _modelCache != null) {
       return _modelCache!;
@@ -823,20 +860,48 @@ class OpenRouterClient {
 
 }
 
-/// Результат чата с AI моделью.
+/// Результат выполнения запроса к модели AI.
+///
+/// Содержит текст ответа модели и информацию об использовании токенов.
+///
+/// **Пример использования:**
+/// ```dart
+/// final result = await client.sendMessage(
+///   message: 'Привет',
+///   model: 'openai/gpt-4',
+/// );
+///
+/// print('Ответ: ${result.text}');
+/// print('Промпт токенов: ${result.promptTokens}');
+/// print('Completion токенов: ${result.completionTokens}');
+/// print('Всего токенов: ${result.totalTokens}');
+/// ```
 class ChatCompletionResult {
-  /// Сгенерированный текст ответа.
+  /// Текст ответа от AI модели.
   final String text;
 
-  /// Общее количество токенов (если возвращено API).
+  /// Общее количество использованных токенов (prompt + completion).
+  ///
+  /// Может быть null, если API не вернуло эту информацию.
   final int? totalTokens;
 
-  /// Количество токенов в промпте (если возвращено API).
+  /// Количество токенов, использованных в промпте (включая системные сообщения).
+  ///
+  /// Может быть null, если API не вернуло эту информацию.
   final int? promptTokens;
 
-  /// Количество токенов в завершении (если возвращено API).
+  /// Количество токенов в ответе модели.
+  ///
+  /// Может быть null, если API не вернуло эту информацию.
   final int? completionTokens;
 
+  /// Создает экземпляр [ChatCompletionResult].
+  ///
+  /// **Параметры:**
+  /// - [text]: Текст ответа от AI (обязательный).
+  /// - [totalTokens]: Общее количество токенов (опционально).
+  /// - [promptTokens]: Количество токенов в промпте (опционально).
+  /// - [completionTokens]: Количество токенов в ответе (опционально).
   const ChatCompletionResult({
     required this.text,
     this.totalTokens,
@@ -845,10 +910,36 @@ class ChatCompletionResult {
   });
 }
 
-/// Ошибка, связанная с работой OpenRouterClient.
+/// Исключение, выбрасываемое при ошибках работы с OpenRouter API.
+///
+/// Используется для обработки различных типов ошибок:
+/// - Сетевые ошибки (отсутствие подключения, таймауты)
+/// - HTTP ошибки (401, 403, 404, 429, 5xx)
+/// - Ошибки парсинга ответа (неверный формат JSON)
+/// - Ошибки валидации (неверный API ключ, отсутствие модели)
+///
+/// **Пример использования:**
+/// ```dart
+/// try {
+///   final models = await client.getModels();
+/// } on OpenRouterException catch (e) {
+///   if (e.message.contains('401')) {
+///     print('Неверный API ключ');
+///   } else if (e.message.contains('429')) {
+///     print('Превышен лимит запросов');
+///   } else {
+///     print('Ошибка: ${e.message}');
+///   }
+/// }
+/// ```
 class OpenRouterException implements Exception {
+  /// Сообщение об ошибке, описывающее причину исключения.
   final String message;
 
+  /// Создает экземпляр [OpenRouterException] с указанным сообщением.
+  ///
+  /// **Параметры:**
+  /// - [message]: Текст сообщения об ошибке.
   const OpenRouterException(this.message);
 
   @override
