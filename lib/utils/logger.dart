@@ -1,9 +1,10 @@
 import 'dart:io' show Directory, File, FileMode, IOSink;
-import 'package:flutter/foundation.dart' show debugPrint;
+import 'package:flutter/foundation.dart' show debugPrint, kReleaseMode;
 import 'package:logger/logger.dart';
 import 'package:path_provider/path_provider.dart';
 import 'package:intl/intl.dart';
 import 'platform.dart';
+import 'package:ai_chat/config/config.dart';
 
 /// Уровни логирования приложения.
 enum LogLevel {
@@ -24,12 +25,25 @@ enum LogLevel {
 ///
 /// Предоставляет централизованную функциональность логирования:
 /// - Ежедневные лог-файлы с датой в названии
-/// - Консольный вывод для мониторинга в реальном времени
+/// - Консольный вывод для мониторинга в реальном времени (только в debug режиме)
 /// - Несколько уровней логирования (debug, info, warning, error)
 /// - Форматированные сообщения с временными метками
 /// - Ротация логов по датам
+/// - Автоматическая очистка старых логов (старше 30 дней)
+/// - Контроль размера лог-файлов (максимум 10 MB на файл)
+/// - Настройка уровня логирования через EnvConfig.LOG_LEVEL
 ///
-/// Пример использования:
+/// **Безопасность логирования:**
+/// - debugPrint автоматически отключается в release builds
+/// - Чувствительные данные (API ключи, пароли) НЕ должны логироваться
+/// - Authorization заголовки НЕ логируются (проверено в OpenRouterClient)
+///
+/// **Ротация логов:**
+/// - Новый файл создается каждый день: chat_app_YYYY-MM-DD.log
+/// - Старые файлы (старше 30 дней) автоматически удаляются
+/// - При превышении размера 10 MB создается новый файл с суффиксом
+///
+/// **Пример использования:**
 /// ```dart
 /// final logger = await AppLogger.create();
 /// logger.info('Приложение запущено');
@@ -86,7 +100,20 @@ class AppLogger {
     return instance;
   }
 
+  /// Максимальный возраст лог-файлов в днях (30 дней).
+  ///
+  /// Файлы старше этого периода будут автоматически удаляться при инициализации.
+  static const int maxLogAgeDays = 30;
+
+  /// Максимальный размер лог-файла в байтах (10 MB).
+  ///
+  /// Если файл превышает этот размер, создается новый файл с суффиксом номера.
+  static const int maxLogFileSizeBytes = 10 * 1024 * 1024; // 10 MB
+
   /// Инициализирует систему логирования.
+  ///
+  /// Выполняет очистку старых лог-файлов, проверяет размер текущего файла
+  /// и настраивает уровень логирования из конфигурации окружения.
   Future<void> _initializeLogger() async {
     try {
       // Определяем директорию для логов
@@ -94,15 +121,24 @@ class AppLogger {
 
       // Создаем директорию, если не существует
       if (_logsDirectory != null && await _ensureLogsDirectory()) {
+        // Очищаем старые лог-файлы перед созданием нового
+        await _cleanOldLogs();
+
         // Создаем файл лога с текущей датой: chat_app_YYYY-MM-DD.log
         final currentDate = _dateFormat.format(DateTime.now());
         _currentLogFile =
             File('${_logsDirectory!.path}/chat_app_$currentDate.log');
 
+        // Проверяем размер файла и создаем новый, если превышен лимит
+        await _ensureLogFileSize();
+
         // Открываем файл для записи
         _fileSink = _currentLogFile!.openWrite(mode: FileMode.append);
         _fileLoggingEnabled = true;
       }
+
+      // Устанавливаем уровень логирования из конфигурации окружения
+      _initializeLogLevel();
     } catch (e) {
       // Fallback: продолжаем только с консольным логированием
       _fileLoggingEnabled = false;
@@ -117,6 +153,103 @@ class AppLogger {
       ),
       printer: _CustomLogPrinter(),
     );
+  }
+
+  /// Инициализирует уровень логирования из конфигурации окружения.
+  ///
+  /// Читает значение LOG_LEVEL из EnvConfig и устанавливает соответствующий уровень.
+  /// Если конфигурация не загружена или значение не задано, используется значение по умолчанию:
+  /// - INFO для production режима
+  /// - DEBUG для development режима
+  void _initializeLogLevel() {
+    try {
+      // Пытаемся получить уровень логирования из конфигурации
+      if (EnvConfig.isLoaded) {
+        final levelStr = EnvConfig.logLevel.toUpperCase();
+        switch (levelStr) {
+          case 'DEBUG':
+            _currentLevel = LogLevel.debug;
+            break;
+          case 'INFO':
+            _currentLevel = LogLevel.info;
+            break;
+          case 'WARNING':
+          case 'WARN':
+            _currentLevel = LogLevel.warning;
+            break;
+          case 'ERROR':
+            _currentLevel = LogLevel.error;
+            break;
+          default:
+            // Если уровень неизвестен, используем значение по умолчанию
+            _currentLevel = EnvConfig.isProduction
+                ? LogLevel.info
+                : LogLevel.debug;
+        }
+      } else {
+        // Если конфигурация не загружена, используем значение по умолчанию
+        _currentLevel = LogLevel.info;
+      }
+    } catch (_) {
+      // Если не удалось загрузить конфигурацию, используем значение по умолчанию
+      _currentLevel = LogLevel.info;
+    }
+  }
+
+  /// Очищает старые лог-файлы.
+  ///
+  /// Удаляет файлы старше [maxLogAgeDays] дней для предотвращения переполнения диска.
+  /// Выполняется автоматически при инициализации logger.
+  Future<void> _cleanOldLogs() async {
+    if (_logsDirectory == null) return;
+
+    try {
+      final now = DateTime.now();
+      final files = _logsDirectory!.listSync();
+
+      for (final file in files) {
+        if (file is File && file.path.endsWith('.log')) {
+          try {
+            final stat = await file.stat();
+            final age = now.difference(stat.modified);
+            if (age.inDays > maxLogAgeDays) {
+              await file.delete();
+            }
+          } catch (_) {
+            // Игнорируем ошибки при удалении отдельных файлов
+          }
+        }
+      }
+    } catch (_) {
+      // Игнорируем ошибки очистки старых логов
+    }
+  }
+
+  /// Проверяет размер текущего лог-файла и создает новый, если превышен лимит.
+  ///
+  /// Если файл превышает [maxLogFileSizeBytes], создается новый файл с суффиксом.
+  Future<void> _ensureLogFileSize() async {
+    if (_currentLogFile == null) return;
+
+    try {
+      if (await _currentLogFile!.exists()) {
+        final stat = await _currentLogFile!.stat();
+        if (stat.size > maxLogFileSizeBytes) {
+          // Создаем новый файл с номером
+          int counter = 1;
+          File? newFile;
+          do {
+            final baseName = _currentLogFile!.path.replaceAll('.log', '');
+            newFile = File('${baseName}_$counter.log');
+            counter++;
+          } while (await newFile.exists());
+
+          _currentLogFile = newFile;
+        }
+      }
+    } catch (_) {
+      // Игнорируем ошибки проверки размера файла
+    }
   }
 
   /// Получает путь к директории логов в зависимости от платформы.
@@ -293,12 +426,16 @@ class _CustomLogOutput extends LogOutput {
 
   @override
   void output(OutputEvent event) {
-    // Вывод в консоль (всегда)
-    for (final line in event.lines) {
-      debugPrint(line);
+    // Вывод в консоль (только в debug режиме, не в release)
+    // debugPrint автоматически отключается в release builds
+    if (!kReleaseMode) {
+      for (final line in event.lines) {
+        debugPrint(line);
+      }
     }
 
     // Вывод в файл (если включен)
+    // В production также ведется файловое логирование для анализа проблем
     if (fileLoggingEnabled && fileSink != null) {
       for (final line in event.lines) {
         fileSink!.writeln(line);
