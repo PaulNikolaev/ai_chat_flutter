@@ -5,10 +5,12 @@ import '../screens/home_screen.dart';
 import '../screens/settings_screen.dart';
 import '../screens/statistics_screen.dart';
 import '../ui/login/login_screen.dart';
+import '../ui/transitions/page_transitions.dart';
 import '../api/openrouter_client.dart';
 import '../utils/analytics.dart';
 import '../utils/monitor.dart';
 import '../utils/expenses_calculator.dart';
+import '../utils/platform.dart';
 
 /// Константы для именованных маршрутов приложения.
 class AppRoutes {
@@ -75,50 +77,67 @@ class AppRouter {
   ///
   /// Используется для создания экранов, которым требуется передача
   /// дополнительных параметров (например, API клиент).
+  /// Использует плавные переходы для улучшения UX.
   ///
   /// **Параметры:**
   /// - [settings]: Настройки маршрута с именем и аргументами.
   ///
   /// **Возвращает:** Route для навигации к соответствующему экрану.
   static Route<dynamic>? onGenerateRoute(RouteSettings settings) {
+    // Определяем тип перехода в зависимости от платформы
+    final isMobile = PlatformUtils.isMobile();
+    
     switch (settings.name) {
       case AppRoutes.home:
-        return MaterialPageRoute(
-          builder: (context) => HomeScreen(
-            apiClient: apiClient,
-            onLogout: onLogout ?? () {},
-          ),
-        );
+        return isMobile
+            ? PageTransitions.fadeSlideRoute(
+                builder: (context) => HomeScreen(
+                  apiClient: apiClient,
+                  onLogout: onLogout ?? () {},
+                ),
+                settings: settings,
+              )
+            : PageTransitions.fadeRoute(
+                builder: (context) => HomeScreen(
+                  apiClient: apiClient,
+                  onLogout: onLogout ?? () {},
+                ),
+                settings: settings,
+              );
 
       case AppRoutes.settings:
-        return MaterialPageRoute(
+        return PageTransitions.fadeSlideRoute(
           builder: (context) => const SettingsScreen(),
+          settings: settings,
         );
 
       case AppRoutes.statistics:
-        return MaterialPageRoute(
+        return PageTransitions.fadeSlideRoute(
           builder: (context) => StatisticsScreen(
             apiClient: apiClient,
             analytics: analytics,
             performanceMonitor: performanceMonitor,
           ),
+          settings: settings,
         );
 
       case AppRoutes.expenses:
-        return MaterialPageRoute(
+        return PageTransitions.fadeSlideRoute(
           builder: (context) => ExpensesScreen(
             apiClient: apiClient,
             analytics: analytics,
             expensesCalculator: expensesCalculator,
           ),
+          settings: settings,
         );
 
       default:
         // Если маршрут не найден, возвращаемся на страницу входа
-        return MaterialPageRoute(
+        return PageTransitions.fadeRoute(
           builder: (context) => LoginScreen(
             onLoginSuccess: onLoginSuccess ?? () {},
           ),
+          settings: settings,
         );
     }
   }

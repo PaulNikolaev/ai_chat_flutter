@@ -7,6 +7,7 @@ import 'package:shared_preferences/shared_preferences.dart';
 
 import '../api/openrouter_client.dart';
 import '../models/model_info.dart';
+import '../ui/components/animated_loading_indicator.dart';
 import '../ui/components/message_bubble.dart';
 import '../ui/components/model_selector.dart';
 import '../ui/styles.dart';
@@ -713,7 +714,10 @@ class _ChatScreenState extends State<ChatScreen> {
                   ? const Center(
                       child: Padding(
                         padding: EdgeInsets.all(AppStyles.paddingSmall),
-                        child: CircularProgressIndicator(),
+                        child: AnimatedLoadingIndicator(
+                          size: 24,
+                          strokeWidth: 2,
+                        ),
                       ),
                     )
                   : _models.isEmpty
@@ -738,7 +742,9 @@ class _ChatScreenState extends State<ChatScreen> {
           Expanded(
             child: _isLoadingHistory
                 ? const Center(
-                    child: CircularProgressIndicator(),
+                    child: AnimatedLoadingIndicator(
+                      usePulse: true,
+                    ),
                   )
                 : _messages.isEmpty && !_isLoading
                     ? Center(
@@ -767,7 +773,10 @@ class _ChatScreenState extends State<ChatScreen> {
                               return const Padding(
                                 padding: EdgeInsets.all(AppStyles.padding),
                                 child: Center(
-                                  child: CircularProgressIndicator(),
+                                  child: AnimatedLoadingIndicator(
+                                    size: 20,
+                                    strokeWidth: 2,
+                                  ),
                                 ),
                               );
                             }

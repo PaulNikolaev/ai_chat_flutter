@@ -7,6 +7,7 @@ import 'package:path_provider/path_provider.dart';
 
 import '../api/openrouter_client.dart';
 import '../models/analytics_record.dart';
+import '../ui/components/animated_loading_indicator.dart';
 import '../ui/styles.dart';
 import '../utils/analytics.dart';
 import '../utils/monitor.dart';
@@ -434,21 +435,8 @@ class _StatisticsScreenState extends State<StatisticsScreen> {
         ],
       ),
       body: _isLoadingBalance || _isLoadingStatistics || _isLoadingMetrics
-          ? const Center(
-              child: Column(
-                mainAxisAlignment: MainAxisAlignment.center,
-                children: [
-                  CircularProgressIndicator(),
-                  SizedBox(height: AppStyles.padding),
-                  Text(
-                    'Загрузка статистики...',
-                    style: TextStyle(
-                      color: AppStyles.textSecondary,
-                      fontSize: 14,
-                    ),
-                  ),
-                ],
-              ),
+          ? const LoadingWithMessage(
+              message: 'Загрузка статистики...',
             )
           : Center(
               child: SingleChildScrollView(

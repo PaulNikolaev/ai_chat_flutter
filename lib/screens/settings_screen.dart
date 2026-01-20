@@ -1,6 +1,7 @@
 import 'package:flutter/material.dart';
 
 import '../auth/auth_manager.dart';
+import '../ui/components/animated_loading_indicator.dart';
 import '../ui/styles.dart';
 import '../utils/platform.dart';
 
@@ -280,7 +281,9 @@ class _SettingsScreenState extends State<SettingsScreen> {
       ),
       body: _isLoading
           ? const Center(
-              child: CircularProgressIndicator(),
+              child: AnimatedLoadingIndicator(
+                usePulse: true,
+              ),
             )
           : _errorMessage != null
               ? Center(
