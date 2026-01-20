@@ -1,6 +1,8 @@
 import 'package:flutter/material.dart';
+import 'package:intl/intl.dart';
 
 import '../api/openrouter_client.dart';
+import '../models/analytics_record.dart';
 import '../ui/styles.dart';
 import '../utils/analytics.dart';
 import '../utils/monitor.dart';
@@ -33,6 +35,19 @@ class StatisticsScreen extends StatefulWidget {
   State<StatisticsScreen> createState() => _StatisticsScreenState();
 }
 
+/// Тип сортировки статистики.
+enum SortType {
+  model,
+  count,
+  tokens,
+}
+
+/// Направление сортировки.
+enum SortDirection {
+  ascending,
+  descending,
+}
+
 class _StatisticsScreenState extends State<StatisticsScreen> {
   String _balance = 'Загрузка...';
   bool _isLoadingBalance = false;
@@ -40,6 +55,17 @@ class _StatisticsScreenState extends State<StatisticsScreen> {
   bool _isLoadingStatistics = false;
   Map<String, dynamic>? _performanceMetrics;
   bool _isLoadingMetrics = false;
+  
+  // Фильтры и сортировка
+  String? _selectedModelFilter;
+  DateTime? _startDateFilter;
+  DateTime? _endDateFilter;
+  SortType _sortType = SortType.tokens;
+  SortDirection _sortDirection = SortDirection.descending;
+  
+  // Общая статистика
+  int _totalRequests = 0;
+  int _totalTokens = 0;
 
   @override
   void initState() {
@@ -180,10 +206,73 @@ class _StatisticsScreenState extends State<StatisticsScreen> {
     });
 
     try {
-      final statistics = await analytics.getModelStatistics();
+      // Получаем полную историю для фильтрации и расчета общей статистики
+      final history = await analytics.getHistory();
+      
+      // Применяем фильтры
+      List<AnalyticsRecord> filteredHistory = history;
+      
+      if (_selectedModelFilter != null && _selectedModelFilter!.isNotEmpty) {
+        filteredHistory = filteredHistory.where(
+          (record) => record.model == _selectedModelFilter,
+        ).toList();
+      }
+      
+      if (_startDateFilter != null) {
+        filteredHistory = filteredHistory.where(
+          (record) => record.timestamp.isAfter(_startDateFilter!),
+        ).toList();
+      }
+      
+      if (_endDateFilter != null) {
+        filteredHistory = filteredHistory.where(
+          (record) => record.timestamp.isBefore(_endDateFilter!.add(const Duration(days: 1))),
+        ).toList();
+      }
+      
+      // Рассчитываем общую статистику
+      int totalRequests = 0;
+      int totalTokens = 0;
+      for (final record in filteredHistory) {
+        totalRequests++;
+        totalTokens += record.tokensUsed;
+      }
+      
+      // Группируем по моделям
+      final Map<String, Map<String, int>> statistics = {};
+      for (final record in filteredHistory) {
+        if (!statistics.containsKey(record.model)) {
+          statistics[record.model] = {'count': 0, 'tokens': 0};
+        }
+        statistics[record.model]!['count'] = statistics[record.model]!['count']! + 1;
+        statistics[record.model]!['tokens'] = statistics[record.model]!['tokens']! + record.tokensUsed;
+      }
+      
+      // Сортируем статистику
+      final sortedEntries = statistics.entries.toList();
+      sortedEntries.sort((a, b) {
+        int comparison = 0;
+        switch (_sortType) {
+          case SortType.model:
+            comparison = a.key.compareTo(b.key);
+            break;
+          case SortType.count:
+            comparison = (a.value['count'] ?? 0).compareTo(b.value['count'] ?? 0);
+            break;
+          case SortType.tokens:
+            comparison = (a.value['tokens'] ?? 0).compareTo(b.value['tokens'] ?? 0);
+            break;
+        }
+        return _sortDirection == SortDirection.ascending ? comparison : -comparison;
+      });
+      
+      final sortedStatistics = Map<String, Map<String, int>>.fromEntries(sortedEntries);
+      
       if (mounted) {
         setState(() {
-          _modelStatistics = statistics;
+          _modelStatistics = sortedStatistics;
+          _totalRequests = totalRequests;
+          _totalTokens = totalTokens;
           _isLoadingStatistics = false;
         });
       }
@@ -193,10 +282,45 @@ class _StatisticsScreenState extends State<StatisticsScreen> {
       if (mounted) {
         setState(() {
           _modelStatistics = {};
+          _totalRequests = 0;
+          _totalTokens = 0;
           _isLoadingStatistics = false;
         });
       }
     }
+  }
+  
+  /// Применяет фильтры и перезагружает статистику.
+  void _applyFilters() {
+    _loadStatistics();
+  }
+  
+  /// Сбрасывает все фильтры.
+  void _resetFilters() {
+    setState(() {
+      _selectedModelFilter = null;
+      _startDateFilter = null;
+      _endDateFilter = null;
+      _sortType = SortType.tokens;
+      _sortDirection = SortDirection.descending;
+    });
+    _loadStatistics();
+  }
+  
+  /// Изменяет тип сортировки.
+  void _changeSortType(SortType type) {
+    setState(() {
+      if (_sortType == type) {
+        // Меняем направление, если тот же тип
+        _sortDirection = _sortDirection == SortDirection.ascending
+            ? SortDirection.descending
+            : SortDirection.ascending;
+      } else {
+        _sortType = type;
+        _sortDirection = SortDirection.descending;
+      }
+    });
+    _loadStatistics();
   }
 
   /// Загружает метрики производительности.
@@ -271,7 +395,6 @@ class _StatisticsScreenState extends State<StatisticsScreen> {
 
   @override
   Widget build(BuildContext context) {
-    final isMobile = PlatformUtils.isMobile();
     final padding = AppStyles.getPadding(context);
     final maxContentWidth = AppStyles.getMaxContentWidth(context);
 
@@ -310,6 +433,14 @@ class _StatisticsScreenState extends State<StatisticsScreen> {
               children: [
                 // Баланс
                 _buildBalanceSection(),
+                const SizedBox(height: AppStyles.padding),
+                
+                // Общая статистика
+                _buildTotalStatisticsSection(),
+                const SizedBox(height: AppStyles.padding),
+                
+                // Фильтры и сортировка
+                _buildFiltersSection(),
                 const SizedBox(height: AppStyles.padding),
                 
                 // Статистика моделей
@@ -381,6 +512,358 @@ class _StatisticsScreenState extends State<StatisticsScreen> {
           Text(
             _balance,
             style: AppStyles.balanceTextStyle.copyWith(fontSize: 28),
+          ),
+        ],
+      ),
+    );
+  }
+
+  /// Строит секцию с общей статистикой.
+  Widget _buildTotalStatisticsSection() {
+    final isMobile = PlatformUtils.isMobile();
+    
+    return Container(
+      padding: const EdgeInsets.all(AppStyles.padding),
+      decoration: BoxDecoration(
+        color: AppStyles.cardColor,
+        borderRadius: BorderRadius.circular(AppStyles.borderRadius),
+        border: Border.all(color: AppStyles.borderColor),
+        boxShadow: [
+          BoxShadow(
+            color: Colors.black.withValues(alpha: 0.1),
+            blurRadius: 4,
+            offset: const Offset(0, 2),
+          ),
+        ],
+      ),
+      child: Column(
+        crossAxisAlignment: CrossAxisAlignment.start,
+        children: [
+          const Row(
+            children: [
+              Icon(
+                Icons.dashboard,
+                color: AppStyles.accentColor,
+                size: 24,
+              ),
+              SizedBox(width: 8),
+              Text(
+                'Общая статистика',
+                style: TextStyle(
+                  fontSize: 18,
+                  fontWeight: FontWeight.bold,
+                  color: AppStyles.textPrimary,
+                ),
+              ),
+            ],
+          ),
+          const SizedBox(height: AppStyles.padding),
+          isMobile
+              ? Column(
+                  children: [
+                    _buildStatCard(
+                      icon: Icons.message,
+                      label: 'Всего запросов',
+                      value: _totalRequests.toString(),
+                      color: AppStyles.accentColor,
+                    ),
+                    const SizedBox(height: AppStyles.paddingSmall),
+                    _buildStatCard(
+                      icon: Icons.token,
+                      label: 'Всего токенов',
+                      value: _formatTokens(_totalTokens),
+                      color: AppStyles.successColor,
+                    ),
+                  ],
+                )
+              : Row(
+                  children: [
+                    Expanded(
+                      child: _buildStatCard(
+                        icon: Icons.message,
+                        label: 'Всего запросов',
+                        value: _totalRequests.toString(),
+                        color: AppStyles.accentColor,
+                      ),
+                    ),
+                    const SizedBox(width: AppStyles.padding),
+                    Expanded(
+                      child: _buildStatCard(
+                        icon: Icons.token,
+                        label: 'Всего токенов',
+                        value: _formatTokens(_totalTokens),
+                        color: AppStyles.successColor,
+                      ),
+                    ),
+                  ],
+                ),
+        ],
+      ),
+    );
+  }
+
+  /// Строит карточку со статистикой.
+  Widget _buildStatCard({
+    required IconData icon,
+    required String label,
+    required String value,
+    required Color color,
+  }) {
+    return Container(
+      padding: const EdgeInsets.all(AppStyles.padding),
+      decoration: BoxDecoration(
+        color: AppStyles.surfaceColor,
+        borderRadius: BorderRadius.circular(AppStyles.borderRadius),
+        border: Border.all(
+          color: color.withValues(alpha: 0.3),
+          width: 1,
+        ),
+      ),
+      child: Column(
+        crossAxisAlignment: CrossAxisAlignment.start,
+        children: [
+          Row(
+            children: [
+              Icon(icon, color: color, size: 20),
+              const SizedBox(width: 8),
+              Text(
+                label,
+                style: const TextStyle(
+                  fontSize: 14,
+                  color: AppStyles.textSecondary,
+                ),
+              ),
+            ],
+          ),
+          const SizedBox(height: 8),
+          Text(
+            value,
+            style: TextStyle(
+              fontSize: 24,
+              fontWeight: FontWeight.bold,
+              color: color,
+            ),
+          ),
+        ],
+      ),
+    );
+  }
+
+  /// Строит секцию фильтров и сортировки.
+  Widget _buildFiltersSection() {
+    final analytics = widget.analytics ?? Analytics();
+    
+    return Container(
+      padding: const EdgeInsets.all(AppStyles.padding),
+      decoration: BoxDecoration(
+        color: AppStyles.cardColor,
+        borderRadius: BorderRadius.circular(AppStyles.borderRadius),
+        border: Border.all(color: AppStyles.borderColor),
+        boxShadow: [
+          BoxShadow(
+            color: Colors.black.withValues(alpha: 0.1),
+            blurRadius: 4,
+            offset: const Offset(0, 2),
+          ),
+        ],
+      ),
+      child: Column(
+        crossAxisAlignment: CrossAxisAlignment.start,
+        children: [
+          const Row(
+            children: [
+              Icon(
+                Icons.filter_list,
+                color: AppStyles.accentColor,
+                size: 24,
+              ),
+              SizedBox(width: 8),
+              Text(
+                'Фильтры и сортировка',
+                style: TextStyle(
+                  fontSize: 18,
+                  fontWeight: FontWeight.bold,
+                  color: AppStyles.textPrimary,
+                ),
+              ),
+            ],
+          ),
+          const SizedBox(height: AppStyles.padding),
+          // Фильтр по модели
+          FutureBuilder<Map<String, Map<String, int>>>(
+            future: analytics.getModelStatistics(),
+            builder: (context, snapshot) {
+              final allModels = snapshot.data?.keys.toList() ?? [];
+              return DropdownButtonFormField<String>(
+                decoration: InputDecoration(
+                  labelText: 'Модель',
+                  prefixIcon: const Icon(Icons.model_training),
+                  border: OutlineInputBorder(
+                    borderRadius: BorderRadius.circular(AppStyles.borderRadius),
+                  ),
+                ),
+                initialValue: _selectedModelFilter,
+                items: [
+                  const DropdownMenuItem<String>(
+                    value: null,
+                    child: Text('Все модели'),
+                  ),
+                  ...allModels.map((model) => DropdownMenuItem<String>(
+                    value: model,
+                    child: Text(model),
+                  )),
+                ],
+                onChanged: (value) {
+                  setState(() {
+                    _selectedModelFilter = value;
+                  });
+                  _applyFilters();
+                },
+              );
+            },
+          ),
+          const SizedBox(height: AppStyles.paddingSmall),
+          // Фильтр по дате
+          Row(
+            children: [
+              Expanded(
+                child: InkWell(
+                  onTap: () async {
+                    final date = await showDatePicker(
+                      context: context,
+                      initialDate: _startDateFilter ?? DateTime.now(),
+                      firstDate: DateTime(2000),
+                      lastDate: DateTime.now(),
+                    );
+                    if (date != null) {
+                      setState(() {
+                        _startDateFilter = date;
+                      });
+                      _applyFilters();
+                    }
+                  },
+                  child: InputDecorator(
+                    decoration: InputDecoration(
+                      labelText: 'Дата начала',
+                      prefixIcon: const Icon(Icons.calendar_today),
+                      border: OutlineInputBorder(
+                        borderRadius: BorderRadius.circular(AppStyles.borderRadius),
+                      ),
+                    ),
+                    child: Text(
+                      _startDateFilter != null
+                          ? DateFormat('yyyy-MM-dd').format(_startDateFilter!)
+                          : 'Не выбрана',
+                    ),
+                  ),
+                ),
+              ),
+              const SizedBox(width: AppStyles.paddingSmall),
+              Expanded(
+                child: InkWell(
+                  onTap: () async {
+                    final date = await showDatePicker(
+                      context: context,
+                      initialDate: _endDateFilter ?? DateTime.now(),
+                      firstDate: _startDateFilter ?? DateTime(2000),
+                      lastDate: DateTime.now(),
+                    );
+                    if (date != null) {
+                      setState(() {
+                        _endDateFilter = date;
+                      });
+                      _applyFilters();
+                    }
+                  },
+                  child: InputDecorator(
+                    decoration: InputDecoration(
+                      labelText: 'Дата окончания',
+                      prefixIcon: const Icon(Icons.calendar_today),
+                      border: OutlineInputBorder(
+                        borderRadius: BorderRadius.circular(AppStyles.borderRadius),
+                      ),
+                    ),
+                    child: Text(
+                      _endDateFilter != null
+                          ? DateFormat('yyyy-MM-dd').format(_endDateFilter!)
+                          : 'Не выбрана',
+                    ),
+                  ),
+                ),
+              ),
+            ],
+          ),
+          const SizedBox(height: AppStyles.paddingSmall),
+          // Сортировка
+          Row(
+            children: [
+              const Text(
+                'Сортировать по:',
+                style: TextStyle(
+                  color: AppStyles.textSecondary,
+                  fontSize: 14,
+                ),
+              ),
+              const SizedBox(width: AppStyles.paddingSmall),
+              Expanded(
+                child: SegmentedButton<SortType>(
+                  segments: const [
+                    ButtonSegment<SortType>(
+                      value: SortType.model,
+                      label: Text('Модель'),
+                      icon: Icon(Icons.sort_by_alpha, size: 16),
+                    ),
+                    ButtonSegment<SortType>(
+                      value: SortType.count,
+                      label: Text('Запросы'),
+                      icon: Icon(Icons.numbers, size: 16),
+                    ),
+                    ButtonSegment<SortType>(
+                      value: SortType.tokens,
+                      label: Text('Токены'),
+                      icon: Icon(Icons.token, size: 16),
+                    ),
+                  ],
+                  selected: {_sortType},
+                  onSelectionChanged: (Set<SortType> selection) {
+                    if (selection.isNotEmpty) {
+                      _changeSortType(selection.first);
+                    }
+                  },
+                ),
+              ),
+              const SizedBox(width: AppStyles.paddingSmall),
+              IconButton(
+                icon: Icon(
+                  _sortDirection == SortDirection.ascending
+                      ? Icons.arrow_upward
+                      : Icons.arrow_downward,
+                ),
+                tooltip: _sortDirection == SortDirection.ascending
+                    ? 'По возрастанию'
+                    : 'По убыванию',
+                onPressed: () {
+                  setState(() {
+                    _sortDirection = _sortDirection == SortDirection.ascending
+                        ? SortDirection.descending
+                        : SortDirection.ascending;
+                  });
+                  _loadStatistics();
+                },
+              ),
+            ],
+          ),
+          const SizedBox(height: AppStyles.paddingSmall),
+          // Кнопка сброса фильтров
+          Row(
+            mainAxisAlignment: MainAxisAlignment.end,
+            children: [
+              TextButton.icon(
+                onPressed: _resetFilters,
+                icon: const Icon(Icons.clear_all, size: 18),
+                label: const Text('Сбросить фильтры'),
+              ),
+            ],
           ),
         ],
       ),
@@ -465,62 +948,211 @@ class _StatisticsScreenState extends State<StatisticsScreen> {
               ),
             )
           else
-            ..._modelStatistics.entries.map((entry) {
-              final model = entry.key;
-              final stats = entry.value;
-              final count = stats['count'] ?? 0;
-              final tokens = stats['tokens'] ?? 0;
+            ..._buildModelStatisticsList(),
+        ],
+      ),
+    );
+  }
 
-              return Padding(
-                padding: const EdgeInsets.only(bottom: AppStyles.paddingSmall),
-                child: Container(
-                  padding: const EdgeInsets.all(AppStyles.paddingSmall),
-                  decoration: BoxDecoration(
-                    color: AppStyles.surfaceColor,
-                    borderRadius: BorderRadius.circular(AppStyles.borderRadius),
-                    border: Border.all(color: AppStyles.borderColor),
+  /// Строит список статистики по моделям с улучшенным отображением.
+  List<Widget> _buildModelStatisticsList() {
+    if (_modelStatistics.isEmpty) {
+      return [];
+    }
+    
+    final isMobile = PlatformUtils.isMobile();
+    final totalTokens = _totalTokens > 0 ? _totalTokens : 1; // Избегаем деления на ноль
+    
+    return _modelStatistics.entries.map((entry) {
+      final model = entry.key;
+      final stats = entry.value;
+      final count = stats['count'] ?? 0;
+      final tokens = stats['tokens'] ?? 0;
+      final percentage = (tokens / totalTokens * 100).clamp(0.0, 100.0);
+
+      return Padding(
+        padding: const EdgeInsets.only(bottom: AppStyles.paddingSmall),
+        child: Container(
+          padding: const EdgeInsets.all(AppStyles.padding),
+          decoration: BoxDecoration(
+            color: AppStyles.surfaceColor,
+            borderRadius: BorderRadius.circular(AppStyles.borderRadius),
+            border: Border.all(
+              color: AppStyles.borderColor,
+              width: 1,
+            ),
+            boxShadow: [
+              BoxShadow(
+                color: Colors.black.withValues(alpha: 0.05),
+                blurRadius: 2,
+                offset: const Offset(0, 1),
+              ),
+            ],
+          ),
+          child: Column(
+            crossAxisAlignment: CrossAxisAlignment.start,
+            children: [
+              // Заголовок с названием модели
+              Row(
+                children: [
+                  const Icon(
+                    Icons.smart_toy,
+                    size: 20,
+                    color: AppStyles.accentColor,
                   ),
-                  child: Row(
+                  const SizedBox(width: 8),
+                  Expanded(
+                    child: Text(
+                      model,
+                      style: const TextStyle(
+                        color: AppStyles.textPrimary,
+                        fontSize: 16,
+                        fontWeight: FontWeight.w600,
+                      ),
+                      overflow: TextOverflow.ellipsis,
+                    ),
+                  ),
+                ],
+              ),
+              const SizedBox(height: AppStyles.paddingSmall),
+              // Индикатор прогресса по токенам
+              Column(
+                crossAxisAlignment: CrossAxisAlignment.start,
+                children: [
+                  Row(
                     mainAxisAlignment: MainAxisAlignment.spaceBetween,
                     children: [
-                      Expanded(
-                        child: Column(
-                          crossAxisAlignment: CrossAxisAlignment.start,
-                          children: [
-                            Text(
-                              model,
-                              style: const TextStyle(
-                                color: AppStyles.textPrimary,
-                                fontSize: 14,
-                                fontWeight: FontWeight.w500,
-                              ),
-                              overflow: TextOverflow.ellipsis,
-                            ),
-                          ],
-                        ),
-                      ),
-                      const SizedBox(width: AppStyles.paddingSmall),
                       Text(
-                        '$count запросов',
+                        '${percentage.toStringAsFixed(1)}% от общего использования',
                         style: const TextStyle(
                           color: AppStyles.textSecondary,
-                          fontSize: 14,
+                          fontSize: 12,
                         ),
                       ),
-                      const SizedBox(width: AppStyles.paddingSmall),
                       Text(
-                        '${_formatTokens(tokens)} токенов',
+                        _formatTokens(tokens),
                         style: const TextStyle(
                           color: AppStyles.accentColor,
-                          fontSize: 14,
+                          fontSize: 12,
                           fontWeight: FontWeight.bold,
                         ),
                       ),
                     ],
                   ),
+                  const SizedBox(height: 4),
+                  ClipRRect(
+                    borderRadius: BorderRadius.circular(4),
+                    child: LinearProgressIndicator(
+                      value: percentage / 100,
+                      minHeight: 6,
+                      backgroundColor: AppStyles.borderColor,
+                      valueColor: const AlwaysStoppedAnimation<Color>(
+                        AppStyles.accentColor,
+                      ),
+                    ),
+                  ),
+                ],
+              ),
+              const SizedBox(height: AppStyles.paddingSmall),
+              // Статистика в карточках
+              isMobile
+                  ? Column(
+                      children: [
+                        _buildModelStatItem(
+                          icon: Icons.message,
+                          label: 'Запросов',
+                          value: count.toString(),
+                        ),
+                        const SizedBox(height: 8),
+                        _buildModelStatItem(
+                          icon: Icons.token,
+                          label: 'Токенов',
+                          value: _formatTokens(tokens),
+                        ),
+                      ],
+                    )
+                  : Row(
+                      children: [
+                        Expanded(
+                          child: _buildModelStatItem(
+                            icon: Icons.message,
+                            label: 'Запросов',
+                            value: count.toString(),
+                          ),
+                        ),
+                        const SizedBox(width: AppStyles.paddingSmall),
+                        Expanded(
+                          child: _buildModelStatItem(
+                            icon: Icons.token,
+                            label: 'Токенов',
+                            value: _formatTokens(tokens),
+                          ),
+                        ),
+                        if (count > 0) ...[
+                          const SizedBox(width: AppStyles.paddingSmall),
+                          Expanded(
+                            child: _buildModelStatItem(
+                              icon: Icons.trending_up,
+                              label: 'Среднее на запрос',
+                              value: _formatTokens((tokens / count).round()),
+                            ),
+                          ),
+                        ],
+                      ],
+                    ),
+            ],
+          ),
+        ),
+      );
+    }).toList();
+  }
+
+  /// Строит элемент статистики для модели.
+  Widget _buildModelStatItem({
+    required IconData icon,
+    required String label,
+    required String value,
+  }) {
+    return Container(
+      padding: const EdgeInsets.symmetric(
+        horizontal: AppStyles.paddingSmall,
+        vertical: 8,
+      ),
+      decoration: BoxDecoration(
+        color: AppStyles.cardColor,
+        borderRadius: BorderRadius.circular(AppStyles.borderRadius / 2),
+        border: Border.all(
+          color: AppStyles.borderColor.withValues(alpha: 0.5),
+        ),
+      ),
+      child: Row(
+        mainAxisSize: MainAxisSize.min,
+        children: [
+          Icon(icon, size: 16, color: AppStyles.textSecondary),
+          const SizedBox(width: 6),
+          Flexible(
+            child: Column(
+              crossAxisAlignment: CrossAxisAlignment.start,
+              mainAxisSize: MainAxisSize.min,
+              children: [
+                Text(
+                  label,
+                  style: const TextStyle(
+                    color: AppStyles.textSecondary,
+                    fontSize: 11,
+                  ),
                 ),
-              );
-            }),
+                Text(
+                  value,
+                  style: const TextStyle(
+                    color: AppStyles.textPrimary,
+                    fontSize: 14,
+                    fontWeight: FontWeight.bold,
+                  ),
+                ),
+              ],
+            ),
+          ),
         ],
       ),
     );
