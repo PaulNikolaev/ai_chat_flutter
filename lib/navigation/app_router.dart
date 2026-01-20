@@ -1,6 +1,7 @@
 import 'package:flutter/material.dart';
 
 import '../screens/chat_screen.dart';
+import '../screens/expenses_screen.dart';
 import '../screens/settings_screen.dart';
 import '../screens/statistics_screen.dart';
 import '../ui/login/login_screen.dart';
@@ -90,13 +91,9 @@ class AppRouter {
         );
 
       case AppRoutes.expenses:
-        // TODO: Заменить на ExpensesScreen после реализации (Этап 4)
         return MaterialPageRoute(
-          builder: (context) => _buildPlaceholderScreen(
-            context,
-            title: 'Расходы',
-            description: 'График расходов по дням',
-            route: AppRoutes.expenses,
+          builder: (context) => ExpensesScreen(
+            apiClient: apiClient,
           ),
         );
 
@@ -110,69 +107,4 @@ class AppRouter {
     }
   }
 
-  /// Создает заглушку экрана для будущих реализаций.
-  ///
-  /// Используется для определения маршрутов, которые будут реализованы
-  /// в следующих этапах разработки.
-  ///
-  /// **Параметры:**
-  /// - [context]: Контекст построения виджета.
-  /// - [title]: Заголовок экрана.
-  /// - [description]: Описание назначения экрана.
-  /// - [route]: Имя маршрута.
-  ///
-  /// **Возвращает:** Scaffold с заглушкой экрана.
-  static Widget _buildPlaceholderScreen(
-    BuildContext context, {
-    required String title,
-    required String description,
-    required String route,
-  }) {
-    return Scaffold(
-      appBar: AppBar(
-        title: Text(title),
-      ),
-      body: Center(
-        child: Padding(
-          padding: const EdgeInsets.all(24.0),
-          child: Column(
-            mainAxisAlignment: MainAxisAlignment.center,
-            children: [
-              Icon(
-                Icons.construction,
-                size: 64,
-                color: Theme.of(context).colorScheme.secondary,
-              ),
-              const SizedBox(height: 24),
-              Text(
-                title,
-                style: Theme.of(context).textTheme.headlineMedium,
-                textAlign: TextAlign.center,
-              ),
-              const SizedBox(height: 16),
-              Text(
-                description,
-                style: Theme.of(context).textTheme.bodyLarge,
-                textAlign: TextAlign.center,
-              ),
-              const SizedBox(height: 8),
-              Text(
-                'Маршрут: $route',
-                style: Theme.of(context).textTheme.bodySmall,
-                textAlign: TextAlign.center,
-              ),
-              const SizedBox(height: 32),
-              const Text(
-                'Эта страница будет реализована в следующих этапах разработки.',
-                style: TextStyle(
-                  fontStyle: FontStyle.italic,
-                ),
-                textAlign: TextAlign.center,
-              ),
-            ],
-          ),
-        ),
-      ),
-    );
-  }
 }
