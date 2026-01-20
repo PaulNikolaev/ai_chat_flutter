@@ -1,6 +1,7 @@
 import 'package:flutter/material.dart';
 
 import '../screens/chat_screen.dart';
+import '../screens/settings_screen.dart';
 import '../ui/login/login_screen.dart';
 import '../api/openrouter_client.dart';
 
@@ -76,14 +77,8 @@ class AppRouter {
         );
 
       case AppRoutes.settings:
-        // TODO: Заменить на SettingsScreen после реализации (Этап 2)
         return MaterialPageRoute(
-          builder: (context) => _buildPlaceholderScreen(
-            context,
-            title: 'Настройки',
-            description: 'Страница настроек провайдера и API ключей',
-            route: AppRoutes.settings,
-          ),
+          builder: (context) => const SettingsScreen(),
         );
 
       case AppRoutes.statistics:
