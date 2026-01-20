@@ -64,6 +64,72 @@ class Analytics {
     return _cache.getModelStatistics();
   }
 
+  /// Возвращает агрегированную статистику по моделям с фильтрацией.
+  ///
+  /// Параметры:
+  /// - [model]: Фильтр по модели (опционально).
+  /// - [startDate]: Начальная дата фильтрации (опционально).
+  /// - [endDate]: Конечная дата фильтрации (опционально).
+  ///
+  /// Возвращает Map с агрегированной статистикой, отфильтрованной на уровне SQL.
+  Future<Map<String, Map<String, int>>> getModelStatisticsFiltered({
+    String? model,
+    DateTime? startDate,
+    DateTime? endDate,
+  }) async {
+    return _cache.getModelStatisticsFiltered(
+      model: model,
+      startDate: startDate,
+      endDate: endDate,
+    );
+  }
+
+  /// Возвращает историю аналитики с фильтрацией и пагинацией.
+  ///
+  /// Параметры:
+  /// - [model]: Фильтр по модели (опционально).
+  /// - [startDate]: Начальная дата фильтрации (опционально).
+  /// - [endDate]: Конечная дата фильтрации (опционально).
+  /// - [limit]: Максимальное количество записей (по умолчанию 1000).
+  /// - [offset]: Смещение для пагинации (по умолчанию 0).
+  ///
+  /// Возвращает список [AnalyticsRecord] с примененными фильтрами и пагинацией.
+  Future<List<AnalyticsRecord>> getHistoryFiltered({
+    String? model,
+    DateTime? startDate,
+    DateTime? endDate,
+    int limit = 1000,
+    int offset = 0,
+  }) async {
+    return _cache.getAnalyticsHistoryFiltered(
+      model: model,
+      startDate: startDate,
+      endDate: endDate,
+      limit: limit,
+      offset: offset,
+    );
+  }
+
+  /// Возвращает количество записей аналитики с фильтрацией.
+  ///
+  /// Параметры:
+  /// - [model]: Фильтр по модели (опционально).
+  /// - [startDate]: Начальная дата фильтрации (опционально).
+  /// - [endDate]: Конечная дата фильтрации (опционально).
+  ///
+  /// Возвращает количество записей, соответствующих фильтрам.
+  Future<int> getHistoryCount({
+    String? model,
+    DateTime? startDate,
+    DateTime? endDate,
+  }) async {
+    return _cache.getAnalyticsCount(
+      model: model,
+      startDate: startDate,
+      endDate: endDate,
+    );
+  }
+
   /// Возвращает статистику сессии с момента создания экземпляра.
   ///
   /// Формат:

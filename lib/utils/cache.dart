@@ -281,6 +281,200 @@ class ChatCache {
     }
   }
 
+  /// Получает историю аналитики с фильтрацией и пагинацией.
+  ///
+  /// Параметры:
+  /// - [model]: Фильтр по модели (опционально).
+  /// - [startDate]: Начальная дата фильтрации (опционально).
+  /// - [endDate]: Конечная дата фильтрации (опционально).
+  /// - [limit]: Максимальное количество записей (по умолчанию 1000).
+  /// - [offset]: Смещение для пагинации (по умолчанию 0).
+  ///
+  /// Возвращает список [AnalyticsRecord] или пустой список в случае ошибки.
+  Future<List<AnalyticsRecord>> getAnalyticsHistoryFiltered({
+    String? model,
+    DateTime? startDate,
+    DateTime? endDate,
+    int limit = 1000,
+    int offset = 0,
+  }) async {
+    try {
+      final db = await _db;
+      
+      // Строим WHERE условие
+      final whereConditions = <String>[];
+      final whereArgs = <dynamic>[];
+      
+      if (model != null && model.isNotEmpty) {
+        whereConditions.add('model = ?');
+        whereArgs.add(model);
+      }
+      
+      if (startDate != null) {
+        whereConditions.add('timestamp >= ?');
+        whereArgs.add(startDate.toIso8601String());
+      }
+      
+      if (endDate != null) {
+        // Добавляем день к конечной дате для включения всего дня
+        final endDateInclusive = endDate.add(const Duration(days: 1));
+        whereConditions.add('timestamp < ?');
+        whereArgs.add(endDateInclusive.toIso8601String());
+      }
+      
+      final whereClause = whereConditions.isNotEmpty
+          ? whereConditions.join(' AND ')
+          : null;
+      
+      final results = await db.query(
+        'analytics_messages',
+        where: whereClause,
+        whereArgs: whereArgs.isNotEmpty ? whereArgs : null,
+        orderBy: 'timestamp ASC',
+        limit: limit,
+        offset: offset,
+      );
+
+      return results.map((row) => AnalyticsRecord(
+            id: row['id'] as int?,
+            timestamp: DateTime.parse(row['timestamp'] as String),
+            model: row['model'] as String,
+            messageLength: row['message_length'] as int,
+            responseTime: (row['response_time'] as num).toDouble(),
+            tokensUsed: row['tokens_used'] as int,
+          )).toList();
+    } catch (e) {
+      debugPrint('ChatCache.getAnalyticsHistoryFiltered error: $e');
+      return [];
+    }
+  }
+
+  /// Получает количество записей аналитики с фильтрацией.
+  ///
+  /// Параметры:
+  /// - [model]: Фильтр по модели (опционально).
+  /// - [startDate]: Начальная дата фильтрации (опционально).
+  /// - [endDate]: Конечная дата фильтрации (опционально).
+  ///
+  /// Возвращает количество записей или 0 в случае ошибки.
+  Future<int> getAnalyticsCount({
+    String? model,
+    DateTime? startDate,
+    DateTime? endDate,
+  }) async {
+    try {
+      final db = await _db;
+      
+      // Строим WHERE условие
+      final whereConditions = <String>[];
+      final whereArgs = <dynamic>[];
+      
+      if (model != null && model.isNotEmpty) {
+        whereConditions.add('model = ?');
+        whereArgs.add(model);
+      }
+      
+      if (startDate != null) {
+        whereConditions.add('timestamp >= ?');
+        whereArgs.add(startDate.toIso8601String());
+      }
+      
+      if (endDate != null) {
+        final endDateInclusive = endDate.add(const Duration(days: 1));
+        whereConditions.add('timestamp < ?');
+        whereArgs.add(endDateInclusive.toIso8601String());
+      }
+      
+      final whereClause = whereConditions.isNotEmpty
+          ? whereConditions.join(' AND ')
+          : null;
+      
+      final result = await db.rawQuery(
+        'SELECT COUNT(*) as count FROM analytics_messages'
+        '${whereClause != null ? ' WHERE $whereClause' : ''}',
+        whereArgs.isNotEmpty ? whereArgs : null,
+      );
+      
+      return Sqflite.firstIntValue(result) ?? 0;
+    } catch (e) {
+      debugPrint('ChatCache.getAnalyticsCount error: $e');
+      return 0;
+    }
+  }
+
+  /// Получает агрегированную статистику с фильтрацией на уровне SQL.
+  ///
+  /// Параметры:
+  /// - [model]: Фильтр по модели (опционально).
+  /// - [startDate]: Начальная дата фильтрации (опционально).
+  /// - [endDate]: Конечная дата фильтрации (опционально).
+  ///
+  /// Возвращает Map с ключом - идентификатор модели, значение - Map
+  /// с ключами 'count' и 'tokens'.
+  Future<Map<String, Map<String, int>>> getModelStatisticsFiltered({
+    String? model,
+    DateTime? startDate,
+    DateTime? endDate,
+  }) async {
+    try {
+      final db = await _db;
+      
+      // Строим WHERE условие
+      final whereConditions = <String>[];
+      final whereArgs = <dynamic>[];
+      
+      if (model != null && model.isNotEmpty) {
+        whereConditions.add('model = ?');
+        whereArgs.add(model);
+      }
+      
+      if (startDate != null) {
+        whereConditions.add('timestamp >= ?');
+        whereArgs.add(startDate.toIso8601String());
+      }
+      
+      if (endDate != null) {
+        final endDateInclusive = endDate.add(const Duration(days: 1));
+        whereConditions.add('timestamp < ?');
+        whereArgs.add(endDateInclusive.toIso8601String());
+      }
+      
+      final whereClause = whereConditions.isNotEmpty
+          ? 'WHERE ${whereConditions.join(' AND ')}'
+          : '';
+      
+      final results = await db.rawQuery('''
+        SELECT 
+          model,
+          COUNT(*) as count,
+          SUM(tokens_used) as tokens
+        FROM analytics_messages
+        $whereClause
+        GROUP BY model
+      ''', whereArgs.isNotEmpty ? whereArgs : null);
+
+      final statistics = <String, Map<String, int>>{};
+      
+      for (final row in results) {
+        final modelName = row['model'] as String?;
+        if (modelName == null) continue;
+        
+        final count = row['count'] as int? ?? 0;
+        final tokens = row['tokens'] as int? ?? 0;
+        
+        statistics[modelName] = {
+          'count': count,
+          'tokens': tokens,
+        };
+      }
+      
+      return statistics;
+    } catch (e) {
+      debugPrint('ChatCache.getModelStatisticsFiltered error: $e');
+      return {};
+    }
+  }
+
   /// Получает аналитику по модели.
   ///
   /// Возвращает список аналитических записей для указанной модели,

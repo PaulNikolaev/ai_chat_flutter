@@ -201,7 +201,7 @@ class _StatisticsScreenState extends State<StatisticsScreen> {
     }
   }
 
-  /// Загружает статистику использования моделей.
+  /// Загружает статистику использования моделей с оптимизированными запросами.
   Future<void> _loadStatistics() async {
     final analytics = widget.analytics ?? Analytics();
     
@@ -210,46 +210,49 @@ class _StatisticsScreenState extends State<StatisticsScreen> {
     });
 
     try {
-      // Получаем полную историю для фильтрации и расчета общей статистики
-      final history = await analytics.getHistory();
+      // Используем оптимизированный метод с фильтрацией на уровне SQL
+      final statisticsFuture = analytics.getModelStatisticsFiltered(
+        model: _selectedModelFilter,
+        startDate: _startDateFilter,
+        endDate: _endDateFilter,
+      );
       
-      // Применяем фильтры
-      List<AnalyticsRecord> filteredHistory = history;
+      // Параллельно получаем общую статистику
+      final totalCountFuture = analytics.getHistoryCount(
+        model: _selectedModelFilter,
+        startDate: _startDateFilter,
+        endDate: _endDateFilter,
+      );
       
-      if (_selectedModelFilter != null && _selectedModelFilter!.isNotEmpty) {
-        filteredHistory = filteredHistory.where(
-          (record) => record.model == _selectedModelFilter,
-        ).toList();
-      }
+      // Получаем ограниченную выборку для расчета общей статистики по токенам
+      final sampleHistoryFuture = analytics.getHistoryFiltered(
+        model: _selectedModelFilter,
+        startDate: _startDateFilter,
+        endDate: _endDateFilter,
+        limit: 10000, // Ограничиваем для производительности
+      );
       
-      if (_startDateFilter != null) {
-        filteredHistory = filteredHistory.where(
-          (record) => record.timestamp.isAfter(_startDateFilter!),
-        ).toList();
-      }
+      // Ждем выполнения всех запросов параллельно
+      final results = await Future.wait([
+        statisticsFuture,
+        totalCountFuture,
+        sampleHistoryFuture,
+      ]);
       
-      if (_endDateFilter != null) {
-        filteredHistory = filteredHistory.where(
-          (record) => record.timestamp.isBefore(_endDateFilter!.add(const Duration(days: 1))),
-        ).toList();
-      }
+      final statistics = results[0] as Map<String, Map<String, int>>;
+      final totalCount = results[1] as int;
+      final sampleHistory = results[2] as List<AnalyticsRecord>;
       
-      // Рассчитываем общую статистику
-      int totalRequests = 0;
+      // Рассчитываем общую статистику по токенам из выборки
       int totalTokens = 0;
-      for (final record in filteredHistory) {
-        totalRequests++;
+      for (final record in sampleHistory) {
         totalTokens += record.tokensUsed;
       }
       
-      // Группируем по моделям
-      final Map<String, Map<String, int>> statistics = {};
-      for (final record in filteredHistory) {
-        if (!statistics.containsKey(record.model)) {
-          statistics[record.model] = {'count': 0, 'tokens': 0};
-        }
-        statistics[record.model]!['count'] = statistics[record.model]!['count']! + 1;
-        statistics[record.model]!['tokens'] = statistics[record.model]!['tokens']! + record.tokensUsed;
+      // Если выборка меньше общего количества, экстраполируем
+      if (sampleHistory.length < totalCount && sampleHistory.isNotEmpty) {
+        final avgTokensPerRecord = totalTokens / sampleHistory.length;
+        totalTokens = (avgTokensPerRecord * totalCount).round();
       }
       
       // Сортируем статистику
@@ -275,7 +278,7 @@ class _StatisticsScreenState extends State<StatisticsScreen> {
       if (mounted) {
         setState(() {
           _modelStatistics = sortedStatistics;
-          _totalRequests = totalRequests;
+          _totalRequests = totalCount;
           _totalTokens = totalTokens;
           _isLoadingStatistics = false;
         });
@@ -430,42 +433,59 @@ class _StatisticsScreenState extends State<StatisticsScreen> {
           ),
         ],
       ),
-      body: Center(
-        child: SingleChildScrollView(
-          padding: EdgeInsets.all(padding),
-          child: ConstrainedBox(
-            constraints: BoxConstraints(
-              maxWidth: maxContentWidth ?? double.infinity,
-            ),
-            child: Column(
-              crossAxisAlignment: CrossAxisAlignment.stretch,
-              children: [
-                // Баланс
-                _buildBalanceSection(),
-                const SizedBox(height: AppStyles.padding),
-                
-                // Общая статистика
-                _buildTotalStatisticsSection(),
-                const SizedBox(height: AppStyles.padding),
-                
-                // Фильтры и сортировка
-                _buildFiltersSection(),
-                const SizedBox(height: AppStyles.padding),
-                
-                // Статистика моделей
-                _buildModelStatisticsSection(),
-                const SizedBox(height: AppStyles.padding),
-                
-                // Метрики производительности
-                if (_performanceMetrics != null) ...[
-                  _buildPerformanceMetricsSection(),
-                  const SizedBox(height: AppStyles.padding),
+      body: _isLoadingBalance || _isLoadingStatistics || _isLoadingMetrics
+          ? const Center(
+              child: Column(
+                mainAxisAlignment: MainAxisAlignment.center,
+                children: [
+                  CircularProgressIndicator(),
+                  SizedBox(height: AppStyles.padding),
+                  Text(
+                    'Загрузка статистики...',
+                    style: TextStyle(
+                      color: AppStyles.textSecondary,
+                      fontSize: 14,
+                    ),
+                  ),
                 ],
-              ],
+              ),
+            )
+          : Center(
+              child: SingleChildScrollView(
+                padding: EdgeInsets.all(padding),
+                child: ConstrainedBox(
+                  constraints: BoxConstraints(
+                    maxWidth: maxContentWidth ?? double.infinity,
+                  ),
+                  child: Column(
+                    crossAxisAlignment: CrossAxisAlignment.stretch,
+                    children: [
+                      // Баланс
+                      _buildBalanceSection(),
+                      const SizedBox(height: AppStyles.padding),
+                      
+                      // Общая статистика
+                      _buildTotalStatisticsSection(),
+                      const SizedBox(height: AppStyles.padding),
+                      
+                      // Фильтры и сортировка
+                      _buildFiltersSection(),
+                      const SizedBox(height: AppStyles.padding),
+                      
+                      // Статистика моделей
+                      _buildModelStatisticsSection(),
+                      const SizedBox(height: AppStyles.padding),
+                      
+                      // Метрики производительности
+                      if (_performanceMetrics != null) ...[
+                        _buildPerformanceMetricsSection(),
+                        const SizedBox(height: AppStyles.padding),
+                      ],
+                    ],
+                  ),
+                ),
+              ),
             ),
-          ),
-        ),
-      ),
     );
   }
 
@@ -1296,19 +1316,39 @@ class _StatisticsScreenState extends State<StatisticsScreen> {
   Future<void> _showModelDetailsDialog(BuildContext context, String model) async {
     final analytics = widget.analytics ?? Analytics();
     
-    // Загружаем историю для этой модели
-    final records = await analytics.getHistoryByModel(model);
+    // Показываем индикатор загрузки
+    if (!context.mounted) return;
+    showDialog(
+      context: context,
+      barrierDismissible: false,
+      builder: (context) => const Center(
+        child: CircularProgressIndicator(),
+      ),
+    );
     
-    if (records.isEmpty) {
-      if (context.mounted) {
-        ScaffoldMessenger.of(context).showSnackBar(
-          const SnackBar(
-            content: Text('Нет данных для этой модели'),
-          ),
-        );
+    try {
+      // Загружаем историю для этой модели с применением фильтров даты
+      final records = await analytics.getHistoryFiltered(
+        model: model,
+        startDate: _startDateFilter,
+        endDate: _endDateFilter,
+        limit: 10000, // Ограничиваем для производительности
+      );
+      
+      // Закрываем индикатор загрузки
+      if (!context.mounted) return;
+      Navigator.of(context).pop();
+      
+      if (records.isEmpty) {
+        if (context.mounted) {
+          ScaffoldMessenger.of(context).showSnackBar(
+            const SnackBar(
+              content: Text('Нет данных для этой модели'),
+            ),
+          );
+        }
+        return;
       }
-      return;
-    }
     
     // Рассчитываем статистику
     final totalRequests = records.length;
@@ -1473,6 +1513,18 @@ class _StatisticsScreenState extends State<StatisticsScreen> {
         ),
       ),
     );
+    } catch (e) {
+      // Закрываем индикатор загрузки в случае ошибки
+      if (context.mounted) {
+        Navigator.of(context).pop();
+        ScaffoldMessenger.of(context).showSnackBar(
+          SnackBar(
+            content: Text('Ошибка отображения диалога: $e'),
+            backgroundColor: AppStyles.errorColor,
+          ),
+        );
+      }
+    }
   }
 
   /// Строит строку статистики для детального диалога.
