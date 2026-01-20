@@ -1,6 +1,7 @@
 import 'dart:io' show Platform;
 import 'package:flutter/foundation.dart' show kIsWeb;
 import 'package:flutter/material.dart';
+import 'package:ai_chat/utils/constants.dart';
 
 /// Утилиты для определения платформы, на которой запущено приложение.
 class PlatformUtils {
@@ -74,25 +75,36 @@ class PlatformUtils {
     return 'unknown';
   }
 
-  /// Определяет размер экрана на основе ширины.
+  /// Определяет размер экрана на основе ширины (Responsive Breakpoints).
   ///
-  /// Возвращает:
+  /// Использует стандартные Material Design breakpoints:
   /// - "small" для маленьких экранов (< 600px) - телефоны
   /// - "medium" для средних экранов (600-1024px) - планшеты
   /// - "large" для больших экранов (> 1024px) - десктопы
   ///
-  /// Пример использования:
+  /// Breakpoints соответствуют Material Design guidelines:
+  /// - Small: < 600px (mobile phones)
+  /// - Medium: 600-1024px (tablets, small laptops)
+  /// - Large: > 1024px (desktops, large laptops)
+  ///
+  /// **Пример использования:**
   /// ```dart
   /// final screenSize = PlatformUtils.getScreenSize(context);
   /// if (screenSize == 'medium') {
   ///   // Layout для планшета
+  /// } else if (screenSize == 'large') {
+  ///   // Layout для десктопа
   /// }
   /// ```
+  ///
+  /// **Примечание:** Значения breakpoints определены в [AppConstants.mediumScreenWidth]
+  /// и [AppConstants.largeScreenWidth] для консистентности.
   static String getScreenSize(BuildContext context) {
     final width = MediaQuery.of(context).size.width;
-    if (width < 600) {
+    // Используем константы из AppConstants для консистентности
+    if (width < AppConstants.mediumScreenWidth) {
       return 'small';
-    } else if (width < 1024) {
+    } else if (width < AppConstants.largeScreenWidth) {
       return 'medium';
     } else {
       return 'large';
