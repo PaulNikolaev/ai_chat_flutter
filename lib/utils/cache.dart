@@ -69,6 +69,8 @@ class ChatCache {
 
       return id;
     } catch (e) {
+      // Логируем ошибку для отладки, но не прерываем выполнение
+      debugPrint('[ChatCache] Error saving message: $e');
       return null;
     }
   }

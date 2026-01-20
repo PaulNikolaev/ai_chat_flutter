@@ -240,6 +240,8 @@ class AuthRepository {
         'provider': provider,
       };
     } catch (e) {
+      // Логируем ошибку, но не прерываем выполнение
+      // Возвращаем null для индикации отсутствия данных
       return null;
     }
   }
