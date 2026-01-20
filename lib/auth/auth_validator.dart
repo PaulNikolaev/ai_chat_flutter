@@ -3,6 +3,7 @@ import 'dart:convert';
 import 'dart:math';
 import 'package:http/http.dart' as http;
 import 'package:crypto/crypto.dart';
+import 'package:ai_chat/utils/utils.dart';
 
 /// Результат валидации API ключа.
 class ApiKeyValidationResult {
@@ -590,7 +591,9 @@ class AuthValidator {
   /// ```
   static String generatePin() {
     final random = Random();
-    return (1000 + random.nextInt(9000)).toString();
+    return (AppConstants.pinMinValue +
+            random.nextInt(AppConstants.pinMaxValue - AppConstants.pinMinValue))
+        .toString();
   }
 
   /// Хэширует PIN код через SHA-256.
@@ -639,7 +642,9 @@ class AuthValidator {
 
     // Проверяем, что PIN в диапазоне 1000-9999
     final pinNumber = int.tryParse(pin);
-    if (pinNumber == null || pinNumber < 1000 || pinNumber > 9999) {
+    if (pinNumber == null ||
+        pinNumber < AppConstants.pinMinValue ||
+        pinNumber > AppConstants.pinMaxValue) {
       return false;
     }
 

@@ -1,6 +1,7 @@
 // Barrel file for utilities.
 export 'analytics.dart';
 export 'cache.dart';
+export 'constants.dart';
 export 'expenses_calculator.dart';
 export 'logger.dart';
 export 'monitor.dart';
