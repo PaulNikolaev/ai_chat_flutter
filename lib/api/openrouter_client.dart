@@ -312,9 +312,11 @@ class OpenRouterClient {
     };
 
     // Логируем URL и параметры запроса для диагностики
+    // ВАЖНО: Не логируем Authorization header, чтобы не раскрывать API ключ
     debugPrint('[OpenRouterClient] Sending message to: $uri');
     debugPrint('[OpenRouterClient] Provider: $provider');
     debugPrint('[OpenRouterClient] Model: $model');
+    // Логируем body без чувствительных данных (API ключ в заголовках, не в body)
     debugPrint('[OpenRouterClient] Request body: ${jsonEncode(body)}');
 
     http.Response response;
@@ -609,7 +611,10 @@ class OpenRouterClient {
       try {
         debugPrint(
             '[OpenRouterClient] POST attempt $attempt/$maxRetries to $uri');
-        debugPrint('[OpenRouterClient] Headers: $_defaultHeaders');
+        // ВАЖНО: Не логируем Authorization header для безопасности
+        final safeHeaders = Map<String, String>.from(_defaultHeaders)
+          ..remove('Authorization');
+        debugPrint('[OpenRouterClient] Headers (safe): $safeHeaders');
 
         // Проверяем, что клиент не закрыт перед использованием
         // Для VSEGPT не используем encoding параметр, так как он может вызывать проблемы
