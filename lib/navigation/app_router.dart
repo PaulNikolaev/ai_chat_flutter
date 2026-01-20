@@ -2,6 +2,7 @@ import 'package:flutter/material.dart';
 
 import '../screens/chat_screen.dart';
 import '../screens/settings_screen.dart';
+import '../screens/statistics_screen.dart';
 import '../ui/login/login_screen.dart';
 import '../api/openrouter_client.dart';
 
@@ -82,13 +83,9 @@ class AppRouter {
         );
 
       case AppRoutes.statistics:
-        // TODO: Заменить на StatisticsScreen после реализации (Этап 3)
         return MaterialPageRoute(
-          builder: (context) => _buildPlaceholderScreen(
-            context,
-            title: 'Статистика',
-            description: 'Статистика использования токенов моделями',
-            route: AppRoutes.statistics,
+          builder: (context) => StatisticsScreen(
+            apiClient: apiClient,
           ),
         );
 
