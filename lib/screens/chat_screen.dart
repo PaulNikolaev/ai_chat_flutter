@@ -3,7 +3,6 @@ import 'dart:io';
 import 'package:flutter/material.dart';
 import 'package:intl/intl.dart';
 import 'package:path_provider/path_provider.dart';
-import 'package:shared_preferences/shared_preferences.dart';
 
 import 'package:ai_chat/api/api.dart';
 import 'package:ai_chat/models/models.dart';
@@ -480,12 +479,11 @@ class _ChatScreenState extends State<ChatScreen> {
 
   /// Загружает сохраненную выбранную модель из настроек.
   ///
-  /// Восстанавливает последнюю выбранную модель из SharedPreferences.
+  /// Восстанавливает последнюю выбранную модель из PreferencesService.
   Future<void> _loadSelectedModel() async {
     try {
       _logger?.debug('Loading saved model preference');
-      final prefs = await SharedPreferences.getInstance();
-      final savedModelId = prefs.getString(_selectedModelKey);
+      final savedModelId = await PreferencesService.instance.getString(_selectedModelKey);
       
       if (mounted && savedModelId != null && savedModelId.isNotEmpty) {
         setState(() {
@@ -509,11 +507,10 @@ class _ChatScreenState extends State<ChatScreen> {
 
   /// Сохраняет выбранную модель в настройках.
   ///
-  /// Сохраняет ID выбранной модели в SharedPreferences для восстановления при следующем запуске.
+  /// Сохраняет ID выбранной модели в PreferencesService для восстановления при следующем запуске.
   Future<void> _saveSelectedModel(String modelId) async {
     try {
-      final prefs = await SharedPreferences.getInstance();
-      await prefs.setString(_selectedModelKey, modelId);
+      await PreferencesService.instance.saveString(_selectedModelKey, modelId);
       _logger?.debug('Saved model preference: $modelId');
     } catch (e) {
       _logger?.warning('Failed to save model preference: $e');
@@ -526,8 +523,7 @@ class _ChatScreenState extends State<ChatScreen> {
   /// Используется при переключении провайдера, когда модели становятся несовместимыми.
   Future<void> _clearSavedModel() async {
     try {
-      final prefs = await SharedPreferences.getInstance();
-      await prefs.remove(_selectedModelKey);
+      await PreferencesService.instance.remove(_selectedModelKey);
       _logger?.debug('Cleared saved model preference');
     } catch (e) {
       _logger?.warning('Failed to clear saved model preference: $e');
