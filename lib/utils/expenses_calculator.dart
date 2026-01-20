@@ -1,7 +1,7 @@
 import 'package:intl/intl.dart';
 
 import 'package:ai_chat/models/models.dart';
-import 'analytics.dart';
+import 'package:ai_chat/utils/analytics.dart';
 
 /// Модель данных для представления расходов за период.
 class ExpensesPeriod {

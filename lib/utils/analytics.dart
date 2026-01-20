@@ -1,5 +1,5 @@
 import 'package:ai_chat/models/models.dart';
-import 'cache.dart';
+import 'package:ai_chat/utils/cache.dart';
 
 /// Класс аналитики использования моделей.
 ///
