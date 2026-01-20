@@ -13,14 +13,17 @@ import '../ui/styles.dart';
 import '../utils/analytics.dart';
 import '../utils/cache.dart';
 import '../utils/logger.dart';
-import '../utils/monitor.dart';
 import '../utils/platform.dart';
-import 'analytics_dialog.dart';
 
 /// Главный экран чата с историей сообщений и полем ввода.
 ///
 /// Предоставляет базовую структуру UI с AppBar, областью истории чата
 /// и полем ввода сообщения. Поддерживает адаптивный layout для мобильных/десктопных устройств.
+///
+/// Адаптирован для работы в многостраничном режиме:
+/// - Упрощенный AppBar без дублирования функционала (аналитика доступна через навигацию)
+/// - Кнопка выхода вызывает callback для перехода на страницу входа
+/// - Автоматически скрывает кнопку "назад" в контексте HomeScreen
 class ChatScreen extends StatefulWidget {
   /// API клиент для отправки сообщений.
   final OpenRouterClient? apiClient;
@@ -30,9 +33,6 @@ class ChatScreen extends StatefulWidget {
 
   /// Callback при нажатии кнопки сохранения.
   final VoidCallback? onSave;
-
-  /// Callback при нажатии кнопки аналитики.
-  final VoidCallback? onAnalytics;
 
   /// Callback при нажатии кнопки очистки истории.
   final VoidCallback? onClear;
@@ -45,7 +45,6 @@ class ChatScreen extends StatefulWidget {
     this.apiClient,
     this.selectedModel,
     this.onSave,
-    this.onAnalytics,
     this.onClear,
     this.onLogout,
   });
@@ -75,9 +74,8 @@ class _ChatScreenState extends State<ChatScreen> {
   bool _isLoading = false;
   bool _isLoadingHistory = false;
   
-  // Экземпляры для аналитики и мониторинга
+  // Экземпляр для аналитики
   final Analytics _analytics = Analytics();
-  final PerformanceMonitor _performanceMonitor = PerformanceMonitor();
   AppLogger? _logger;
 
   // Состояние для моделей
@@ -391,23 +389,6 @@ class _ChatScreenState extends State<ChatScreen> {
     }
   }
 
-  /// Показывает диалог аналитики с статистикой использования моделей и метриками производительности.
-  ///
-  /// Отображает баланс аккаунта, статистику использования моделей и метрики производительности.
-  /// Баланс автоматически обновляется каждые 30 секунд.
-  void _showAnalyticsDialog() {
-    showDialog(
-      context: context,
-      builder: (BuildContext context) {
-        return AnalyticsDialog(
-          apiClient: widget.apiClient,
-          analytics: _analytics,
-          performanceMonitor: _performanceMonitor,
-        );
-      },
-    );
-  }
-
   /// Загружает список моделей из API (ленивая загрузка).
   ///
   /// Получает список доступных моделей от OpenRouter API и обновляет состояние.
@@ -685,26 +666,21 @@ class _ChatScreenState extends State<ChatScreen> {
       backgroundColor: AppStyles.backgroundColor,
       appBar: AppBar(
         title: const Text('AI Chat'),
+        automaticallyImplyLeading: false, // Убираем кнопку "назад" в контексте HomeScreen
         actions: [
-          // Кнопка сохранения
+          // Кнопка сохранения истории чата
           IconButton(
             icon: const Icon(Icons.save),
             tooltip: 'Сохранить диалог',
             onPressed: widget.onSave ?? _saveHistory,
           ),
-          // Кнопка аналитики
+          // Кнопка очистки истории чата
           IconButton(
-            icon: const Icon(Icons.analytics),
-            tooltip: 'Аналитика',
-            onPressed: widget.onAnalytics ?? _showAnalyticsDialog,
-          ),
-          // Кнопка очистки истории
-          IconButton(
-            icon: const Icon(Icons.delete),
+            icon: const Icon(Icons.delete_outline),
             tooltip: 'Очистить историю',
             onPressed: widget.onClear ?? _showClearHistoryDialog,
           ),
-          // Кнопка выхода
+          // Кнопка выхода из приложения
           IconButton(
             icon: const Icon(Icons.logout),
             tooltip: 'Выйти',
