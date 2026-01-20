@@ -417,6 +417,75 @@ class ChatCache {
     }
   }
 
+  /// Получает сумму токенов с фильтрацией (оптимизированный запрос).
+  ///
+  /// Параметры:
+  /// - [model]: Фильтр по модели (опционально).
+  /// - [startDate]: Начальная дата фильтрации (опционально).
+  /// - [endDate]: Конечная дата фильтрации (опционально).
+  ///
+  /// Возвращает сумму токенов или 0 в случае ошибки.
+  Future<int> getTotalTokens({
+    String? model,
+    DateTime? startDate,
+    DateTime? endDate,
+  }) async {
+    try {
+      final db = await _db;
+      
+      // Строим WHERE условие
+      final whereConditions = <String>[];
+      final whereArgs = <dynamic>[];
+      
+      if (model != null && model.isNotEmpty) {
+        whereConditions.add('model = ?');
+        whereArgs.add(model);
+      }
+      
+      if (startDate != null) {
+        whereConditions.add('timestamp >= ?');
+        whereArgs.add(startDate.toIso8601String());
+      }
+      
+      if (endDate != null) {
+        final endDateInclusive = endDate.add(const Duration(days: 1));
+        whereConditions.add('timestamp < ?');
+        whereArgs.add(endDateInclusive.toIso8601String());
+      }
+      
+      final whereClause = whereConditions.isNotEmpty
+          ? 'WHERE ${whereConditions.join(' AND ')}'
+          : '';
+      
+      final result = await db.rawQuery('''
+        SELECT SUM(tokens_used) as total_tokens
+        FROM analytics_messages
+        $whereClause
+      ''', whereArgs.isNotEmpty ? whereArgs : null);
+      
+      if (result.isEmpty || result.first['total_tokens'] == null) {
+        return 0;
+      }
+      
+      final totalTokens = result.first['total_tokens'];
+      if (totalTokens == null) {
+        return 0;
+      }
+      
+      // SQLite возвращает SUM как int или double в зависимости от типа данных
+      if (totalTokens is int) {
+        return totalTokens;
+      } else if (totalTokens is num) {
+        return totalTokens.toInt();
+      }
+      
+      return 0;
+    } catch (e) {
+      debugPrint('ChatCache.getTotalTokens error: $e');
+      return 0;
+    }
+  }
+
   /// Получает агрегированную статистику с фильтрацией на уровне SQL.
   ///
   /// Параметры:

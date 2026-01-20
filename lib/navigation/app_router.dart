@@ -59,6 +59,9 @@ class AppRouter {
   /// Callback для обработки выхода из приложения.
   static VoidCallback? onLogout;
 
+  /// Callback для обновления API клиента при изменении провайдера.
+  static Future<void> Function()? onProviderChanged;
+
   /// Экземпляр аналитики для передачи в экраны.
   static Analytics? analytics;
 

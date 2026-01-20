@@ -1,6 +1,7 @@
 import 'package:flutter/material.dart';
 
 import '../auth/auth_manager.dart';
+import '../navigation/app_router.dart';
 import '../ui/components/animated_loading_indicator.dart';
 import '../ui/styles.dart';
 import '../utils/platform.dart';
@@ -24,10 +25,10 @@ class _SettingsScreenState extends State<SettingsScreen> {
   final _apiKeyFormKey = GlobalKey<FormState>();
   bool _isLoading = true;
   bool _isUpdatingProvider = false;
-  bool _isUpdatingApiKey = false;
+  bool _isAddingApiKey = false;
   bool _showApiKeyForm = false;
-  String? _provider;
-  String _maskedApiKey = '';
+  String? _activeProvider;
+  List<Map<String, String>> _allApiKeys = [];
   String? _errorMessage;
   String? _successMessage;
   String? _apiKeyError;
@@ -53,17 +54,16 @@ class _SettingsScreenState extends State<SettingsScreen> {
     });
 
     try {
-      // Получаем провайдера
+      // Получаем активного провайдера
       final provider = await _authManager.getStoredProvider();
       
-      // Получаем API ключ и маскируем его
-      final apiKey = await _authManager.getStoredApiKey();
-      final maskedKey = _maskApiKey(apiKey);
+      // Получаем все API ключи
+      final allKeys = await _authManager.getAllStoredApiKeys();
 
       if (mounted) {
         setState(() {
-          _provider = provider;
-          _maskedApiKey = maskedKey;
+          _activeProvider = provider;
+          _allApiKeys = allKeys;
           _isLoading = false;
         });
       }
@@ -77,9 +77,25 @@ class _SettingsScreenState extends State<SettingsScreen> {
     }
   }
 
-  /// Обрабатывает смену провайдера.
+  /// Обрабатывает смену активного провайдера.
   Future<void> _handleProviderChange(String? newProvider) async {
-    if (newProvider == null || newProvider == _provider) {
+    if (newProvider == null || newProvider == _activeProvider) {
+      return;
+    }
+    
+    // Проверяем, есть ли ключ для этого провайдера
+    final hasKey = _allApiKeys.any((key) => key['provider'] == newProvider);
+    if (!hasKey) {
+      setState(() {
+        _errorMessage = 'API ключ для $newProvider не найден. Пожалуйста, добавьте ключ для этого провайдера.';
+      });
+      ScaffoldMessenger.of(context).showSnackBar(
+        SnackBar(
+          content: Text(_errorMessage!),
+          backgroundColor: AppStyles.errorColor,
+          duration: const Duration(seconds: 5),
+        ),
+      );
       return;
     }
 
@@ -95,19 +111,29 @@ class _SettingsScreenState extends State<SettingsScreen> {
       if (mounted) {
         if (result.success) {
           setState(() {
-            _provider = newProvider;
+            _activeProvider = newProvider;
             _successMessage = result.message;
             _isUpdatingProvider = false;
           });
           
+          // Обновляем список ключей
+          await _loadSettings();
+          
+          // Обновляем API клиент с новым провайдером
+          if (AppRouter.onProviderChanged != null) {
+            await AppRouter.onProviderChanged!();
+          }
+          
           // Показываем сообщение об успехе
-          ScaffoldMessenger.of(context).showSnackBar(
-            SnackBar(
-              content: Text(result.message),
-              backgroundColor: AppStyles.successColor,
-              duration: const Duration(seconds: 3),
-            ),
-          );
+          if (mounted) {
+            ScaffoldMessenger.of(context).showSnackBar(
+              SnackBar(
+                content: Text(result.message),
+                backgroundColor: AppStyles.successColor,
+                duration: const Duration(seconds: 3),
+              ),
+            );
+          }
           
           // Очищаем сообщение через 3 секунды
           Future.delayed(const Duration(seconds: 3), () {
@@ -151,7 +177,7 @@ class _SettingsScreenState extends State<SettingsScreen> {
     }
   }
 
-  /// Обрабатывает обновление API ключа.
+  /// Обрабатывает добавление/обновление API ключа.
   Future<void> _handleApiKeyUpdate() async {
     if (!_apiKeyFormKey.currentState!.validate()) {
       return;
@@ -166,14 +192,15 @@ class _SettingsScreenState extends State<SettingsScreen> {
     }
 
     setState(() {
-      _isUpdatingApiKey = true;
+      _isAddingApiKey = true;
       _apiKeyError = null;
       _errorMessage = null;
       _successMessage = null;
     });
 
     try {
-      final result = await _authManager.handleApiKeyLogin(newApiKey);
+      // Используем addApiKey для добавления нового ключа
+      final result = await _authManager.addApiKey(newApiKey);
 
       if (mounted) {
         if (result.success) {
@@ -181,24 +208,26 @@ class _SettingsScreenState extends State<SettingsScreen> {
           _apiKeyController.clear();
           setState(() {
             _showApiKeyForm = false;
-            _isUpdatingApiKey = false;
-            _successMessage = 'API ключ успешно обновлен. Баланс: ${result.balance}';
+            _isAddingApiKey = false;
+            _successMessage = result.balance.isNotEmpty
+                ? 'API ключ успешно добавлен. Баланс: ${result.balance}'
+                : 'API ключ успешно добавлен';
           });
 
-          // Перезагружаем настройки для отображения нового маскированного ключа
+          // Перезагружаем настройки для отображения нового ключа
           await _loadSettings();
 
           // Показываем сообщение об успехе
           if (mounted) {
             ScaffoldMessenger.of(context).showSnackBar(
-            SnackBar(
-              content: Text(result.balance.isNotEmpty
-                  ? 'API ключ обновлен. Баланс: ${result.balance}'
-                  : 'API ключ успешно обновлен'),
-              backgroundColor: AppStyles.successColor,
-              duration: const Duration(seconds: 5),
-            ),
-          );
+              SnackBar(
+                content: Text(result.balance.isNotEmpty
+                    ? 'API ключ добавлен. Баланс: ${result.balance}'
+                    : 'API ключ успешно добавлен'),
+                backgroundColor: AppStyles.successColor,
+                duration: const Duration(seconds: 5),
+              ),
+            );
           }
 
           // Очищаем сообщение через 5 секунд
@@ -212,7 +241,7 @@ class _SettingsScreenState extends State<SettingsScreen> {
         } else {
           setState(() {
             _apiKeyError = result.message;
-            _isUpdatingApiKey = false;
+            _isAddingApiKey = false;
           });
 
           // Показываем сообщение об ошибке
@@ -228,15 +257,79 @@ class _SettingsScreenState extends State<SettingsScreen> {
     } catch (e) {
       if (mounted) {
         setState(() {
-          _apiKeyError = 'Ошибка обновления API ключа: $e';
-          _isUpdatingApiKey = false;
+          _apiKeyError = 'Ошибка добавления API ключа: $e';
+          _isAddingApiKey = false;
         });
 
         ScaffoldMessenger.of(context).showSnackBar(
           SnackBar(
-            content: Text('Ошибка обновления API ключа: $e'),
+            content: Text('Ошибка добавления API ключа: $e'),
             backgroundColor: AppStyles.errorColor,
             duration: const Duration(seconds: 5),
+          ),
+        );
+      }
+    }
+  }
+  
+  /// Обрабатывает удаление API ключа для указанного провайдера.
+  Future<void> _handleDeleteApiKey(String provider) async {
+    final confirmed = await showDialog<bool>(
+      context: context,
+      builder: (context) => AlertDialog(
+        title: const Text('Удаление API ключа'),
+        content: Text('Вы уверены, что хотите удалить API ключ для $provider?'),
+        actions: [
+          TextButton(
+            onPressed: () => Navigator.of(context).pop(false),
+            child: const Text('Отмена'),
+          ),
+          TextButton(
+            onPressed: () => Navigator.of(context).pop(true),
+            style: TextButton.styleFrom(
+              foregroundColor: AppStyles.errorColor,
+            ),
+            child: const Text('Удалить'),
+          ),
+        ],
+      ),
+    );
+
+    if (confirmed != true) {
+      return;
+    }
+
+    try {
+      final deleted = await _authManager.deleteApiKey(provider);
+      if (deleted) {
+        await _loadSettings();
+        if (mounted) {
+          ScaffoldMessenger.of(context).showSnackBar(
+            SnackBar(
+              content: Text('API ключ для $provider удален'),
+              backgroundColor: AppStyles.successColor,
+              duration: const Duration(seconds: 3),
+            ),
+          );
+        }
+      } else {
+        if (mounted) {
+          ScaffoldMessenger.of(context).showSnackBar(
+            SnackBar(
+              content: Text('Ошибка удаления API ключа для $provider'),
+              backgroundColor: AppStyles.errorColor,
+              duration: const Duration(seconds: 3),
+            ),
+          );
+        }
+      }
+    } catch (e) {
+      if (mounted) {
+        ScaffoldMessenger.of(context).showSnackBar(
+          SnackBar(
+            content: Text('Ошибка удаления API ключа: $e'),
+            backgroundColor: AppStyles.errorColor,
+            duration: const Duration(seconds: 3),
           ),
         );
       }
@@ -261,6 +354,18 @@ class _SettingsScreenState extends State<SettingsScreen> {
     final suffix = apiKey.substring(apiKey.length - 4);
     return '$prefix...$suffix';
   }
+  
+  /// Получает название провайдера для отображения.
+  String _getProviderDisplayName(String provider) {
+    switch (provider) {
+      case 'openrouter':
+        return 'OpenRouter';
+      case 'vsegpt':
+        return 'VSEGPT';
+      default:
+        return provider;
+    }
+  }
 
   @override
   Widget build(BuildContext context) {
@@ -278,6 +383,13 @@ class _SettingsScreenState extends State<SettingsScreen> {
           ],
         ),
         elevation: 0,
+        actions: [
+          IconButton(
+            icon: const Icon(Icons.logout),
+            tooltip: 'Выйти',
+            onPressed: AppRouter.onLogout,
+          ),
+        ],
       ),
       body: _isLoading
           ? const Center(
@@ -465,7 +577,7 @@ class _SettingsScreenState extends State<SettingsScreen> {
                 tooltip: 'VSEGPT API',
               ),
             ],
-            selected: _provider != null ? {_provider!} : <String>{},
+            selected: _activeProvider != null ? {_activeProvider!} : <String>{},
             onSelectionChanged: _isUpdatingProvider
                 ? null
                 : (Set<String> newSelection) {
@@ -594,53 +706,105 @@ class _SettingsScreenState extends State<SettingsScreen> {
         crossAxisAlignment: CrossAxisAlignment.start,
         children: [
           const SizedBox(height: AppStyles.paddingSmall),
-          Container(
-            padding: const EdgeInsets.all(AppStyles.paddingSmall),
-            decoration: BoxDecoration(
-              color: AppStyles.surfaceColor,
-              borderRadius: BorderRadius.circular(AppStyles.borderRadius),
-              border: Border.all(color: AppStyles.borderColor),
-            ),
-            child: Row(
-              children: [
-                Expanded(
-                  child: Text(
-                    _maskedApiKey,
-                    style: const TextStyle(
-                      fontSize: 14,
-                      fontFamily: 'monospace',
-                      color: AppStyles.textSecondary,
-                    ),
-                    overflow: TextOverflow.ellipsis,
-                  ),
-                ),
-                if (_maskedApiKey != 'Не установлен') ...[
-                  const SizedBox(width: AppStyles.paddingSmall),
-                  const Icon(
-                    Icons.visibility_off,
-                    size: 18,
-                    color: AppStyles.textSecondary,
-                  ),
-                ],
-              ],
-            ),
-          ),
-          if (_maskedApiKey == 'Не установлен')
-            const Padding(
-              padding: EdgeInsets.only(top: AppStyles.paddingSmall),
-              child: Text(
-                'API ключ не найден. Пожалуйста, выполните вход в приложение.',
-                style: TextStyle(
-                  fontSize: 12,
-                  color: AppStyles.textSecondary,
-                  fontStyle: FontStyle.italic,
-                ),
+          // Список всех API ключей
+          if (_allApiKeys.isNotEmpty) ...[
+            const SizedBox(height: AppStyles.paddingSmall),
+            const Text(
+              'Сохраненные ключи:',
+              style: TextStyle(
+                fontSize: 14,
+                fontWeight: FontWeight.w500,
+                color: AppStyles.textSecondary,
               ),
             ),
+            const SizedBox(height: AppStyles.paddingSmall),
+            ..._allApiKeys.map((key) {
+              final provider = key['provider'] ?? '';
+              final maskedKey = _maskApiKey(key['api_key'] ?? '');
+              final isActive = provider == _activeProvider;
+              
+              return Container(
+                margin: const EdgeInsets.only(bottom: AppStyles.paddingSmall),
+                padding: const EdgeInsets.all(AppStyles.paddingSmall),
+                decoration: BoxDecoration(
+                  color: isActive 
+                      ? AppStyles.accentColor.withValues(alpha: 0.1)
+                      : AppStyles.surfaceColor,
+                  borderRadius: BorderRadius.circular(AppStyles.borderRadius),
+                  border: Border.all(
+                    color: isActive 
+                        ? AppStyles.accentColor
+                        : AppStyles.borderColor,
+                    width: isActive ? 2 : 1,
+                  ),
+                ),
+                child: Row(
+                  children: [
+                    Expanded(
+                      child: Column(
+                        crossAxisAlignment: CrossAxisAlignment.start,
+                        children: [
+                          Row(
+                            children: [
+                              Text(
+                                _getProviderDisplayName(provider),
+                                style: TextStyle(
+                                  fontSize: 14,
+                                  fontWeight: FontWeight.bold,
+                                  color: isActive 
+                                      ? AppStyles.accentColor
+                                      : AppStyles.textPrimary,
+                                ),
+                              ),
+                              if (isActive) ...[
+                                const SizedBox(width: 8),
+                                const Icon(
+                                  Icons.check_circle,
+                                  size: 16,
+                                  color: AppStyles.accentColor,
+                                ),
+                                const SizedBox(width: 4),
+                                const Text(
+                                  '(активен)',
+                                  style: TextStyle(
+                                    fontSize: 12,
+                                    color: AppStyles.accentColor,
+                                    fontStyle: FontStyle.italic,
+                                  ),
+                                ),
+                              ],
+                            ],
+                          ),
+                          const SizedBox(height: 4),
+                          Text(
+                            maskedKey,
+                            style: const TextStyle(
+                              fontSize: 12,
+                              fontFamily: 'monospace',
+                              color: AppStyles.textSecondary,
+                            ),
+                            overflow: TextOverflow.ellipsis,
+                          ),
+                        ],
+                      ),
+                    ),
+                    IconButton(
+                      icon: const Icon(Icons.delete_outline, size: 20),
+                      color: AppStyles.errorColor,
+                      tooltip: 'Удалить ключ',
+                      onPressed: () => _handleDeleteApiKey(provider),
+                    ),
+                  ],
+                ),
+              );
+            }),
+          ],
+          
           const SizedBox(height: AppStyles.padding),
-          // Кнопка для показа/скрытия формы обновления
+          
+          // Кнопка для показа/скрытия формы добавления
           ElevatedButton.icon(
-            onPressed: _isUpdatingApiKey
+            onPressed: _isAddingApiKey
                 ? null
                 : () {
                     setState(() {
@@ -651,8 +815,8 @@ class _SettingsScreenState extends State<SettingsScreen> {
                       }
                     });
                   },
-            icon: Icon(_showApiKeyForm ? Icons.close : Icons.edit),
-            label: Text(_showApiKeyForm ? 'Отменить' : 'Обновить API ключ'),
+            icon: Icon(_showApiKeyForm ? Icons.close : Icons.add),
+            label: Text(_showApiKeyForm ? 'Отменить' : 'Добавить API ключ'),
             style: ElevatedButton.styleFrom(
               backgroundColor: AppStyles.accentColor,
               foregroundColor: Colors.white,
@@ -678,7 +842,7 @@ class _SettingsScreenState extends State<SettingsScreen> {
                       ),
                     ),
                     obscureText: true,
-                    enabled: !_isUpdatingApiKey,
+                    enabled: !_isAddingApiKey,
                     validator: (value) {
                       if (value == null || value.trim().isEmpty) {
                         return 'Введите API ключ';
@@ -697,7 +861,7 @@ class _SettingsScreenState extends State<SettingsScreen> {
                     },
                   ),
                   const SizedBox(height: AppStyles.paddingSmall),
-                  if (_isUpdatingApiKey)
+                  if (_isAddingApiKey)
                     const Center(
                       child: Padding(
                         padding: EdgeInsets.all(AppStyles.paddingSmall),
@@ -711,7 +875,7 @@ class _SettingsScreenState extends State<SettingsScreen> {
                             ),
                             SizedBox(width: AppStyles.paddingSmall),
                             Text(
-                              'Обновление API ключа...',
+                              'Добавление API ключа...',
                               style: TextStyle(
                                 color: AppStyles.textSecondary,
                                 fontSize: 14,
@@ -724,8 +888,8 @@ class _SettingsScreenState extends State<SettingsScreen> {
                   else
                     ElevatedButton.icon(
                       onPressed: _handleApiKeyUpdate,
-                      icon: const Icon(Icons.save),
-                      label: const Text('Сохранить'),
+                      icon: const Icon(Icons.add),
+                      label: const Text('Добавить'),
                       style: ElevatedButton.styleFrom(
                         backgroundColor: AppStyles.successColor,
                         foregroundColor: Colors.white,

@@ -1,6 +1,7 @@
 import 'dart:async';
 import 'dart:convert';
 
+import 'package:flutter/foundation.dart' show debugPrint;
 import 'package:http/http.dart' as http;
 
 import '../config/env.dart';
@@ -30,6 +31,13 @@ class OpenRouterClient {
   /// Кэш баланса.
   String? _cachedBalance;
   DateTime? _balanceUpdatedAt;
+
+  /// Очищает кэш моделей.
+  ///
+  /// Вызывается при переключении провайдера для принудительной перезагрузки моделей.
+  void clearModelCache() {
+    _modelCache = null;
+  }
 
   OpenRouterClient._({
     required this.baseUrl,
@@ -109,10 +117,17 @@ class OpenRouterClient {
   }
 
   /// Заголовки по умолчанию для запросов к OpenRouter.
-  Map<String, String> get _defaultHeaders => <String, String>{
-        'Authorization': 'Bearer $apiKey',
-        'Content-Type': 'application/json',
-      };
+  Map<String, String> get _defaultHeaders {
+    final headers = <String, String>{
+      'Authorization': 'Bearer $apiKey',
+      'Content-Type': 'application/json',
+    };
+    
+    // Для VSEGPT используем минимальный набор заголовков
+    // User-Agent может вызывать проблемы с некоторыми серверами
+    
+    return headers;
+  }
 
   /// Получает список доступных моделей из API.
   ///
@@ -237,12 +252,32 @@ class OpenRouterClient {
     if (provider == 'vsegpt') {
       // Для VSEGPT используем /v1/chat/completions
       final baseUri = Uri.parse(baseUrl);
+      debugPrint('[OpenRouterClient] VSEGPT baseUrl: $baseUrl');
+      debugPrint('[OpenRouterClient] Parsed baseUri path: ${baseUri.path}');
+      
       // Если baseUrl уже содержит полный путь /v1/chat/completions, используем его как есть
       if (baseUri.path == '/v1/chat/completions' || baseUri.path.endsWith('/v1/chat/completions')) {
         uri = baseUri;
+      } else if (baseUri.path == '/v1/chat' || baseUri.path.endsWith('/v1/chat')) {
+        // Если baseUrl заканчивается на /v1/chat, добавляем /completions
+        // Например: https://api.vsegpt.ru/v1/chat -> https://api.vsegpt.ru/v1/chat/completions
+        uri = Uri(
+          scheme: baseUri.scheme,
+          host: baseUri.host,
+          port: baseUri.hasPort ? baseUri.port : null,
+          path: '/v1/chat/completions',
+        );
+      } else if (baseUri.path == '/v1' || baseUri.path.endsWith('/v1')) {
+        // Если baseUrl заканчивается на /v1, добавляем /chat/completions
+        // Например: https://api.vsegpt.ru/v1 -> https://api.vsegpt.ru/v1/chat/completions
+        uri = Uri(
+          scheme: baseUri.scheme,
+          host: baseUri.host,
+          port: baseUri.hasPort ? baseUri.port : null,
+          path: '/v1/chat/completions',
+        );
       } else if (baseUri.path.contains('/v1/')) {
         // Если содержит /v1/, заменяем весь путь на /v1/chat/completions
-        // Например: https://api.vsegpt.ru/v1/chat -> https://api.vsegpt.ru/v1/chat/completions
         uri = Uri(
           scheme: baseUri.scheme,
           host: baseUri.host,
@@ -253,9 +288,11 @@ class OpenRouterClient {
         // Иначе добавляем /v1/chat/completions
         uri = baseUri.resolve('/v1/chat/completions');
       }
+      debugPrint('[OpenRouterClient] Final VSEGPT URI: $uri');
     } else {
       // Для OpenRouter используем стандартный /chat/completions
       uri = Uri.parse('$baseUrl/chat/completions');
+      debugPrint('[OpenRouterClient] OpenRouter URI: $uri');
     }
 
     final body = <String, dynamic>{
@@ -270,12 +307,22 @@ class OpenRouterClient {
       'temperature': EnvConfig.temperature,
     };
 
+    // Логируем URL и параметры запроса для диагностики
+    debugPrint('[OpenRouterClient] Sending message to: $uri');
+    debugPrint('[OpenRouterClient] Provider: $provider');
+    debugPrint('[OpenRouterClient] Model: $model');
+    debugPrint('[OpenRouterClient] Request body: ${jsonEncode(body)}');
+
     http.Response response;
     try {
       response = await _postWithRetry(uri, body: body);
+      debugPrint('[OpenRouterClient] Response status: ${response.statusCode}');
+      debugPrint('[OpenRouterClient] Response body: ${response.body}');
     } on http.ClientException catch (e) {
+      debugPrint('[OpenRouterClient] Network error: $e');
       throw OpenRouterException('Network error while sending message: $e');
     } catch (e) {
+      debugPrint('[OpenRouterClient] Unexpected error: $e');
       throw OpenRouterException('Unexpected error while sending message: $e');
     }
 
@@ -315,28 +362,69 @@ class OpenRouterClient {
     try {
       final dynamic decoded = jsonDecode(response.body);
       if (decoded is! Map<String, dynamic>) {
+        debugPrint('[OpenRouterClient] Response is not a JSON object: ${decoded.runtimeType}');
         throw const FormatException('Response is not a JSON object');
       }
 
-      final choices = decoded['choices'];
+      // Для VSEGPT может быть другой формат ответа
+      dynamic choices;
+      if (provider == 'vsegpt') {
+        // Пробуем разные варианты структуры ответа VSEGPT
+        choices = decoded['choices'] ?? decoded['data'] ?? decoded['result'];
+        // Если choices это не список, но это Map, пробуем извлечь список из него
+        if (choices is Map<String, dynamic>) {
+          choices = choices['choices'] ?? choices['items'] ?? choices['data'];
+        }
+      } else {
+        choices = decoded['choices'];
+      }
+
       if (choices is! List || choices.isEmpty) {
-        throw const FormatException('Response does not contain choices');
+        debugPrint('[OpenRouterClient] Response structure: ${decoded.keys}');
+        debugPrint('[OpenRouterClient] Choices type: ${choices.runtimeType}, value: $choices');
+        throw FormatException('Response does not contain choices. Response keys: ${decoded.keys}');
       }
 
       final first = choices.first;
       if (first is! Map<String, dynamic>) {
+        debugPrint('[OpenRouterClient] First choice type: ${first.runtimeType}');
         throw const FormatException('First choice is not an object');
       }
 
-      // OpenRouter совместим с форматом OpenAI: choices[].message.content
-      final messageObj = first['message'] as Map<String, dynamic>?;
-      final content = messageObj?['content'] as String? ?? '';
+      // Извлекаем контент ответа - пробуем разные форматы
+      String? content;
+      if (first.containsKey('message')) {
+        // Стандартный формат OpenAI: choices[].message.content
+        final messageObj = first['message'] as Map<String, dynamic>?;
+        content = messageObj?['content'] as String?;
+      } else if (first.containsKey('content')) {
+        // Прямой формат: choices[].content
+        content = first['content'] as String?;
+      } else if (first.containsKey('text')) {
+        // Альтернативный формат: choices[].text
+        content = first['text'] as String?;
+      } else if (first.containsKey('delta')) {
+        // Streaming формат: choices[].delta.content
+        final delta = first['delta'] as Map<String, dynamic>?;
+        content = delta?['content'] as String?;
+      }
+
+      if (content == null || content.isEmpty) {
+        debugPrint('[OpenRouterClient] First choice keys: ${first.keys}');
+        debugPrint('[OpenRouterClient] First choice: $first');
+        throw FormatException('Could not extract content from response. Choice keys: ${first.keys}');
+      }
 
       // Извлекаем информацию о токенах, если она присутствует.
       final usage = decoded['usage'] as Map<String, dynamic>?;
-      final totalTokens = usage?['total_tokens'] as int?;
-      final promptTokens = usage?['prompt_tokens'] as int?;
-      final completionTokens = usage?['completion_tokens'] as int?;
+      final totalTokens = usage?['total_tokens'] as int? ?? 
+                         usage?['totalTokens'] as int?;
+      final promptTokens = usage?['prompt_tokens'] as int? ?? 
+                          usage?['promptTokens'] as int?;
+      final completionTokens = usage?['completion_tokens'] as int? ?? 
+                               usage?['completionTokens'] as int?;
+
+      debugPrint('[OpenRouterClient] Successfully parsed response. Content length: ${content.length}');
 
       return ChatCompletionResult(
         text: content,
@@ -345,8 +433,12 @@ class OpenRouterClient {
         completionTokens: completionTokens,
       );
     } on FormatException catch (e) {
+      debugPrint('[OpenRouterClient] FormatException: $e');
+      debugPrint('[OpenRouterClient] Response body: ${response.body}');
       throw OpenRouterException('Invalid chat completion response format: $e');
     } catch (e) {
+      debugPrint('[OpenRouterClient] Parse error: $e');
+      debugPrint('[OpenRouterClient] Response body: ${response.body}');
       throw OpenRouterException('Failed to parse chat completion response: $e');
     }
   }
@@ -504,7 +596,11 @@ class OpenRouterClient {
     while (true) {
       attempt += 1;
       try {
+        debugPrint('[OpenRouterClient] POST attempt $attempt/$maxRetries to $uri');
+        debugPrint('[OpenRouterClient] Headers: $_defaultHeaders');
+        
         // Проверяем, что клиент не закрыт перед использованием
+        // Для VSEGPT не используем encoding параметр, так как он может вызывать проблемы
         final response = await _client.post(
           uri,
           headers: _defaultHeaders,
@@ -512,30 +608,47 @@ class OpenRouterClient {
         ).timeout(
           const Duration(seconds: 60),
           onTimeout: () {
+            debugPrint('[OpenRouterClient] Request timeout after 60 seconds');
             throw http.ClientException('Request timeout');
           },
         );
 
+        debugPrint('[OpenRouterClient] Response received: ${response.statusCode}');
+
         // Повторяем только при 5xx ошибках, остальные возвращаем сразу.
         if (response.statusCode >= 500 && response.statusCode < 600) {
           if (attempt >= maxRetries) {
+            debugPrint('[OpenRouterClient] Max retries reached for 5xx error');
             return response;
           }
-        } else {
-          return response;
+
+          debugPrint('[OpenRouterClient] Retrying after delay...');
+          await Future<void>.delayed(Duration(milliseconds: 300 * attempt));
+          continue;
         }
+
+        return response;
       } on http.ClientException catch (e) {
-        if (attempt >= maxRetries) rethrow;
-        // Если клиент закрыт, не пытаемся повторять
-        if (e.toString().contains('already closed')) {
+        debugPrint('[OpenRouterClient] ClientException on attempt $attempt: $e');
+        if (attempt >= maxRetries) {
+          debugPrint('[OpenRouterClient] Max retries reached, rethrowing exception');
           rethrow;
         }
+        // Если клиент закрыт, не пытаемся повторять
+        if (e.toString().contains('already closed') || 
+            e.toString().contains('Connection closed')) {
+          debugPrint('[OpenRouterClient] Connection closed, not retrying');
+          rethrow;
+        }
+        debugPrint('[OpenRouterClient] Retrying after delay...');
+        await Future<void>.delayed(Duration(milliseconds: 300 * attempt));
+      } catch (e) {
+        debugPrint('[OpenRouterClient] Unexpected error on attempt $attempt: $e');
+        if (attempt >= maxRetries) {
+          rethrow;
+        }
+        await Future<void>.delayed(Duration(milliseconds: 300 * attempt));
       }
-
-      // Небольшая задержка перед повторной попыткой.
-      await Future<void>.delayed(
-        Duration(milliseconds: 300 * attempt),
-      );
     }
   }
 

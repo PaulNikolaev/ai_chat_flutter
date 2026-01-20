@@ -67,4 +67,4 @@ logs/
 exports/
 chat_cache.db
 
-DEVELOPMENT_PLAN.md
+CODE_REVIEW_PLAN.md

@@ -6,6 +6,7 @@ import 'config/env.dart';
 import 'navigation/app_router.dart';
 import 'ui/styles.dart';
 import 'ui/theme.dart';
+import 'utils/cache.dart';
 import 'utils/database/database.dart';
 import 'utils/logger.dart';
 
@@ -29,6 +30,9 @@ class _MyAppState extends State<MyApp> {
   OpenRouterClient? _apiClient;
   bool _isAuthenticated = false;
   AppLogger? _logger;
+  
+  /// Глобальный ключ навигатора для программной навигации.
+  final GlobalKey<NavigatorState> _navigatorKey = GlobalKey<NavigatorState>();
 
   @override
   void initState() {
@@ -119,15 +123,21 @@ class _MyAppState extends State<MyApp> {
       
       // Создаем клиент в зависимости от провайдера
       if (provider == 'vsegpt') {
+        // Для VSEGPT базовый URL должен быть https://api.vsegpt.ru/v1
+        // (без /chat в конце, так как endpoint добавляется автоматически)
         final vsegptBaseUrl = EnvConfig.vsegptBaseUrl.trim().isNotEmpty
             ? EnvConfig.vsegptBaseUrl.trim()
-            : 'https://api.vsegpt.ru/v1/chat';
+            : 'https://api.vsegpt.ru/v1';
+        // Если пользователь указал URL с /chat, убираем его
+        final cleanBaseUrl = vsegptBaseUrl.endsWith('/chat')
+            ? vsegptBaseUrl.substring(0, vsegptBaseUrl.length - 5) // убираем '/chat'
+            : vsegptBaseUrl;
         final client = OpenRouterClient(
           apiKey: apiKey,
-          baseUrl: vsegptBaseUrl,
+          baseUrl: cleanBaseUrl,
           provider: 'vsegpt',
         );
-        _logger?.info('VSEGPT API client created with baseUrl: $vsegptBaseUrl');
+        _logger?.info('VSEGPT API client created with baseUrl: $cleanBaseUrl');
         return client;
       } else {
         final client = OpenRouterClient(
@@ -153,6 +163,50 @@ class _MyAppState extends State<MyApp> {
   void _updateApiClientInRouter(OpenRouterClient? client) {
     AppRouter.apiClient = client;
     _logger?.debug('API client updated in router');
+  }
+
+  /// Обновляет API клиент при изменении провайдера.
+  ///
+  /// Вызывается из SettingsScreen после успешного переключения провайдера.
+  /// Пересоздает API клиент с новым провайдером и обновляет его во всех экранах.
+  /// Очищает историю чата, так как модели разных провайдеров несовместимы.
+  Future<void> _refreshApiClient() async {
+    if (_authManager == null) return;
+    
+    try {
+      _logger?.info('Refreshing API client after provider change');
+      
+      // Очищаем кэш моделей в старом клиенте перед освобождением
+      _apiClient?.clearModelCache();
+      
+      // Очищаем историю чата при переключении провайдера,
+      // так как модели разных провайдеров несовместимы
+      _logger?.info('Clearing chat history due to provider change');
+      await ChatCache.instance.clearHistory();
+      
+      // Освобождаем старый клиент
+      _apiClient?.dispose();
+      
+      // Создаем новый клиент с обновленным провайдером
+      final newClient = await _createApiClient();
+      
+      if (mounted) {
+        setState(() {
+          _apiClient = newClient;
+        });
+        
+        // Обновляем клиент в роутере и всех экранах
+        _updateApiClientInRouter(_apiClient);
+        
+        _logger?.info('API client refreshed successfully with provider: ${newClient?.provider}');
+      }
+    } catch (e, stackTrace) {
+      _logger?.error(
+        'Failed to refresh API client',
+        error: e,
+        stackTrace: stackTrace,
+      );
+    }
   }
 
   /// Проверяет статус аутентификации и инициализирует API клиент при необходимости.
@@ -217,6 +271,9 @@ class _MyAppState extends State<MyApp> {
           // Обновляем клиент в роутере после обновления состояния
           _updateApiClientInRouter(_apiClient);
           _logger?.info('User logged in successfully');
+          
+          // Переходим на главный экран после успешного входа
+          _navigatorKey.currentState?.pushReplacementNamed(AppRoutes.home);
         }
       } else {
         _logger?.warning('API key is empty or invalid after login');
@@ -266,6 +323,12 @@ class _MyAppState extends State<MyApp> {
         });
         // Обновляем роутер после очистки состояния
         _updateApiClientInRouter(null);
+        
+        // Переходим на экран входа после выхода
+        _navigatorKey.currentState?.pushNamedAndRemoveUntil(
+          AppRoutes.login,
+          (route) => false,
+        );
       }
       
       // Освобождаем ресурсы API клиента после обновления состояния
@@ -287,6 +350,12 @@ class _MyAppState extends State<MyApp> {
           _isAuthenticated = false;
         });
         _updateApiClientInRouter(null);
+        
+        // Переходим на экран входа даже при ошибке
+        _navigatorKey.currentState?.pushNamedAndRemoveUntil(
+          AppRoutes.login,
+          (route) => false,
+        );
       }
     }
   }
@@ -298,11 +367,13 @@ class _MyAppState extends State<MyApp> {
     _updateApiClientInRouter(_apiClient);
     AppRouter.onLoginSuccess = _handleLoginSuccess;
     AppRouter.onLogout = _handleLogout;
+    AppRouter.onProviderChanged = _refreshApiClient;
 
     return MaterialApp(
       title: 'AI Chat',
       debugShowCheckedModeBanner: false,
       theme: AppTheme.darkTheme,
+      navigatorKey: _navigatorKey,
       // Используем initialRoute для правильной навигации в многостраничном режиме
       initialRoute: _isAuthenticated ? AppRoutes.home : AppRoutes.login,
       routes: AppRouter.routes,

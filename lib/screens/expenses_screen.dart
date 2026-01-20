@@ -38,18 +38,22 @@ class ExpensesScreen extends StatefulWidget {
   /// Экземпляр калькулятора расходов.
   final ExpensesCalculator? expensesCalculator;
 
+  /// Callback при нажатии кнопки выхода.
+  final VoidCallback? onLogout;
+
   const ExpensesScreen({
     super.key,
     this.apiClient,
     this.analytics,
     this.expensesCalculator,
+    this.onLogout,
   });
 
   @override
-  State<ExpensesScreen> createState() => _ExpensesScreenState();
+  State<ExpensesScreen> createState() => ExpensesScreenState();
 }
 
-class _ExpensesScreenState extends State<ExpensesScreen> {
+class ExpensesScreenState extends State<ExpensesScreen> {
   /// Текущий тип периода отображения.
   ExpensesPeriodType _periodType = ExpensesPeriodType.day;
 
@@ -95,6 +99,12 @@ class _ExpensesScreenState extends State<ExpensesScreen> {
 
   /// Экземпляр калькулятора расходов.
   late ExpensesCalculator _calculator;
+  
+  // Флаг для отслеживания первого вызова didChangeDependencies
+  bool _isFirstBuild = true;
+  
+  // Время последнего обновления расходов
+  DateTime? _lastExpensesUpdate;
 
   @override
   void initState() {
@@ -112,12 +122,41 @@ class _ExpensesScreenState extends State<ExpensesScreen> {
     _loadData();
   }
 
+  @override
+  void didChangeDependencies() {
+    super.didChangeDependencies();
+    // Обновляем данные при каждом входе на страницу (кроме первого раза)
+    if (!_isFirstBuild) {
+      // Обновляем расходы только если прошло больше 1 секунды с последнего обновления
+      final now = DateTime.now();
+      if (_lastExpensesUpdate == null || 
+          now.difference(_lastExpensesUpdate!).inSeconds > 1) {
+        _lastExpensesUpdate = now;
+        // Принудительно обновляем расходы при входе на страницу
+        _loadExpenses(forceRefresh: true);
+        _loadModels();
+      }
+    } else {
+      _isFirstBuild = false;
+      _lastExpensesUpdate = DateTime.now();
+    }
+  }
+
   /// Загружает все данные для страницы.
   Future<void> _loadData() async {
     await Future.wait([
       _loadModels(),
       _loadExpenses(),
     ]);
+  }
+  
+  /// Публичный метод для принудительного обновления данных при входе на страницу.
+  /// Вызывается из HomeScreen при переключении вкладок.
+  void refreshData() {
+    // Обновляем данные принудительно
+    _loadExpenses(forceRefresh: true);
+    _loadModels();
+    _lastExpensesUpdate = DateTime.now();
   }
 
   /// Загружает список моделей для фильтрации.
@@ -140,7 +179,7 @@ class _ExpensesScreenState extends State<ExpensesScreen> {
   }
 
   /// Загружает данные расходов для выбранного периода с кэшированием.
-  Future<void> _loadExpenses() async {
+  Future<void> _loadExpenses({bool forceRefresh = false}) async {
     if (_startDate == null || _endDate == null) return;
 
     setState(() {
@@ -148,13 +187,13 @@ class _ExpensesScreenState extends State<ExpensesScreen> {
     });
 
     try {
-      // Проверяем кэш для оптимизации
+      // Проверяем кэш для оптимизации (если не принудительное обновление)
       final cacheKey = _getCacheKey(_startDate!, _endDate!, _selectedModelFilter, _periodType);
       
       List<ExpensesPeriod> expenses;
       double total;
 
-      if (_expensesCache.containsKey(cacheKey) && _totalExpensesCache.containsKey(cacheKey)) {
+      if (!forceRefresh && _expensesCache.containsKey(cacheKey) && _totalExpensesCache.containsKey(cacheKey)) {
         // Используем кэшированные данные
         expenses = _expensesCache[cacheKey]!;
         total = _totalExpensesCache[cacheKey]!;
@@ -371,6 +410,11 @@ class _ExpensesScreenState extends State<ExpensesScreen> {
             tooltip: 'Обновить',
             onPressed: _loadData,
           ),
+          IconButton(
+            icon: const Icon(Icons.logout),
+            tooltip: 'Выйти',
+            onPressed: widget.onLogout,
+          ),
         ],
       ),
       body: _isLoading
@@ -586,16 +630,17 @@ class _ExpensesScreenState extends State<ExpensesScreen> {
                         decoration: InputDecoration(
                           labelText: 'Дата начала',
                           prefixIcon: const Icon(Icons.calendar_today),
-                      border: OutlineInputBorder(
-                        borderRadius: BorderRadius.circular(AppStyles.borderRadius),
+                          border: OutlineInputBorder(
+                            borderRadius: BorderRadius.circular(AppStyles.borderRadius),
+                          ),
+                        ),
+                        child: Text(
+                          _startDate != null
+                              ? DateFormat('yyyy-MM-dd').format(_startDate!)
+                              : 'Не выбрана',
+                          overflow: TextOverflow.ellipsis,
+                        ),
                       ),
-                    ),
-                    child: Text(
-                      _startDate != null
-                          ? DateFormat('yyyy-MM-dd').format(_startDate!)
-                          : 'Не выбрана',
-                    ),
-                  ),
                 ),
               ),
               const SizedBox(width: AppStyles.paddingSmall),
@@ -627,6 +672,7 @@ class _ExpensesScreenState extends State<ExpensesScreen> {
                       _endDate != null
                           ? DateFormat('yyyy-MM-dd').format(_endDate!)
                           : 'Не выбрана',
+                      overflow: TextOverflow.ellipsis,
                     ),
                   ),
                 ),
@@ -643,15 +689,16 @@ class _ExpensesScreenState extends State<ExpensesScreen> {
                     borderRadius: BorderRadius.circular(AppStyles.borderRadius),
                   ),
                 ),
+                isExpanded: true,
                 initialValue: _selectedModelFilter,
                 items: [
                   const DropdownMenuItem<String>(
                     value: null,
-                    child: Text('Все модели'),
+                    child: Text('Все модели', overflow: TextOverflow.ellipsis),
                   ),
                   ..._availableModels.map((model) => DropdownMenuItem<String>(
                         value: model.id,
-                        child: Text(model.id),
+                        child: Text(model.id, overflow: TextOverflow.ellipsis),
                       )),
                 ],
                 onChanged: (value) {
@@ -723,7 +770,12 @@ class _ExpensesScreenState extends State<ExpensesScreen> {
   /// Строит секцию графика расходов.
   Widget _buildChartSection() {
     return Container(
-      padding: const EdgeInsets.all(AppStyles.padding),
+      padding: const EdgeInsets.fromLTRB(
+        AppStyles.padding,
+        AppStyles.padding,
+        AppStyles.padding,
+        AppStyles.paddingLarge,
+      ),
       decoration: BoxDecoration(
         color: AppStyles.cardColor,
         borderRadius: BorderRadius.circular(AppStyles.borderRadius),
@@ -927,7 +979,7 @@ class _ExpensesScreenState extends State<ExpensesScreen> {
           ),
           bottomTitles: AxisTitles(
             axisNameWidget: const Padding(
-              padding: EdgeInsets.only(top: 8),
+              padding: EdgeInsets.only(top: 12, bottom: 4),
               child: Text(
                 'Период',
                 style: TextStyle(
@@ -967,14 +1019,14 @@ class _ExpensesScreenState extends State<ExpensesScreen> {
                   ),
                 );
               },
-              reservedSize: 50,
+              reservedSize: 60,
             ),
           ),
           leftTitles: AxisTitles(
             axisNameWidget: const Padding(
               padding: EdgeInsets.only(right: 8),
               child: RotatedBox(
-                quarterTurns: 3,
+                quarterTurns: 1,
                 child: Text(
                   'Расходы (\$)',
                   style: TextStyle(
@@ -1374,6 +1426,7 @@ class _ExpensesScreenState extends State<ExpensesScreen> {
                       _compareStartDate != null
                           ? DateFormat('yyyy-MM-dd').format(_compareStartDate!)
                           : 'Не выбрана',
+                      overflow: TextOverflow.ellipsis,
                     ),
                   ),
                 ),
@@ -1407,6 +1460,7 @@ class _ExpensesScreenState extends State<ExpensesScreen> {
                       _compareEndDate != null
                           ? DateFormat('yyyy-MM-dd').format(_compareEndDate!)
                           : 'Не выбрана',
+                      overflow: TextOverflow.ellipsis,
                     ),
                   ),
                 ),

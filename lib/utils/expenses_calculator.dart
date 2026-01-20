@@ -130,12 +130,9 @@ class ExpensesCalculator {
     }
 
     // Если есть только общее количество токенов, используем среднюю цену
-    if (promptPrice > 0.0 || completionPrice > 0.0) {
-      final avgPrice = (promptPrice + completionPrice) / 2.0;
-      return record.tokensUsed * avgPrice;
-    }
-
-    return null;
+    // Для бесплатных моделей (обе цены = 0.0) возвращаем 0.0, а не null
+    final avgPrice = (promptPrice + completionPrice) / 2.0;
+    return record.tokensUsed * avgPrice;
   }
 
   /// Получает расходы по дням за указанный период.

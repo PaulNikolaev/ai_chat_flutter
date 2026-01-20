@@ -6,6 +6,9 @@ import '../utils/analytics.dart';
 import '../utils/monitor.dart';
 import '../utils/expenses_calculator.dart';
 import 'chat_screen.dart';
+import 'expenses_screen.dart';
+import 'settings_screen.dart';
+import 'statistics_screen.dart';
 import '../api/openrouter_client.dart';
 
 /// Главная страница приложения с навигацией между разделами.
@@ -19,7 +22,7 @@ import '../api/openrouter_client.dart';
 /// **Особенности:**
 /// - Использует адаптивный UI (BottomNavigationBar для мобильных, NavigationRail для десктопа)
 /// - Кэширует страницы в `_pages` для сохранения состояния при переключении
-/// - Использует `AnimatedSwitcher` для плавных переходов между страницами
+/// - Использует `IndexedStack` для переключения между страницами с сохранением состояния
 /// - Передает сервисы (Analytics, PerformanceMonitor, ExpensesCalculator) в дочерние экраны
 ///
 /// **Управление состоянием:**
@@ -47,7 +50,11 @@ class _HomeScreenState extends State<HomeScreen> {
   int _selectedIndex = 0;
 
   /// Кэш виджетов страниц для сохранения состояния при переключении.
-  late final List<Widget> _pages;
+  List<Widget>? _pages;
+  
+  /// Ключи для доступа к State виджетов страниц для вызова методов обновления.
+  final GlobalKey<StatisticsScreenState> _statisticsKey = GlobalKey<StatisticsScreenState>();
+  final GlobalKey<ExpensesScreenState> _expensesKey = GlobalKey<ExpensesScreenState>();
 
   /// Список страниц приложения с их маршрутами.
   /// 
@@ -99,7 +106,12 @@ class _HomeScreenState extends State<HomeScreen> {
     AppRouter.expensesCalculator = _expensesCalculator;
     
     // Инициализируем кэш страниц для сохранения состояния
-    _pages = _buildPages();
+    _pages ??= _buildPages();
+    
+    // Обновляем данные для начальной страницы (если это статистика или расходы)
+    WidgetsBinding.instance.addPostFrameCallback((_) {
+      _refreshPageData(_selectedIndex);
+    });
   }
 
   @override
@@ -129,6 +141,21 @@ class _HomeScreenState extends State<HomeScreen> {
     setState(() {
       _selectedIndex = index;
     });
+    
+    // Обновляем данные при переключении на страницы статистики или расходов
+    _refreshPageData(index);
+  }
+  
+  /// Обновляет данные страницы при переключении вкладок.
+  void _refreshPageData(int index) {
+    // Индексы страниц: 0 - Чат, 1 - Статистика, 2 - Расходы, 3 - Настройки
+    if (index == 1) {
+      // Статистика
+      _statisticsKey.currentState?.refreshData();
+    } else if (index == 2) {
+      // Расходы
+      _expensesKey.currentState?.refreshData();
+    }
   }
 
   /// Создает список виджетов страниц для кэширования состояния.
@@ -141,32 +168,44 @@ class _HomeScreenState extends State<HomeScreen> {
       // Создаем уникальный ключ для каждой страницы для сохранения состояния
       final pageKey = ValueKey('${routeName}_${widget.apiClient?.hashCode ?? 'null'}');
       
-      // Для главной страницы возвращаем ChatScreen напрямую
-      if (routeName == AppRoutes.home) {
-        return ChatScreen(
-          key: pageKey,
-          apiClient: widget.apiClient,
-          onLogout: widget.onLogout,
-        );
+      // Создаем виджеты страниц напрямую для правильной работы IndexedStack
+      switch (routeName) {
+        case AppRoutes.home:
+          return ChatScreen(
+            key: pageKey,
+            apiClient: widget.apiClient,
+            onLogout: widget.onLogout,
+          );
+        
+        case AppRoutes.statistics:
+          return StatisticsScreen(
+            key: _statisticsKey,
+            apiClient: widget.apiClient,
+            analytics: AppRouter.analytics ?? _analytics,
+            performanceMonitor: AppRouter.performanceMonitor ?? _performanceMonitor,
+            onLogout: widget.onLogout,
+          );
+        
+        case AppRoutes.expenses:
+          return ExpensesScreen(
+            key: _expensesKey,
+            apiClient: widget.apiClient,
+            analytics: AppRouter.analytics ?? _analytics,
+            expensesCalculator: AppRouter.expensesCalculator ?? _expensesCalculator,
+            onLogout: widget.onLogout,
+          );
+        
+        case AppRoutes.settings:
+          return SettingsScreen(key: pageKey);
+        
+        default:
+          // Fallback на главную страницу
+          return ChatScreen(
+            key: pageKey,
+            apiClient: widget.apiClient,
+            onLogout: widget.onLogout,
+          );
       }
-      
-      // Для остальных страниц используем генератор роутов
-      final routeSettings = RouteSettings(name: routeName);
-      final route = AppRouter.onGenerateRoute(routeSettings);
-      
-      if (route != null && route is MaterialPageRoute) {
-        return Builder(
-          key: pageKey,
-          builder: (context) => route.builder(context),
-        );
-      }
-      
-      // Fallback на главную страницу
-      return ChatScreen(
-        key: pageKey,
-        apiClient: widget.apiClient,
-        onLogout: widget.onLogout,
-      );
     }).toList();
   }
 
@@ -177,28 +216,9 @@ class _HomeScreenState extends State<HomeScreen> {
     // Для мобильных устройств используем BottomNavigationBar
     if (isMobile) {
       return Scaffold(
-        body: AnimatedSwitcher(
-          duration: const Duration(milliseconds: 300),
-          transitionBuilder: (Widget child, Animation<double> animation) {
-            return FadeTransition(
-              opacity: animation,
-              child: SlideTransition(
-                position: Tween<Offset>(
-                  begin: const Offset(0.02, 0.0),
-                  end: Offset.zero,
-                ).animate(CurvedAnimation(
-                  parent: animation,
-                  curve: Curves.easeOutCubic,
-                )),
-                child: child,
-              ),
-            );
-          },
-          child: IndexedStack(
-            key: ValueKey<int>(_selectedIndex),
-            index: _selectedIndex,
-            children: _pages,
-          ),
+        body: IndexedStack(
+          index: _selectedIndex,
+          children: _pages ?? [],
         ),
         bottomNavigationBar: BottomNavigationBar(
           type: BottomNavigationBarType.fixed,
@@ -241,28 +261,9 @@ class _HomeScreenState extends State<HomeScreen> {
           const VerticalDivider(thickness: 1, width: 1),
           // Основной контент
           Expanded(
-            child: AnimatedSwitcher(
-              duration: const Duration(milliseconds: 300),
-              transitionBuilder: (Widget child, Animation<double> animation) {
-                return FadeTransition(
-                  opacity: animation,
-                  child: SlideTransition(
-                    position: Tween<Offset>(
-                      begin: const Offset(0.02, 0.0),
-                      end: Offset.zero,
-                    ).animate(CurvedAnimation(
-                      parent: animation,
-                      curve: Curves.easeOutCubic,
-                    )),
-                    child: child,
-                  ),
-                );
-              },
-              child: IndexedStack(
-                key: ValueKey<int>(_selectedIndex),
-                index: _selectedIndex,
-                children: _pages,
-              ),
+            child: IndexedStack(
+              index: _selectedIndex,
+              children: _pages ?? [],
             ),
           ),
         ],

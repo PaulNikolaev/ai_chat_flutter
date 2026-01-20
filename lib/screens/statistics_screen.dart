@@ -1,3 +1,4 @@
+import 'dart:async';
 import 'dart:convert';
 import 'dart:io';
 
@@ -29,15 +30,19 @@ class StatisticsScreen extends StatefulWidget {
   /// Экземпляр мониторинга производительности.
   final PerformanceMonitor? performanceMonitor;
 
+  /// Callback при нажатии кнопки выхода.
+  final VoidCallback? onLogout;
+
   const StatisticsScreen({
     super.key,
     this.apiClient,
     this.analytics,
     this.performanceMonitor,
+    this.onLogout,
   });
 
   @override
-  State<StatisticsScreen> createState() => _StatisticsScreenState();
+  State<StatisticsScreen> createState() => StatisticsScreenState();
 }
 
 /// Тип сортировки статистики.
@@ -53,7 +58,27 @@ enum SortDirection {
   descending,
 }
 
-class _StatisticsScreenState extends State<StatisticsScreen> {
+/// Кэшированные данные статистики.
+class _CachedStatistics {
+  final Map<String, Map<String, int>> statistics;
+  final int totalRequests;
+  final int totalTokens;
+  final DateTime timestamp;
+  
+  _CachedStatistics({
+    required this.statistics,
+    required this.totalRequests,
+    required this.totalTokens,
+    required this.timestamp,
+  });
+  
+  /// Проверяет, актуален ли кэш (не старше 5 секунд).
+  bool get isValid {
+    return DateTime.now().difference(timestamp).inSeconds < 5;
+  }
+}
+
+class StatisticsScreenState extends State<StatisticsScreen> {
   String _balance = 'Загрузка...';
   bool _isLoadingBalance = false;
   Map<String, Map<String, int>> _modelStatistics = {};
@@ -71,6 +96,21 @@ class _StatisticsScreenState extends State<StatisticsScreen> {
   // Общая статистика
   int _totalRequests = 0;
   int _totalTokens = 0;
+  
+  // Кэш для статистики (ключ - строка фильтров, значение - кэшированные данные)
+  final Map<String, _CachedStatistics> _statisticsCache = {};
+  
+  // Флаг для предотвращения параллельных загрузок
+  bool _isLoadingStatisticsInProgress = false;
+  
+  // Таймер для автообновления баланса
+  Timer? _balanceRefreshTimer;
+  
+  // Флаг для отслеживания первого вызова didChangeDependencies
+  bool _isFirstBuild = true;
+  
+  // Время последнего обновления статистики
+  DateTime? _lastStatisticsUpdate;
 
   @override
   void initState() {
@@ -81,7 +121,28 @@ class _StatisticsScreenState extends State<StatisticsScreen> {
   }
 
   @override
+  void didChangeDependencies() {
+    super.didChangeDependencies();
+    // Обновляем данные при каждом входе на страницу (кроме первого раза)
+    if (!_isFirstBuild) {
+      // Обновляем статистику только если прошло больше 1 секунды с последнего обновления
+      final now = DateTime.now();
+      if (_lastStatisticsUpdate == null || 
+          now.difference(_lastStatisticsUpdate!).inSeconds > 1) {
+        _lastStatisticsUpdate = now;
+        // Принудительно обновляем статистику при входе на страницу
+        _loadStatistics(forceRefresh: true);
+        _loadPerformanceMetrics();
+      }
+    } else {
+      _isFirstBuild = false;
+      _lastStatisticsUpdate = DateTime.now();
+    }
+  }
+
+  @override
   void dispose() {
+    _balanceRefreshTimer?.cancel();
     super.dispose();
   }
 
@@ -175,8 +236,9 @@ class _StatisticsScreenState extends State<StatisticsScreen> {
               duration: Duration(seconds: 2),
             ),
           );
-          // Перезагружаем данные
-          _loadData();
+          // Перезагружаем данные с принудительным обновлением
+          _loadStatistics(forceRefresh: true);
+          _loadPerformanceMetrics();
         }
       } else {
         if (mounted) {
@@ -202,59 +264,75 @@ class _StatisticsScreenState extends State<StatisticsScreen> {
     }
   }
 
-  /// Загружает статистику использования моделей с оптимизированными запросами.
-  Future<void> _loadStatistics() async {
+  /// Генерирует ключ кэша на основе текущих фильтров.
+  String _getCacheKey() {
+    final modelKey = _selectedModelFilter ?? 'all';
+    final startKey = _startDateFilter?.toIso8601String() ?? 'none';
+    final endKey = _endDateFilter?.toIso8601String() ?? 'none';
+    return '$modelKey|$startKey|$endKey';
+  }
+
+  /// Загружает статистику использования моделей с оптимизированными запросами и кэшированием.
+  Future<void> _loadStatistics({bool forceRefresh = false}) async {
+    // Предотвращаем параллельные загрузки
+    if (_isLoadingStatisticsInProgress && !forceRefresh) {
+      return;
+    }
+    
+    // Проверяем кэш
+    if (!forceRefresh) {
+      final cacheKey = _getCacheKey();
+      final cached = _statisticsCache[cacheKey];
+      if (cached != null && cached.isValid) {
+        // Используем кэшированные данные
+        _applyCachedStatistics(cached);
+        return;
+      }
+    }
+    
+    _isLoadingStatisticsInProgress = true;
     final analytics = widget.analytics ?? Analytics();
     
-    setState(() {
-      _isLoadingStatistics = true;
-    });
+    if (mounted) {
+      setState(() {
+        _isLoadingStatistics = true;
+      });
+    }
 
     try {
       // Используем оптимизированный метод с фильтрацией на уровне SQL
+      // getModelStatisticsFiltered уже возвращает агрегированные данные с SUM(tokens_used)
       final statisticsFuture = analytics.getModelStatisticsFiltered(
         model: _selectedModelFilter,
         startDate: _startDateFilter,
         endDate: _endDateFilter,
       );
       
-      // Параллельно получаем общую статистику
+      // Параллельно получаем общую статистику (только COUNT, без загрузки всех записей)
       final totalCountFuture = analytics.getHistoryCount(
         model: _selectedModelFilter,
         startDate: _startDateFilter,
         endDate: _endDateFilter,
       );
       
-      // Получаем ограниченную выборку для расчета общей статистики по токенам
-      final sampleHistoryFuture = analytics.getHistoryFiltered(
+      // Получаем SUM токенов напрямую из БД через оптимизированный запрос
+      // Вместо загрузки 10000 записей, используем SQL SUM
+      final totalTokensFuture = analytics.getTotalTokens(
         model: _selectedModelFilter,
         startDate: _startDateFilter,
         endDate: _endDateFilter,
-        limit: 10000, // Ограничиваем для производительности
       );
       
       // Ждем выполнения всех запросов параллельно
       final results = await Future.wait([
         statisticsFuture,
         totalCountFuture,
-        sampleHistoryFuture,
+        totalTokensFuture,
       ]);
       
       final statistics = results[0] as Map<String, Map<String, int>>;
       final totalCount = results[1] as int;
-      final sampleHistory = results[2] as List<AnalyticsRecord>;
-      
-      // Рассчитываем общую статистику по токенам из выборки
-      int totalTokens = 0;
-      for (final record in sampleHistory) {
-        totalTokens += record.tokensUsed;
-      }
-      
-      // Если выборка меньше общего количества, экстраполируем
-      if (sampleHistory.length < totalCount && sampleHistory.isNotEmpty) {
-        final avgTokensPerRecord = totalTokens / sampleHistory.length;
-        totalTokens = (avgTokensPerRecord * totalCount).round();
-      }
+      final totalTokens = results[2] as int;
       
       // Сортируем статистику
       final sortedEntries = statistics.entries.toList();
@@ -276,6 +354,21 @@ class _StatisticsScreenState extends State<StatisticsScreen> {
       
       final sortedStatistics = Map<String, Map<String, int>>.fromEntries(sortedEntries);
       
+      // Сохраняем в кэш
+      final cacheKey = _getCacheKey();
+      _statisticsCache[cacheKey] = _CachedStatistics(
+        statistics: sortedStatistics,
+        totalRequests: totalCount,
+        totalTokens: totalTokens,
+        timestamp: DateTime.now(),
+      );
+      
+      // Очищаем старый кэш (оставляем только последние 5 записей)
+      if (_statisticsCache.length > 5) {
+        final oldestKey = _statisticsCache.keys.first;
+        _statisticsCache.remove(oldestKey);
+      }
+      
       if (mounted) {
         setState(() {
           _modelStatistics = sortedStatistics;
@@ -295,12 +388,35 @@ class _StatisticsScreenState extends State<StatisticsScreen> {
           _isLoadingStatistics = false;
         });
       }
+    } finally {
+      _isLoadingStatisticsInProgress = false;
     }
+  }
+  
+  /// Применяет кэшированные данные статистики.
+  void _applyCachedStatistics(_CachedStatistics cached) {
+    if (mounted) {
+      setState(() {
+        _modelStatistics = cached.statistics;
+        _totalRequests = cached.totalRequests;
+        _totalTokens = cached.totalTokens;
+        _isLoadingStatistics = false;
+      });
+    }
+  }
+  
+  /// Публичный метод для принудительного обновления данных при входе на страницу.
+  /// Вызывается из HomeScreen при переключении вкладок.
+  void refreshData() {
+    // Обновляем данные принудительно
+    _loadStatistics(forceRefresh: true);
+    _loadPerformanceMetrics();
+    _lastStatisticsUpdate = DateTime.now();
   }
   
   /// Применяет фильтры и перезагружает статистику.
   void _applyFilters() {
-    _loadStatistics();
+    _loadStatistics(forceRefresh: true);
   }
   
   /// Сбрасывает все фильтры.
@@ -312,7 +428,7 @@ class _StatisticsScreenState extends State<StatisticsScreen> {
       _sortType = SortType.tokens;
       _sortDirection = SortDirection.descending;
     });
-    _loadStatistics();
+    _loadStatistics(forceRefresh: true);
   }
   
   /// Изменяет тип сортировки.
@@ -328,7 +444,37 @@ class _StatisticsScreenState extends State<StatisticsScreen> {
         _sortDirection = SortDirection.descending;
       }
     });
-    _loadStatistics();
+    // Сортировка применяется в памяти, перезагрузка не нужна
+    // Но обновляем UI для применения новой сортировки
+    _applySorting();
+  }
+  
+  /// Применяет сортировку к текущим данным статистики.
+  void _applySorting() {
+    final sortedEntries = _modelStatistics.entries.toList();
+    sortedEntries.sort((a, b) {
+      int comparison = 0;
+      switch (_sortType) {
+        case SortType.model:
+          comparison = a.key.compareTo(b.key);
+          break;
+        case SortType.count:
+          comparison = (a.value['count'] ?? 0).compareTo(b.value['count'] ?? 0);
+          break;
+        case SortType.tokens:
+          comparison = (a.value['tokens'] ?? 0).compareTo(b.value['tokens'] ?? 0);
+          break;
+      }
+      return _sortDirection == SortDirection.ascending ? comparison : -comparison;
+    });
+    
+    final sortedStatistics = Map<String, Map<String, int>>.fromEntries(sortedEntries);
+    
+    if (mounted) {
+      setState(() {
+        _modelStatistics = sortedStatistics;
+      });
+    }
   }
 
   /// Загружает метрики производительности.
@@ -359,10 +505,12 @@ class _StatisticsScreenState extends State<StatisticsScreen> {
 
   /// Запускает автообновление баланса каждые 30 секунд.
   void _startBalanceAutoRefresh() {
-    Future.delayed(const Duration(seconds: 30), () {
+    _balanceRefreshTimer?.cancel();
+    _balanceRefreshTimer = Timer.periodic(const Duration(seconds: 30), (timer) {
       if (mounted && widget.apiClient != null) {
         _loadBalance(forceRefresh: true);
-        _startBalanceAutoRefresh(); // Рекурсивно планируем следующее обновление
+      } else {
+        timer.cancel();
       }
     });
   }
@@ -431,6 +579,11 @@ class _StatisticsScreenState extends State<StatisticsScreen> {
             icon: const Icon(Icons.delete_outline),
             tooltip: 'Очистить',
             onPressed: _clearData,
+          ),
+          IconButton(
+            icon: const Icon(Icons.logout),
+            tooltip: 'Выйти',
+            onPressed: widget.onLogout,
           ),
         ],
       ),
@@ -720,33 +873,34 @@ class _StatisticsScreenState extends State<StatisticsScreen> {
               final modelFilter = FutureBuilder<Map<String, Map<String, int>>>(
                 future: analytics.getModelStatistics(),
                 builder: (context, snapshot) {
-                  final allModels = snapshot.data?.keys.toList() ?? [];
-                  return DropdownButtonFormField<String>(
-                    decoration: InputDecoration(
-                      labelText: 'Модель',
-                      prefixIcon: const Icon(Icons.model_training),
-                      border: OutlineInputBorder(
-                        borderRadius: BorderRadius.circular(AppStyles.borderRadius),
-                      ),
-                    ),
-                    initialValue: _selectedModelFilter,
-                    items: [
-                      const DropdownMenuItem<String>(
-                        value: null,
-                        child: Text('Все модели'),
-                      ),
-                      ...allModels.map((model) => DropdownMenuItem<String>(
-                        value: model,
-                        child: Text(model),
-                      )),
-                    ],
-                    onChanged: (value) {
-                      setState(() {
-                        _selectedModelFilter = value;
-                      });
-                      _applyFilters();
-                    },
-                  );
+              final allModels = snapshot.data?.keys.toList() ?? [];
+              return DropdownButtonFormField<String>(
+                decoration: InputDecoration(
+                  labelText: 'Модель',
+                  prefixIcon: const Icon(Icons.model_training),
+                  border: OutlineInputBorder(
+                    borderRadius: BorderRadius.circular(AppStyles.borderRadius),
+                  ),
+                ),
+                isExpanded: true,
+                initialValue: _selectedModelFilter,
+                items: [
+                  const DropdownMenuItem<String>(
+                    value: null,
+                    child: Text('Все модели', overflow: TextOverflow.ellipsis),
+                  ),
+                  ...allModels.map((model) => DropdownMenuItem<String>(
+                    value: model,
+                    child: Text(model, overflow: TextOverflow.ellipsis),
+                  )),
+                ],
+                onChanged: (value) {
+                  setState(() {
+                    _selectedModelFilter = value;
+                  });
+                  _applyFilters();
+                },
+              );
                 },
               );
               
@@ -781,6 +935,7 @@ class _StatisticsScreenState extends State<StatisticsScreen> {
                           _startDateFilter != null
                               ? DateFormat('yyyy-MM-dd').format(_startDateFilter!)
                               : 'Не выбрана',
+                          overflow: TextOverflow.ellipsis,
                         ),
                       ),
                     ),
@@ -814,6 +969,7 @@ class _StatisticsScreenState extends State<StatisticsScreen> {
                           _endDateFilter != null
                               ? DateFormat('yyyy-MM-dd').format(_endDateFilter!)
                               : 'Не выбрана',
+                          overflow: TextOverflow.ellipsis,
                         ),
                       ),
                     ),
@@ -877,7 +1033,7 @@ class _StatisticsScreenState extends State<StatisticsScreen> {
                             ? SortDirection.descending
                             : SortDirection.ascending;
                       });
-                      _loadStatistics();
+                      _applySorting();
                     },
                   ),
                 ],

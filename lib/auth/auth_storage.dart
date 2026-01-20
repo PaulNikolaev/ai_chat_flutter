@@ -173,15 +173,60 @@ class AuthStorage {
     }
   }
 
-  /// Получает сохраненный API ключ.
+  /// Получает сохраненный API ключ для указанного провайдера.
+  ///
+  /// Параметры:
+  /// - [provider]: Провайдер для получения ключа (опционально, если null - возвращает активный).
   ///
   /// Возвращает расшифрованный API ключ или null, если он не найден.
-  Future<String?> getApiKey() async {
+  Future<String?> getApiKey({String? provider}) async {
     try {
       await _migrateLegacyData();
-      return await _repository.getApiKey();
+      return await _repository.getApiKey(provider: provider);
     } catch (e) {
       return null;
+    }
+  }
+  
+  /// Получает все сохраненные API ключи.
+  ///
+  /// Возвращает список Map, каждый содержит 'api_key', 'provider', 'created_at', 'last_used'.
+  Future<List<Map<String, String>>> getAllApiKeys() async {
+    try {
+      await _migrateLegacyData();
+      return await _repository.getAllAuthKeys();
+    } catch (e) {
+      return [];
+    }
+  }
+  
+  /// Удаляет API ключ для указанного провайдера.
+  ///
+  /// Параметры:
+  /// - [provider]: Провайдер для удаления ключа.
+  ///
+  /// Возвращает true, если удаление выполнено успешно.
+  Future<bool> deleteApiKey(String provider) async {
+    try {
+      await _migrateLegacyData();
+      return await _repository.deleteApiKey(provider);
+    } catch (e) {
+      return false;
+    }
+  }
+  
+  /// Обновляет дату последнего использования для указанного провайдера.
+  ///
+  /// Параметры:
+  /// - [provider]: Провайдер для обновления.
+  ///
+  /// Возвращает true, если обновление выполнено успешно.
+  Future<bool> updateLastUsed(String provider) async {
+    try {
+      await _migrateLegacyData();
+      return await _repository.updateLastUsed(provider);
+    } catch (e) {
+      return false;
     }
   }
 

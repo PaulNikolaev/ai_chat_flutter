@@ -164,6 +164,26 @@ class Analytics {
     );
   }
 
+  /// Возвращает сумму токенов с фильтрацией (оптимизированный запрос).
+  ///
+  /// Параметры:
+  /// - [model]: Фильтр по модели (опционально).
+  /// - [startDate]: Начальная дата фильтрации (опционально).
+  /// - [endDate]: Конечная дата фильтрации (опционально).
+  ///
+  /// Возвращает сумму токенов, соответствующих фильтрам.
+  Future<int> getTotalTokens({
+    String? model,
+    DateTime? startDate,
+    DateTime? endDate,
+  }) async {
+    return _cache.getTotalTokens(
+      model: model,
+      startDate: startDate,
+      endDate: endDate,
+    );
+  }
+
   /// Возвращает статистику сессии с момента создания экземпляра.
   ///
   /// Формат:

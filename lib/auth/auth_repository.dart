@@ -6,7 +6,7 @@ import '../utils/database/database.dart';
 /// Репозиторий для работы с данными аутентификации в базе данных.
 ///
 /// Предоставляет методы для сохранения, получения и управления
-/// данными аутентификации в таблице `auth` базы данных SQLite.
+/// данными аутентификации в таблице `auth_keys` базы данных SQLite.
 ///
 /// **Оптимизации производительности:**
 /// - Использует транзакции для атомарных операций
@@ -20,9 +20,10 @@ import '../utils/database/database.dart';
 /// - Исходные значения PIN никогда не сохраняются
 ///
 /// **Структура данных:**
-/// - Таблица `auth` содержит только одну запись
+/// - Таблица `auth_keys` поддерживает несколько записей (по одной на провайдера)
 /// - Поля: `id`, `api_key` (зашифрован), `pin_hash`, `provider`, `created_at`, `last_used`
-/// - При обновлении данных сохраняется оригинальная дата создания
+/// - Ограничение UNIQUE(provider) гарантирует один ключ на провайдера
+/// - Все ключи под одним PIN имеют одинаковый pin_hash
 ///
 /// **Пример использования:**
 /// ```dart
@@ -75,8 +76,13 @@ class AuthRepository {
 
   /// Сохраняет данные аутентификации в базу данных.
   ///
-  /// Если запись уже существует, она будет обновлена.
+  /// Если ключ для данного провайдера уже существует, он будет обновлен.
+  /// Если нет - создается новая запись.
   /// API ключ шифруется перед сохранением.
+  ///
+  /// **Важно:** При добавлении нового ключа от другого провайдера,
+  /// pin_hash обновляется для всех существующих ключей, чтобы они были
+  /// связаны с одним PIN.
   ///
   /// Оптимизировано: использует транзакцию и оптимизированный запрос
   /// для уменьшения количества обращений к БД.
@@ -101,24 +107,37 @@ class AuthRepository {
       
       // Используем транзакцию для атомарности операции
       return await db.transaction((txn) async {
-        // Проверяем существование записи одним запросом
+        // Проверяем существование ключа для данного провайдера
         final existing = await txn.query(
-          'auth',
-          columns: ['id', 'created_at'],
+          'auth_keys',
+          columns: ['id', 'created_at', 'pin_hash'],
+          where: 'provider = ?',
+          whereArgs: [provider],
           limit: 1,
         );
 
         if (existing.isNotEmpty) {
-          // Обновляем существующую запись, сохраняя created_at
+          // Обновляем существующую запись для этого провайдера
           final existingId = existing.first['id'] as int;
           final existingCreatedAt = existing.first['created_at'] as String?;
           
+          // Обновляем pin_hash для всех ключей, если он изменился
+          // (это нужно для синхронизации всех ключей под одним PIN)
+          final existingPinHash = existing.first['pin_hash'] as String?;
+          if (existingPinHash != pinHash) {
+            await txn.update(
+              'auth_keys',
+              {'pin_hash': pinHash},
+              where: 'pin_hash = ?',
+              whereArgs: [existingPinHash],
+            );
+          }
+          
           final result = await txn.update(
-            'auth',
+            'auth_keys',
             {
               'api_key': encryptedApiKey,
               'pin_hash': pinHash,
-              'provider': provider,
               'created_at': existingCreatedAt ?? now, // Сохраняем оригинальную дату создания
               'last_used': now,
             },
@@ -127,9 +146,30 @@ class AuthRepository {
           );
           return result > 0;
         } else {
-          // Создаем новую запись
+          // Это новый провайдер - проверяем, есть ли другие ключи
+          // Если есть другие ключи, синхронизируем pin_hash со всеми существующими ключами
+          final otherKeys = await txn.query('auth_keys');
+          if (otherKeys.isNotEmpty) {
+            // Берем pin_hash из первого существующего ключа
+            final otherPinHash = otherKeys.first['pin_hash'] as String?;
+            if (otherPinHash != null && otherPinHash.isNotEmpty) {
+              // Если у существующих ключей уже есть pin_hash, ВСЕГДА используем его
+              // Это гарантирует, что все ключи будут под одним PIN
+              // Новый ключ должен использовать существующий PIN, а не создавать новый
+              pinHash = otherPinHash;
+            } else {
+              // Если у существующих ключей нет pin_hash (не должно происходить в нормальной работе),
+              // обновляем их на новый pin_hash
+              await txn.update(
+                'auth_keys',
+                {'pin_hash': pinHash},
+              );
+            }
+          }
+          
+          // Создаем новую запись для нового провайдера с синхронизированным pin_hash
           final result = await txn.insert(
-            'auth',
+            'auth_keys',
             {
               'api_key': encryptedApiKey,
               'pin_hash': pinHash,
@@ -149,15 +189,17 @@ class AuthRepository {
   /// Получает все данные аутентификации из базы данных.
   ///
   /// Возвращает Map с ключами 'api_key', 'pin_hash', 'provider'
-  /// или null, если данные не найдены.
+  /// для активного провайдера (последнего использованного) или null, если данные не найдены.
   /// API ключ автоматически расшифровывается.
+  ///
+  /// Для получения всех ключей используйте getAllAuthKeys().
   Future<Map<String, String>?> getAuth() async {
     try {
       final db = await _db;
       final records = await db.query(
-        'auth',
+        'auth_keys',
+        orderBy: 'last_used DESC, id DESC',
         limit: 1,
-        orderBy: 'id DESC',
       );
 
       if (records.isEmpty) {
@@ -189,21 +231,60 @@ class AuthRepository {
       return null;
     }
   }
-
-  /// Получает сохраненный API ключ.
+  
+  /// Получает все API ключи из базы данных.
   ///
-  /// Оптимизировано: выполняет прямой запрос к нужному полю вместо полного getAuth().
-  ///
-  /// Возвращает расшифрованный API ключ или null, если он не найден.
-  Future<String?> getApiKey() async {
+  /// Возвращает список Map, каждый содержит 'api_key', 'provider', 'created_at', 'last_used'.
+  /// API ключи автоматически расшифровываются.
+  Future<List<Map<String, String>>> getAllAuthKeys() async {
     try {
       final db = await _db;
       final records = await db.query(
-        'auth',
-        columns: ['api_key'],
-        limit: 1,
-        orderBy: 'id DESC',
+        'auth_keys',
+        orderBy: 'last_used DESC, created_at DESC',
       );
+
+      return records.map((record) {
+        final encryptedApiKey = record['api_key'] as String?;
+        final apiKey = encryptedApiKey != null ? _decryptApiKey(encryptedApiKey) : '';
+        
+        return {
+          'api_key': apiKey,
+          'provider': record['provider'] as String? ?? '',
+          'created_at': record['created_at'] as String? ?? '',
+          'last_used': record['last_used'] as String? ?? '',
+        };
+      }).toList();
+    } catch (e) {
+      return [];
+    }
+  }
+
+  /// Получает сохраненный API ключ для указанного провайдера.
+  ///
+  /// Оптимизировано: выполняет прямой запрос к нужному полю вместо полного getAuth().
+  ///
+  /// Параметры:
+  /// - [provider]: Провайдер для получения ключа (опционально, если null - возвращает активный).
+  ///
+  /// Возвращает расшифрованный API ключ или null, если он не найден.
+  Future<String?> getApiKey({String? provider}) async {
+    try {
+      final db = await _db;
+      final records = provider != null
+          ? await db.query(
+              'auth_keys',
+              columns: ['api_key'],
+              where: 'provider = ?',
+              whereArgs: [provider],
+              limit: 1,
+            )
+          : await db.query(
+              'auth_keys',
+              columns: ['api_key'],
+              orderBy: 'last_used DESC, id DESC',
+              limit: 1,
+            );
 
       if (records.isEmpty) {
         return null;
@@ -229,10 +310,10 @@ class AuthRepository {
     try {
       final db = await _db;
       final records = await db.query(
-        'auth',
+        'auth_keys',
         columns: ['pin_hash'],
         limit: 1,
-        orderBy: 'id DESC',
+        orderBy: 'last_used DESC, id DESC',
       );
 
       if (records.isEmpty) {
@@ -245,7 +326,7 @@ class AuthRepository {
     }
   }
 
-  /// Получает сохраненного провайдера.
+  /// Получает активного провайдера (последнего использованного).
   ///
   /// Оптимизировано: выполняет прямой запрос к нужному полю вместо полного getAuth().
   ///
@@ -254,10 +335,10 @@ class AuthRepository {
     try {
       final db = await _db;
       final records = await db.query(
-        'auth',
+        'auth_keys',
         columns: ['provider'],
+        orderBy: 'last_used DESC, id DESC',
         limit: 1,
-        orderBy: 'id DESC',
       );
 
       if (records.isEmpty) {
@@ -267,6 +348,48 @@ class AuthRepository {
       return records.first['provider'] as String?;
     } catch (e) {
       return null;
+    }
+  }
+  
+  /// Обновляет дату последнего использования для указанного провайдера.
+  ///
+  /// Параметры:
+  /// - [provider]: Провайдер для обновления.
+  ///
+  /// Возвращает true, если обновление выполнено успешно.
+  Future<bool> updateLastUsed(String provider) async {
+    try {
+      final db = await _db;
+      final now = DateTime.now().toIso8601String();
+      final result = await db.update(
+        'auth_keys',
+        {'last_used': now},
+        where: 'provider = ?',
+        whereArgs: [provider],
+      );
+      return result > 0;
+    } catch (e) {
+      return false;
+    }
+  }
+  
+  /// Удаляет API ключ для указанного провайдера.
+  ///
+  /// Параметры:
+  /// - [provider]: Провайдер для удаления ключа.
+  ///
+  /// Возвращает true, если удаление выполнено успешно.
+  Future<bool> deleteApiKey(String provider) async {
+    try {
+      final db = await _db;
+      final result = await db.delete(
+        'auth_keys',
+        where: 'provider = ?',
+        whereArgs: [provider],
+      );
+      return result > 0;
+    } catch (e) {
+      return false;
     }
   }
 
@@ -312,13 +435,13 @@ class AuthRepository {
 
   /// Очищает все данные аутентификации из базы данных.
   ///
-  /// Удаляет все записи из таблицы `auth`.
+  /// Удаляет все записи из таблицы `auth_keys`.
   ///
   /// Возвращает true, если операция выполнена успешно (включая случай, когда данных нет), иначе false.
   Future<bool> clearAuth() async {
     try {
       final db = await _db;
-      await db.delete('auth');
+      await db.delete('auth_keys');
       // Возвращаем true, даже если записей не было (цель - очистить данные, и она достигнута)
       return true;
     } catch (e) {
@@ -330,12 +453,12 @@ class AuthRepository {
   ///
   /// Оптимизировано: выполняет быстрый COUNT запрос вместо полного getAuth().
   ///
-  /// Возвращает true, если есть сохраненный API ключ и PIN хэш, иначе false.
+  /// Возвращает true, если есть хотя бы один сохраненный API ключ и PIN хэш, иначе false.
   Future<bool> hasAuth() async {
     try {
       final db = await _db;
       final result = await db.rawQuery(
-        'SELECT COUNT(*) as count FROM auth WHERE api_key IS NOT NULL AND pin_hash IS NOT NULL',
+        'SELECT COUNT(*) as count FROM auth_keys WHERE api_key IS NOT NULL AND pin_hash IS NOT NULL',
       );
       
       if (result.isEmpty) {

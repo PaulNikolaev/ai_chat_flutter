@@ -4,7 +4,7 @@ import 'package:sqflite_common_ffi/sqflite_ffi.dart';
 import 'package:path/path.dart';
 
 /// Версия базы данных для управления миграциями.
-const int _databaseVersion = 3;
+const int _databaseVersion = 4;
 
 /// Имя файла базы данных.
 const String _databaseName = 'chat_cache.db';
@@ -113,6 +113,38 @@ class DatabaseHelper {
         ''');
       }
     }
+    
+    // Миграция с версии 3 на версию 4: поддержка нескольких API ключей от разных провайдеров
+    if (oldVersion < 4) {
+      // Создаем новую таблицу auth_keys для хранения нескольких ключей
+      await db.execute('''
+        CREATE TABLE IF NOT EXISTS auth_keys (
+          id INTEGER PRIMARY KEY AUTOINCREMENT,
+          api_key TEXT NOT NULL,
+          provider TEXT NOT NULL,
+          pin_hash TEXT NOT NULL,
+          created_at TEXT NOT NULL DEFAULT (datetime('now')),
+          last_used TEXT,
+          UNIQUE(provider)
+        )
+      ''');
+      
+      // Мигрируем существующие данные из auth в auth_keys
+      final existingAuth = await db.query('auth', limit: 1);
+      if (existingAuth.isNotEmpty) {
+        final record = existingAuth.first;
+        await db.insert('auth_keys', {
+          'api_key': record['api_key'],
+          'provider': record['provider'] ?? 'openrouter',
+          'pin_hash': record['pin_hash'],
+          'created_at': record['created_at'] ?? DateTime.now().toIso8601String(),
+          'last_used': record['last_used'],
+        });
+      }
+      
+      // Удаляем старую таблицу auth (после миграции данных)
+      await db.execute('DROP TABLE IF EXISTS auth');
+    }
   }
 
   /// Создает таблицу `messages` для хранения сообщений чата.
@@ -189,29 +221,43 @@ class DatabaseHelper {
     ''');
   }
 
-  /// Создает таблицу `auth` для хранения данных аутентификации.
+  /// Создает таблицу `auth_keys` для хранения данных аутентификации.
   ///
   /// Таблица содержит:
   /// - id: уникальный идентификатор (PRIMARY KEY AUTOINCREMENT)
   /// - api_key: API ключ (зашифрован)
-  /// - pin_hash: хэш PIN кода
   /// - provider: провайдер API ('openrouter' или 'vsegpt')
+  /// - pin_hash: хэш PIN кода (общий для всех ключей под одним PIN)
   /// - created_at: дата создания записи
   /// - last_used: дата последнего использования
+  /// - UNIQUE(provider): ограничение на уникальность провайдера
+  ///
+  /// Поддерживает хранение нескольких API ключей от разных провайдеров
+  /// под одним PIN кодом.
   Future<void> _createAuthTable(Database db) async {
     await db.execute('''
-      CREATE TABLE IF NOT EXISTS auth (
+      CREATE TABLE IF NOT EXISTS auth_keys (
         id INTEGER PRIMARY KEY AUTOINCREMENT,
         api_key TEXT NOT NULL,
+        provider TEXT NOT NULL,
         pin_hash TEXT NOT NULL,
-        provider TEXT NOT NULL DEFAULT 'openrouter',
         created_at TEXT NOT NULL DEFAULT (datetime('now')),
-        last_used TEXT
+        last_used TEXT,
+        UNIQUE(provider)
       )
     ''');
 
-    // Ограничение: только одна запись в таблице auth
-    // Это обеспечивается логикой приложения, но можно добавить триггер
+    // Создаем индекс для быстрого поиска по провайдеру
+    await db.execute('''
+      CREATE INDEX IF NOT EXISTS idx_auth_keys_provider 
+      ON auth_keys(provider)
+    ''');
+    
+    // Создаем индекс для поиска по pin_hash
+    await db.execute('''
+      CREATE INDEX IF NOT EXISTS idx_auth_keys_pin_hash 
+      ON auth_keys(pin_hash)
+    ''');
   }
 
   /// Закрывает базу данных и освобождает ресурсы.

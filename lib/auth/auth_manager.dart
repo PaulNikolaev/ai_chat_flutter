@@ -334,11 +334,47 @@ class AuthManager {
       );
     }
 
-    // Шаг 3: Извлекаем API ключ из базы данных после успешной проверки PIN
+    // Шаг 3: Извлекаем активный API ключ из базы данных после успешной проверки PIN
     // API ключ автоматически расшифровывается при извлечении из БД
     String? apiKey;
+    String? provider;
     try {
-      apiKey = await storage.getApiKey();
+      // Получаем список всех доступных ключей, отсортированных по last_used
+      final allKeys = await storage.getAllApiKeys();
+      
+      if (allKeys.isEmpty) {
+        return const AuthResult(
+          success: false,
+          message: 'No API keys found in database. Please log in with your API key again.',
+        );
+      }
+      
+      // Выбираем активного провайдера (последнего использованного)
+      // Список уже отсортирован по last_used DESC в getAllApiKeys()
+      provider = allKeys.first['provider'];
+      
+      // Если провайдер не найден в первой записи, берем любого доступного
+      if (provider == null || provider.isEmpty) {
+        // Ищем первого провайдера с непустым значением
+        for (final key in allKeys) {
+          final keyProvider = key['provider'];
+          if (keyProvider != null && keyProvider.isNotEmpty) {
+            provider = keyProvider;
+            break;
+          }
+        }
+      }
+      
+      // Если все еще не нашли провайдера, это ошибка
+      if (provider == null || provider.isEmpty) {
+        return const AuthResult(
+          success: false,
+          message: 'Invalid provider data in database. Please log in with your API key again.',
+        );
+      }
+      
+      // Получаем API ключ для найденного провайдера
+      apiKey = await storage.getApiKey(provider: provider);
     } catch (e) {
       return AuthResult(
         success: false,
@@ -352,6 +388,10 @@ class AuthManager {
         message: 'Authentication data not found in database. Please log in with your API key again.',
       );
     }
+
+    // Обновляем дату последнего использования для активного провайдера
+    // Это гарантирует, что при следующем входе будет выбран тот же провайдер
+    await storage.updateLastUsed(provider);
 
     // Возвращаем успешный результат с расшифрованным API ключом
     return AuthResult(
@@ -578,10 +618,40 @@ class AuthManager {
   /// Этот метод полезен для случаев, когда API ключ нужен,
   /// но проверка PIN уже была выполнена.
   ///
+  /// Параметры:
+  /// - [provider]: Провайдер для получения ключа (опционально, если null - возвращает активный).
+  ///
   /// Возвращает сохраненный API ключ или пустую строку, если не найден.
-  Future<String> getStoredApiKey() async {
-    final apiKey = await storage.getApiKey();
+  Future<String> getStoredApiKey({String? provider}) async {
+    final apiKey = await storage.getApiKey(provider: provider);
     return apiKey ?? '';
+  }
+  
+  /// Получает все сохраненные API ключи.
+  ///
+  /// Возвращает список Map, каждый содержит 'api_key', 'provider', 'created_at', 'last_used'.
+  Future<List<Map<String, String>>> getAllStoredApiKeys() async {
+    return await storage.getAllApiKeys();
+  }
+  
+  /// Удаляет API ключ для указанного провайдера.
+  ///
+  /// Параметры:
+  /// - [provider]: Провайдер для удаления ключа.
+  ///
+  /// Возвращает true, если удаление выполнено успешно.
+  Future<bool> deleteApiKey(String provider) async {
+    return await storage.deleteApiKey(provider);
+  }
+  
+  /// Обновляет дату последнего использования для указанного провайдера.
+  ///
+  /// Параметры:
+  /// - [provider]: Провайдер для обновления.
+  ///
+  /// Возвращает true, если обновление выполнено успешно.
+  Future<bool> updateLastUsed(String provider) async {
+    return await storage.updateLastUsed(provider);
   }
 
   /// Получает сохраненного провайдера.
@@ -591,10 +661,9 @@ class AuthManager {
     return await storage.getProvider();
   }
 
-  /// Обновляет провайдера, сохраняя существующий API ключ и PIN.
+  /// Обновляет активного провайдера (переключает на другой существующий ключ).
   ///
-  /// Валидирует, что текущий API ключ совместим с новым провайдером.
-  /// Если API ключ несовместим, возвращает ошибку.
+  /// Проверяет наличие ключа для указанного провайдера и обновляет дату последнего использования.
   ///
   /// **Параметры:**
   /// - [newProvider]: Новый провайдер ('openrouter' или 'vsegpt').
@@ -609,61 +678,18 @@ class AuthManager {
       );
     }
 
-    // Получаем текущие данные
-    final authData = await storage.getAuth();
-    if (authData == null) {
-      return const AuthResult(
+    // Проверяем, существует ли ключ для этого провайдера
+    final apiKey = await storage.getApiKey(provider: newProvider);
+    if (apiKey == null || apiKey.isEmpty) {
+      return AuthResult(
         success: false,
-        message: 'Authentication data not found. Please login first.',
+        message: 'API key for $newProvider not found. Please add an API key for this provider first.',
       );
     }
 
-    final currentApiKey = authData['api_key'] ?? '';
-    final currentPinHash = authData['pin_hash'] ?? '';
-    final currentProvider = authData['provider'];
-
-    if (currentApiKey.isEmpty || currentPinHash.isEmpty) {
-      return const AuthResult(
-        success: false,
-        message: 'API key or PIN not found. Please login again.',
-      );
-    }
-
-    // Проверяем, что провайдер действительно изменился
-    if (currentProvider == newProvider) {
-      return const AuthResult(
-        success: true,
-        message: 'Provider is already set to this value.',
-      );
-    }
-
-    // Валидируем совместимость API ключа с новым провайдером
-    // OpenRouter ключи начинаются с sk-or-v1-, VSEGPT с sk-or-vv-
-    final isOpenRouterKey = currentApiKey.startsWith('sk-or-v1-');
-    final isVsegptKey = currentApiKey.startsWith('sk-or-vv-');
-
-    if (newProvider == 'openrouter' && !isOpenRouterKey) {
-      return const AuthResult(
-        success: false,
-        message: 'API key is not compatible with OpenRouter. OpenRouter keys must start with "sk-or-v1-". Please update your API key.',
-      );
-    }
-
-    if (newProvider == 'vsegpt' && !isVsegptKey) {
-      return const AuthResult(
-        success: false,
-        message: 'API key is not compatible with VSEGPT. VSEGPT keys must start with "sk-or-vv-". Please update your API key.',
-      );
-    }
-
-    // Обновляем провайдера в хранилище
-    final saved = await storage.saveAuth(
-      apiKey: currentApiKey,
-      pinHash: currentPinHash,
-      provider: newProvider,
-    );
-
-    if (!saved) {
+    // Обновляем дату последнего использования
+    final updated = await storage.updateLastUsed(newProvider);
+    if (!updated) {
       return const AuthResult(
         success: false,
         message: 'Failed to update provider. Please try again.',
@@ -672,7 +698,109 @@ class AuthManager {
 
     return AuthResult(
       success: true,
-      message: 'Provider updated successfully to $newProvider',
+      message: 'Provider switched to $newProvider',
     );
+  }
+  
+  /// Добавляет новый API ключ от другого провайдера.
+  ///
+  /// Валидирует ключ и добавляет его к существующим ключам под тем же PIN.
+  /// Если ключ для этого провайдера уже существует, он будет обновлен.
+  ///
+  /// **Параметры:**
+  /// - [apiKey]: API ключ для добавления.
+  ///
+  /// **Возвращает:** [AuthResult] с результатом операции.
+  Future<AuthResult> addApiKey(String apiKey) async {
+    // Валидируем API ключ
+    ApiKeyValidationResult validationResult;
+    try {
+      validationResult = await validator.validateApiKey(apiKey);
+    } catch (e) {
+      return AuthResult(
+        success: false,
+        message: 'Unexpected error during API key validation: $e. Please try again.',
+      );
+    }
+
+    if (!validationResult.isValid) {
+      return AuthResult(
+        success: false,
+        message: validationResult.message,
+      );
+    }
+
+    // Проверяем, что провайдер определен корректно
+    if (validationResult.provider != 'openrouter' && 
+        validationResult.provider != 'vsegpt') {
+      return const AuthResult(
+        success: false,
+        message: 'Invalid provider detected. Supported providers: openrouter, vsegpt',
+      );
+    }
+
+    // Проверяем баланс аккаунта
+    if (validationResult.balance < 0) {
+      return AuthResult(
+        success: false,
+        message: 'Insufficient balance: Your account balance is negative (${validationResult.balance.toStringAsFixed(2)}). Please add funds to your account before continuing.',
+      );
+    }
+
+    // Получаем существующий PIN хэш или создаем новый
+    String pinHash;
+    String? generatedPin;
+    bool isNewAuth = false;
+    
+    try {
+      final existingPinHash = await storage.getPinHash();
+      if (existingPinHash != null && existingPinHash.isNotEmpty) {
+        // Используем существующий PIN хэш
+        pinHash = existingPinHash;
+      } else {
+        // Генерируем новый PIN для первого ключа
+        generatedPin = AuthValidator.generatePin();
+        pinHash = AuthValidator.hashPin(generatedPin);
+        isNewAuth = true;
+      }
+    } catch (e) {
+      return AuthResult(
+        success: false,
+        message: 'Error retrieving PIN hash: $e. Please try again.',
+      );
+    }
+
+    // Сохраняем или обновляем ключ для этого провайдера
+    final saved = await storage.saveAuth(
+      apiKey: apiKey,
+      pinHash: pinHash,
+      provider: validationResult.provider,
+    );
+
+    if (!saved) {
+      return const AuthResult(
+        success: false,
+        message: 'Failed to save API key. Please try again.',
+      );
+    }
+
+    // Обновляем дату последнего использования
+    await storage.updateLastUsed(validationResult.provider);
+
+    // Возвращаем результат
+    if (isNewAuth && generatedPin != null) {
+      // Если это первый ключ, возвращаем сгенерированный PIN
+      return AuthResult(
+        success: true,
+        message: generatedPin,
+        balance: validationResult.message,
+      );
+    } else {
+      return AuthResult(
+        success: true,
+        message: 'API key for ${validationResult.provider} added successfully',
+        balance: validationResult.message,
+      );
+    }
   }
 }

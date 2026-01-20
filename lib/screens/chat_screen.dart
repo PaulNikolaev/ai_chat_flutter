@@ -97,6 +97,28 @@ class _ChatScreenState extends State<ChatScreen> {
     // _loadModels(); // Удалено - загрузка будет по требованию
   }
 
+  @override
+  void didUpdateWidget(ChatScreen oldWidget) {
+    super.didUpdateWidget(oldWidget);
+    // Если изменился API клиент (например, при переключении провайдера),
+    // очищаем кэш моделей и историю чата
+    if (widget.apiClient != oldWidget.apiClient) {
+      // Очищаем список моделей для принудительной перезагрузки
+      setState(() {
+        _models = [];
+        _isLoadingModels = false;
+        // Очищаем выбранную модель, так как модели разных провайдеров несовместимы
+        _selectedModelId = null;
+        // Очищаем историю чата в UI, так как она уже очищена в БД при переключении провайдера
+        _messages.clear();
+      });
+      // Очищаем сохраненную модель из настроек
+      _clearSavedModel();
+      // Перезагружаем историю (она будет пустой после очистки при переключении провайдера)
+      _loadChatHistory();
+    }
+  }
+
   /// Инициализирует логирование для экрана чата.
   Future<void> _initializeLogger() async {
     try {
@@ -419,7 +441,19 @@ class _ChatScreenState extends State<ChatScreen> {
           _models = models;
           _isLoadingModels = false;
           
-          // Если модель не выбрана, выбираем первую доступную или сохраненную
+          // Проверяем, существует ли сохраненная модель в новом списке моделей
+          if (_selectedModelId != null) {
+            final modelExists = models.any((model) => model.id == _selectedModelId);
+            if (!modelExists) {
+              // Если сохраненная модель не найдена (например, при переключении провайдера),
+              // очищаем её и выбираем первую доступную
+              _logger?.info('Saved model $_selectedModelId not found in new list, selecting default');
+              _selectedModelId = null;
+              _clearSavedModel();
+            }
+          }
+          
+          // Если модель не выбрана, выбираем первую доступную
           if (_selectedModelId == null && models.isNotEmpty) {
             _selectedModelId = models.first.id;
             _saveSelectedModel(_selectedModelId!);
@@ -493,12 +527,34 @@ class _ChatScreenState extends State<ChatScreen> {
     }
   }
 
+  /// Очищает сохраненную модель из настроек.
+  ///
+  /// Используется при переключении провайдера, когда модели становятся несовместимыми.
+  Future<void> _clearSavedModel() async {
+    try {
+      final prefs = await SharedPreferences.getInstance();
+      await prefs.remove(_selectedModelKey);
+      _logger?.debug('Cleared saved model preference');
+    } catch (e) {
+      _logger?.warning('Failed to clear saved model preference: $e');
+      // Игнорируем ошибки очистки настроек
+    }
+  }
+
   /// Обрабатывает изменение выбранной модели.
   ///
   /// Обновляет состояние и сохраняет выбранную модель в настройках.
+  /// Очищает историю чата при смене модели, так как контекст может быть несовместим.
   void _onModelChanged(String? modelId) {
     if (modelId == null || modelId.isEmpty) {
       return;
+    }
+
+    // Если модель изменилась, очищаем историю чата
+    final previousModelId = _selectedModelId;
+    if (previousModelId != null && previousModelId != modelId) {
+      _logger?.info('Model changed from $previousModelId to $modelId, clearing chat history');
+      _clearHistorySilently();
     }
 
     _logger?.info('Model changed to: $modelId');
@@ -507,6 +563,31 @@ class _ChatScreenState extends State<ChatScreen> {
     });
 
     _saveSelectedModel(modelId);
+  }
+
+  /// Очищает историю чата без показа диалога подтверждения.
+  ///
+  /// Используется при автоматической очистке (например, при смене модели или провайдера).
+  Future<void> _clearHistorySilently() async {
+    try {
+      _logger?.info('Clearing chat history silently');
+      final success = await ChatCache.instance.clearHistory();
+
+      if (success) {
+        setState(() {
+          _messages.clear();
+        });
+        _logger?.info('Chat history cleared successfully');
+      } else {
+        _logger?.error('Failed to clear history: clearHistory returned false');
+      }
+    } catch (e, stackTrace) {
+      _logger?.error(
+        'Failed to clear chat history',
+        error: e,
+        stackTrace: stackTrace,
+      );
+    }
   }
 
   /// Получает текущую выбранную модель для использования.
