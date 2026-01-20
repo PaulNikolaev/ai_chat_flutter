@@ -37,6 +37,9 @@ dependencies:
   
   # Криптография для хэширования
   crypto: ^3.0.3
+  
+  # Графики и визуализация данных
+  fl_chart: ^0.66.0
 
 dev_dependencies:
   flutter_test:
