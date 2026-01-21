@@ -210,7 +210,7 @@ void main() {
         ),
       );
 
-      final firstLoginResult = await authManager.handleFirstLogin(apiKey);
+      final firstLoginResult = await authManager.handleFirstLogin(apiKey, '1234');
 
       expect(firstLoginResult.success, isTrue);
       expect(firstLoginResult.message.length, equals(4)); // PIN должен быть 4-значным
@@ -253,7 +253,8 @@ void main() {
         ),
       );
 
-      final firstLoginResult = await authManager.handleFirstLogin(firstApiKey);
+      final firstLoginResult =
+          await authManager.handleFirstLogin(firstApiKey, '1234');
 
       expect(firstLoginResult.success, isTrue);
       expect(firstLoginResult.message.length, equals(4));
@@ -281,7 +282,8 @@ void main() {
         ),
       );
 
-      final secondLoginResult = await authManager.handleFirstLogin(secondApiKey);
+      final secondLoginResult =
+          await authManager.handleFirstLogin(secondApiKey, '1234');
 
       expect(secondLoginResult.success, isTrue);
       expect(secondLoginResult.message.length, equals(4));
@@ -307,7 +309,8 @@ void main() {
         ),
       );
 
-      final openRouterResult = await authManager.handleFirstLogin(openRouterKey);
+      final openRouterResult =
+          await authManager.handleFirstLogin(openRouterKey, '1234');
 
       expect(openRouterResult.success, isTrue);
       expect(await authStorage.getProvider(), equals('openrouter'));
@@ -370,7 +373,7 @@ void main() {
 
       const apiKey = 'sk-or-v1-test-network-error';
 
-      final result = await authManager.handleFirstLogin(apiKey);
+      final result = await authManager.handleFirstLogin(apiKey, '1234');
 
       expect(result.success, isFalse);
       expect(result.message, contains('Unexpected error'));
@@ -392,7 +395,7 @@ void main() {
         ),
       );
 
-      final firstLoginResult = await authManager.handleFirstLogin(apiKey);
+      final firstLoginResult = await authManager.handleFirstLogin(apiKey, '1234');
       expect(firstLoginResult.success, isTrue);
       final pin = firstLoginResult.message;
 
@@ -427,7 +430,7 @@ void main() {
       );
 
       // Пытаемся сохранить данные (должна быть ошибка)
-      final result = await authManagerWithError.handleFirstLogin(apiKey);
+      final result = await authManagerWithError.handleFirstLogin(apiKey, '1234');
 
       // Проверяем, что ошибка обработана корректно
       expect(result.success, isFalse);
@@ -447,7 +450,7 @@ void main() {
         ),
       );
 
-      final firstLoginResult = await authManager.handleFirstLogin(apiKey);
+      final firstLoginResult = await authManager.handleFirstLogin(apiKey, '1234');
       expect(firstLoginResult.success, isTrue);
       final pin = firstLoginResult.message;
 
@@ -479,7 +482,7 @@ void main() {
         ),
       );
 
-      final firstLoginResult = await authManager.handleFirstLogin(apiKey);
+      final firstLoginResult = await authManager.handleFirstLogin(apiKey, '1234');
       expect(firstLoginResult.success, isTrue);
 
       // Создаем мок хранилище с ошибкой при сбросе

@@ -198,7 +198,7 @@ void main() {
 
       const apiKey = 'sk-or-v1-test-key-openrouter-12345';
 
-      final result = await authManager.handleFirstLogin(apiKey);
+      final result = await authManager.handleFirstLogin(apiKey, '1234');
 
       expect(result.success, isTrue);
       expect(result.message.length, equals(4)); // PIN должен быть 4-значным
@@ -224,7 +224,7 @@ void main() {
 
       const apiKey = 'sk-or-vv-test-key-vsegpt-67890';
 
-      final result = await authManager.handleFirstLogin(apiKey);
+      final result = await authManager.handleFirstLogin(apiKey, '1234');
 
       expect(result.success, isTrue);
       expect(result.message.length, equals(4)); // PIN должен быть 4-значным
@@ -250,7 +250,7 @@ void main() {
 
       const apiKey = 'sk-or-v1-invalid-key';
 
-      final result = await authManager.handleFirstLogin(apiKey);
+      final result = await authManager.handleFirstLogin(apiKey, '1234');
 
       expect(result.success, isFalse);
       expect(result.message, contains('Invalid API key'));
@@ -263,7 +263,7 @@ void main() {
     test('handleFirstLogin - ошибка при неверном формате ключа', () async {
       const apiKey = 'invalid-key-format';
 
-      final result = await authManager.handleFirstLogin(apiKey);
+      final result = await authManager.handleFirstLogin(apiKey, '1234');
 
       expect(result.success, isFalse);
       expect(result.message, contains('Invalid API key format'));
@@ -277,7 +277,7 @@ void main() {
     test('handleFirstLogin - ошибка при пустом ключе', () async {
       const apiKey = '';
 
-      final result = await authManager.handleFirstLogin(apiKey);
+      final result = await authManager.handleFirstLogin(apiKey, '1234');
 
       expect(result.success, isFalse);
       expect(result.message, contains('cannot be empty'));
@@ -299,7 +299,7 @@ void main() {
 
       const apiKey = 'sk-or-v1-test-key-zero-balance';
 
-      final result = await authManager.handleFirstLogin(apiKey);
+      final result = await authManager.handleFirstLogin(apiKey, '1234');
 
       expect(result.success, isTrue);
       expect(result.message.length, equals(4)); // PIN должен быть 4-значным
@@ -322,7 +322,7 @@ void main() {
 
       const apiKey = 'sk-or-v1-test-key-negative-balance';
 
-      final result = await authManager.handleFirstLogin(apiKey);
+      final result = await authManager.handleFirstLogin(apiKey, '1234');
 
       expect(result.success, isFalse);
       expect(result.message, contains('Insufficient balance'));
@@ -346,7 +346,7 @@ void main() {
 
       const apiKey = 'sk-or-v1-test-key-network-error';
 
-      final result = await authManager.handleFirstLogin(apiKey);
+      final result = await authManager.handleFirstLogin(apiKey, '1234');
 
       expect(result.success, isFalse);
       expect(result.message, contains('Network error'));
@@ -369,7 +369,7 @@ void main() {
 
       const apiKey = 'sk-or-v1-test-key-timeout';
 
-      final result = await authManager.handleFirstLogin(apiKey);
+      final result = await authManager.handleFirstLogin(apiKey, '1234');
 
       expect(result.success, isFalse);
       expect(result.message, contains('timeout'));
@@ -385,7 +385,7 @@ void main() {
 
       const apiKey = 'sk-or-v1-test-key-exception';
 
-      final result = await authManager.handleFirstLogin(apiKey);
+      final result = await authManager.handleFirstLogin(apiKey, '1234');
 
       expect(result.success, isFalse);
       expect(result.message, contains('Unexpected error'));
@@ -411,7 +411,7 @@ void main() {
 
       const apiKey = 'sk-or-v1-test-key-save-error';
 
-      final result = await authManager.handleFirstLogin(apiKey);
+      final result = await authManager.handleFirstLogin(apiKey, '1234');
 
       expect(result.success, isFalse);
       expect(result.message, contains('Failed to save'));
@@ -437,7 +437,7 @@ void main() {
 
       const apiKey = 'sk-or-v1-test-key-verify-error';
 
-      final result = await authManager.handleFirstLogin(apiKey);
+      final result = await authManager.handleFirstLogin(apiKey, '1234');
 
       expect(result.success, isFalse);
       expect(result.message, contains('Error verifying'));
@@ -457,7 +457,7 @@ void main() {
 
       const apiKey = 'sk-or-v1-test-key-unknown-provider';
 
-      final result = await authManager.handleFirstLogin(apiKey);
+      final result = await authManager.handleFirstLogin(apiKey, '1234');
 
       expect(result.success, isFalse);
       expect(result.message, contains('Invalid provider'));

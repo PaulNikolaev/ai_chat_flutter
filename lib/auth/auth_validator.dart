@@ -634,13 +634,16 @@ class AuthValidator {
 
   /// Валидирует формат PIN кода.
   ///
-  /// PIN должен быть 4-значным числом (1000-9999).
+  /// - Должен быть строкой из 4 цифр.
+  /// - По умолчанию диапазон 1000-9999 (без ведущих нулей).
+  /// - Если [allowLeadingZeros] = true, принимаем 0000-9999.
   ///
   /// Параметры:
   /// - [pin]: PIN код для проверки.
+  /// - [allowLeadingZeros]: если true, допускаем PIN с ведущими нулями.
   ///
   /// Возвращает true, если формат валиден, иначе false.
-  static bool validatePinFormat(String pin) {
+  static bool validatePinFormat(String pin, {bool allowLeadingZeros = false}) {
     if (pin.length != 4) {
       return false;
     }
@@ -650,7 +653,11 @@ class AuthValidator {
       return false;
     }
 
-    // Проверяем, что PIN в диапазоне 1000-9999
+    if (allowLeadingZeros) {
+      return true;
+    }
+
+    // Проверяем, что PIN в диапазоне 1000-9999 (без ведущих нулей)
     final pinNumber = int.tryParse(pin);
     if (pinNumber == null ||
         pinNumber < AppConstants.pinMinValue ||

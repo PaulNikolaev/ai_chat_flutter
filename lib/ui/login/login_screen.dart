@@ -191,7 +191,7 @@ class _LoginScreenState extends State<LoginScreen> {
     if (errorMessage.contains('Invalid PIN format') ||
         errorMessage.contains('4 digits')) {
       return '❌ Неверный формат PIN\n\n'
-          'PIN должен содержать ровно 4 цифры (1000-9999).';
+          'PIN должен содержать ровно 4 цифры (0000-9999).';
     }
 
     if (errorMessage.contains('Invalid PIN') ||
@@ -235,7 +235,7 @@ class _LoginScreenState extends State<LoginScreen> {
       final pin = _pinController.text.trim();
 
       if (_isFirstLogin) {
-        // Первый вход: только API ключ
+        // Первый вход: требуется API ключ и придуманный PIN
         if (apiKey.isEmpty) {
           _showStatus('Пожалуйста, введите API ключ для первого входа');
           setState(() {
@@ -244,11 +244,19 @@ class _LoginScreenState extends State<LoginScreen> {
           return;
         }
 
+        // Валидируем, что введено ровно 4 цифры (0000-9999)
+        if (pin.isEmpty || pin.length != 4 || !RegExp(r'^\d{4}$').hasMatch(pin)) {
+          _showStatus('Пожалуйста, придумайте 4-значный PIN (0000-9999)');
+          setState(() {
+            _isLoading = false;
+          });
+          return;
+        }
+
         // Валидация API ключа выполняется, показываем индикатор загрузки
-        final result = await _authManager!.handleFirstLogin(apiKey);
+        final result = await _authManager!.handleFirstLogin(apiKey, pin);
         if (result.success) {
-          // Успешный вход: показываем PIN и баланс
-          final pin = result.message;
+          // Успешный вход: показываем PIN (введенный пользователем) и баланс
           final balance = result.balance.isNotEmpty ? result.balance : '0.00';
 
           _showStatus(
@@ -485,50 +493,61 @@ class _LoginScreenState extends State<LoginScreen> {
                       textAlign: TextAlign.center,
                     ),
                     const SizedBox(height: AppStyles.padding),
-                    // Повторный вход: отображаем поля для PIN и API ключа
-                    if (!_isFirstLogin) ...[
-                      // Поле для ввода PIN кода
-                      // PIN скрывается при вводе (obscureText: true) для безопасности
-                      SizedBox(
-                        height: inputHeight,
-                        child: TextFormField(
-                          controller: _pinController,
-                          decoration: const InputDecoration(
-                            labelText: 'PIN',
-                            hintText: 'Введите 4-значный PIN',
-                            prefixIcon: Icon(Icons.lock),
-                          ),
-                          keyboardType: TextInputType.number,
-                          maxLength: 4,
-                          obscureText:
-                              true, // PIN скрывается при вводе для безопасности
-                          textInputAction: TextInputAction.next,
-                          style: AppStyles.primaryTextStyle,
-                          validator: (value) {
-                            if (!_isFirstLogin &&
-                                value != null &&
-                                value.isNotEmpty) {
-                              // Валидация формата PIN: должен быть ровно 4 цифры
-                              if (value.length != 4) {
-                                return 'PIN должен содержать ровно 4 цифры (1000-9999)';
-                              }
-                              if (!RegExp(r'^\d{4}$').hasMatch(value)) {
-                                return 'PIN должен содержать только цифры';
-                              }
-                              // Проверяем диапазон (1000-9999)
-                              final pinValue = int.tryParse(value);
-                              if (pinValue == null ||
-                                  pinValue < 1000 ||
-                                  pinValue > 9999) {
-                                return 'PIN должен быть числом от 1000 до 9999';
-                              }
-                            }
-                            return null;
-                          },
+                    // PIN: при первом входе пользователь придумывает PIN, при повторном — вводит сохраненный
+                    SizedBox(
+                      height: inputHeight,
+                      child: TextFormField(
+                        controller: _pinController,
+                        decoration: InputDecoration(
+                          labelText: _isFirstLogin ? 'Придумайте PIN' : 'PIN',
+                          hintText: 'Введите 4-значный PIN',
+                          prefixIcon: const Icon(Icons.lock),
                         ),
+                        keyboardType: TextInputType.number,
+                        maxLength: 4,
+                        obscureText: true,
+                        textInputAction: TextInputAction.next,
+                        style: AppStyles.primaryTextStyle,
+                        validator: (value) {
+                          final v = value ?? '';
+                          if (_isFirstLogin) {
+                            if (v.isEmpty) return 'Придумайте PIN';
+                            if (v.length != 4) {
+                              return 'PIN должен содержать ровно 4 цифры (0000-9999)';
+                            }
+                            if (!RegExp(r'^\d{4}$').hasMatch(v)) {
+                              return 'PIN должен содержать только цифры';
+                            }
+                            final pinValue = int.tryParse(v);
+                            // Разрешаем 0000, а также диапазон 1000-9999
+                            final isValidRange = pinValue != null &&
+                                (pinValue == 0 ||
+                                    (pinValue >= 1000 && pinValue <= 9999));
+                            if (!isValidRange) {
+                              return 'PIN должен быть 0000 или числом от 1000 до 9999';
+                            }
+                          } else if (v.isNotEmpty) {
+                            if (v.length != 4) {
+                              return 'PIN должен содержать ровно 4 цифры (0000-9999)';
+                            }
+                            if (!RegExp(r'^\d{4}$').hasMatch(v)) {
+                              return 'PIN должен содержать только цифры';
+                            }
+                            final pinValue = int.tryParse(v);
+                            final isValidRange = pinValue != null &&
+                                (pinValue == 0 ||
+                                    (pinValue >= 1000 && pinValue <= 9999));
+                            if (!isValidRange) {
+                              return 'PIN должен быть 0000 или числом от 1000 до 9999';
+                            }
+                          }
+                          return null;
+                        },
                       ),
-                      const SizedBox(height: AppStyles.paddingSmall),
-                      // Разделитель между полями PIN и API ключа
+                    ),
+                    const SizedBox(height: AppStyles.paddingSmall),
+                    // Повторный вход: разделитель между PIN и API ключом
+                    if (!_isFirstLogin) ...[
                       const Row(
                         children: [
                           Expanded(

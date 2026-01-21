@@ -110,9 +110,12 @@ class AuthManager {
   /// - [apiKey]: API ключ для валидации и сохранения.
   ///
   /// Возвращает [AuthResult] с результатом операции:
-  /// - При успехе: success=true, message=сгенерированный PIN, balance=баланс
+  /// - При успехе: success=true, message=указанный пользователем PIN, balance=баланс
   /// - При ошибке: success=false, message=сообщение об ошибке
-  Future<AuthResult> handleFirstLogin(String apiKey) async {
+  Future<AuthResult> handleFirstLogin(
+    String apiKey,
+    String pin,
+  ) async {
     // Проверка формата ключа перед валидацией
     final trimmedKey = apiKey.trim();
     if (trimmedKey.isEmpty) {
@@ -128,6 +131,15 @@ class AuthManager {
         success: false,
         message:
             'Invalid API key format. Key must start with "sk-or-vv-" (VSEGPT) or "sk-or-v1-" (OpenRouter).',
+      );
+    }
+
+    // Проверяем формат пользовательского PIN (обязателен при первом входе)
+    // Проверяем формат PIN: 4 цифры (0000–9999), допускаем ведущие нули для удобства
+    if (!AuthValidator.validatePinFormat(pin, allowLeadingZeros: true)) {
+      return const AuthResult(
+        success: false,
+        message: 'Invalid PIN format. PIN must be 4 digits (0000-9999).',
       );
     }
 
@@ -247,10 +259,7 @@ class AuthManager {
       // Это информационное сообщение, но не ошибка - продолжаем выполнение
     }
 
-    // Шаг 3: Генерируем PIN код только при успешной валидации и неотрицательном балансе
-    // PIN генерируется как случайное 4-значное число от 1000 до 9999
-    final pin = AuthValidator.generatePin();
-    // Хэшируем PIN перед сохранением в БД
+    // Шаг 3: Используем пользовательский PIN (предварительно проверенный)
     final pinHash = AuthValidator.hashPin(pin);
 
     // Шаг 4: Сохраняем данные аутентификации в базу данных
@@ -320,11 +329,11 @@ class AuthManager {
   /// - При ошибке: success=false, message=сообщение об ошибке
   Future<AuthResult> handlePinLogin(String pin) async {
     // Шаг 1: Проверяем формат PIN перед проверкой в БД
-    // PIN должен быть 4-значным числом от 1000 до 9999
-    if (!AuthValidator.validatePinFormat(pin)) {
+    // PIN должен быть 4-значным числом (0000-9999), допускаем ведущие нули
+    if (!AuthValidator.validatePinFormat(pin, allowLeadingZeros: true)) {
       return const AuthResult(
         success: false,
-        message: 'Invalid PIN format. PIN must be 4 digits (1000-9999).',
+        message: 'Invalid PIN format. PIN must be 4 digits (0000-9999).',
       );
     }
 
