@@ -42,3 +42,35 @@ android {
 flutter {
     source = "../.."
 }
+
+// Копируем артефакты в путь, где их ожидает flutter-cli,
+// чтобы избежать сообщения "Gradle build failed to produce an .apk file".
+tasks.matching { it.name == "assembleRelease" }.configureEach {
+    doLast {
+        // rootDir points to the Android root; один уровень вверх — корень Flutter-проекта
+        val projectRoot = rootDir.parentFile
+        if (projectRoot != null) {
+            // APK
+            val apkSrc = file("$buildDir/outputs/flutter-apk/app-release.apk")
+            val apkDestDir = projectRoot.resolve("build/app/outputs/flutter-apk")
+            if (apkSrc.exists()) {
+                apkDestDir.mkdirs()
+                copy {
+                    from(apkSrc)
+                    into(apkDestDir)
+                }
+            }
+
+            // AAB
+            val aabSrc = file("$buildDir/outputs/bundle/release/app-release.aab")
+            val aabDestDir = projectRoot.resolve("build/app/outputs/bundle/release")
+            if (aabSrc.exists()) {
+                aabDestDir.mkdirs()
+                copy {
+                    from(aabSrc)
+                    into(aabDestDir)
+                }
+            }
+        }
+    }
+}

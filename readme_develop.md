@@ -169,6 +169,32 @@ flutter build apk --release
 flutter build appbundle --release
 ```
 
+### Сборка Android (release)
+
+1. **Сгенерируйте keystore** (один раз):
+   ```bash
+   keytool -genkey -v -keystore android/app/key.jks -keyalg RSA -keysize 2048 -validity 10000 -alias upload
+   ```
+2. **Создайте `android/key.properties`** (не коммитить):
+   ```properties
+   storePassword=<ваш_пароль>
+   keyPassword=<ваш_пароль>
+   keyAlias=upload
+   storeFile=key.jks
+   ```
+3. **Проверьте `android/app/build.gradle`** — блок `signingConfigs`/`buildTypes` должен ссылаться на `key.properties`.
+4. **Соберите release:**
+   - APK: `flutter build apk --release`
+   - AAB: `flutter build appbundle --release`
+5. **Где искать сборки:**
+   - APK: `android/app/build/outputs/flutter-apk/app-release.apk` (копируется также в `build/app/outputs/flutter-apk/` для совместимости)
+   - AAB: `android/app/build/outputs/bundle/release/app-release.aab` (копируется также в `build/app/outputs/bundle/release/`)
+
+Минимальные требования:
+- Android SDK API 21+
+- Установлены platform-tools, build-tools
+- JDK 11+
+
 ### Очистка проекта
 
 ```bash
