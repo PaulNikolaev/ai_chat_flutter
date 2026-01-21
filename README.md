@@ -7,7 +7,7 @@
 - **Desktop**: Windows, Linux, macOS
 - **Mobile**: Android, iOS
 
-Подробные инструкции: [INSTALL.md](INSTALL.md), [DESKTOP_BUILD.md](DESKTOP_BUILD.md), [MOBILE_BUILD.md](MOBILE_BUILD.md)
+Подробные инструкции для разработчиков: [readme_develop.md](readme_develop.md)
 
 ## Быстрый старт
 
