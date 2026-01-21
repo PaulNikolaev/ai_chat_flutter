@@ -117,7 +117,9 @@ class _HomeScreenState extends State<HomeScreen> {
     if (widget.apiClient != oldWidget.apiClient) {
       AppRouter.apiClient = widget.apiClient;
       // Пересоздаем страницы при изменении API клиента
-      _pages = _buildPages();
+      setState(() {
+        _pages = _buildPages();
+      });
     }
     if (widget.onLogout != oldWidget.onLogout) {
       AppRouter.onLogout = widget.onLogout;

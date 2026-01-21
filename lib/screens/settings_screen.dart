@@ -204,6 +204,7 @@ class _SettingsScreenState extends State<SettingsScreen> {
 
       if (mounted) {
         if (result.success) {
+          final previousProvider = _activeProvider;
           // Очищаем форму и скрываем её
           _apiKeyController.clear();
           setState(() {
@@ -216,6 +217,17 @@ class _SettingsScreenState extends State<SettingsScreen> {
 
           // Перезагружаем настройки для отображения нового ключа
           await _loadSettings();
+
+          // Если после добавления ключа активный провайдер изменился (автопереключение),
+          // обязательно пересоздаем API клиент, иначе в чате останется старый провайдер/модели.
+          if (mounted &&
+              previousProvider != null &&
+              _activeProvider != null &&
+              previousProvider != _activeProvider) {
+            if (AppRouter.onProviderChanged != null) {
+              await AppRouter.onProviderChanged!();
+            }
+          }
 
           // Показываем сообщение об успехе
           if (mounted) {

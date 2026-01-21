@@ -5,6 +5,7 @@ import 'package:intl/intl.dart';
 import 'package:path_provider/path_provider.dart';
 
 import 'package:ai_chat/api/api.dart';
+import 'package:ai_chat/navigation/navigation.dart';
 import 'package:ai_chat/models/models.dart';
 import 'package:ai_chat/ui/ui.dart';
 import 'package:ai_chat/utils/utils.dart';
@@ -80,12 +81,16 @@ class _ChatScreenState extends State<ChatScreen> {
   // Ключ для сохранения выбранной модели
   static const String _selectedModelKey = 'selected_model_id';
 
+  // Последний используемый провайдер для реакции на смену без rebuild.
+  String? _lastProvider;
+
   @override
   void initState() {
     super.initState();
     _initializeLogger();
     _loadChatHistory();
     _loadSelectedModel();
+    _lastProvider = _effectiveApiClient?.provider;
     // Ленивая загрузка моделей - загружаем только при первом открытии селектора
     // _loadModels(); // Удалено - загрузка будет по требованию
   }
@@ -109,7 +114,29 @@ class _ChatScreenState extends State<ChatScreen> {
       _clearSavedModel();
       // Перезагружаем историю (она будет пустой после очистки при переключении провайдера)
       _loadChatHistory();
+      _lastProvider = _effectiveApiClient?.provider;
     }
+  }
+
+  /// Текущий клиент (берём из виджета или роутера как fallback).
+  OpenRouterClient? get _effectiveApiClient =>
+      widget.apiClient ?? AppRouter.apiClient;
+
+  /// Реагирует на смену провайдера, даже если не было rebuild виджета.
+  void _ensureProviderSynced() {
+    final currentProvider = _effectiveApiClient?.provider;
+    if (currentProvider == _lastProvider) return;
+
+    // Смена провайдера: сбрасываем модели и выбранную модель, очищаем историю UI.
+    setState(() {
+      _models = [];
+      _isLoadingModels = false;
+      _selectedModelId = null;
+      _messages.clear();
+      _lastProvider = currentProvider;
+    });
+    _clearSavedModel();
+    _loadChatHistory();
   }
 
   /// Заголовок с названием провайдера для AppBar.
@@ -455,7 +482,7 @@ class _ChatScreenState extends State<ChatScreen> {
   /// Загружает модели только если они еще не загружены (ленивая загрузка).
   /// Показывает ошибку, если загрузка не удалась.
   Future<void> _loadModels({bool forceRefresh = false}) async {
-    final apiClient = widget.apiClient;
+    final apiClient = _effectiveApiClient;
     if (apiClient == null) {
       _logger?.warning('Cannot load models: API client is null');
       return;
@@ -788,6 +815,7 @@ class _ChatScreenState extends State<ChatScreen> {
     final buttonHeight = AppStyles.getButtonHeight(context);
     final inputHeight = AppStyles.getInputHeight(context);
     final maxContentWidth = AppStyles.getMaxContentWidth(context);
+    _ensureProviderSynced();
 
     return Scaffold(
       backgroundColor: AppStyles.backgroundColor,
