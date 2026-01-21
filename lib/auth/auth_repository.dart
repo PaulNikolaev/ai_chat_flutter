@@ -2,6 +2,8 @@ import 'dart:convert';
 import 'package:crypto/crypto.dart';
 import 'package:sqflite/sqflite.dart';
 import 'package:ai_chat/utils/utils.dart';
+import 'package:ai_chat/auth/encryption_service.dart';
+import 'package:flutter/foundation.dart' show debugPrint;
 
 /// Репозиторий для работы с данными аутентификации в базе данных.
 ///
@@ -15,9 +17,11 @@ import 'package:ai_chat/utils/utils.dart';
 /// - Минимизирует количество обращений к базе данных
 ///
 /// **Безопасность:**
-/// - API ключи шифруются через base64 перед сохранением
+/// - API ключи шифруются через AES-256-CBC перед сохранением
+/// - Ключ шифрования хранится в flutter_secure_storage
 /// - PIN коды хранятся только в виде хэшей (SHA-256)
 /// - Исходные значения PIN никогда не сохраняются
+/// - Поддерживает автоматическую миграцию данных из Base64 в AES
 ///
 /// **Структура данных:**
 /// - Таблица `auth_keys` поддерживает несколько записей (по одной на провайдера)
@@ -52,36 +56,135 @@ class AuthRepository {
   /// Соединение создается при первом обращении и переиспользуется.
   Future<Database> get _db async => await DatabaseHelper.instance.database;
 
-  /// Кодирует API ключ перед сохранением в БД.
+  /// Сервис шифрования для API ключей.
   ///
-  /// **ВАЖНО:** Использует base64 encoding, который НЕ является шифрованием.
-  /// Base64 - это только кодирование, которое легко декодируется обратно.
-  /// Это используется для базовой обфускации, но не обеспечивает реальную безопасность.
+  /// Используется для шифрования и расшифровки API ключей с использованием AES-256.
+  final EncryptionService _encryptionService;
+
+  /// Создает экземпляр [AuthRepository].
   ///
-  /// Для production приложений рекомендуется использовать настоящее шифрование (AES-256)
-  /// с ключом, хранящимся в secure storage (flutter_secure_storage).
+  /// Параметры:
+  /// - [encryptionService]: Сервис шифрования (опционально, создается новый по умолчанию).
+  AuthRepository({
+    EncryptionService? encryptionService,
+  }) : _encryptionService = encryptionService ?? EncryptionService();
+
+  /// Шифрует API ключ перед сохранением в БД.
   ///
-  /// В текущей реализации данные защищены тем, что:
-  /// - База данных находится в защищенной директории приложения
-  /// - На мобильных платформах используется sandbox приложения
-  /// - На десктопе файл БД доступен только пользователю системы
-  String _encryptApiKey(String apiKey) {
-    final bytes = utf8.encode(apiKey);
-    return base64Encode(bytes);
+  /// Использует AES-256-CBC для шифрования. Ключ шифрования хранится
+  /// в flutter_secure_storage для обеспечения безопасности.
+  ///
+  /// Выбрасывает [EncryptionException] если шифрование не удалось.
+  Future<String> _encryptApiKey(String apiKey) async {
+    if (apiKey.isEmpty) {
+      return '';
+    }
+    try {
+      return await _encryptionService.encrypt(apiKey);
+    } catch (e) {
+      debugPrint('[AuthRepository] Failed to encrypt API key: $e');
+      rethrow;
+    }
   }
 
-  /// Декодирует API ключ после получения из БД.
+  /// Расшифровывает API ключ после получения из БД.
   ///
-  /// Декодирует base64 обратно в исходную строку.
+  /// Поддерживает как новый формат (AES-256), так и старый формат (Base64)
+  /// для обратной совместимости. Автоматически мигрирует данные из Base64 в AES
+  /// при первом обращении.
   ///
-  /// **ВАЖНО:** Это декодирование, а не расшифровка, так как base64 не является шифрованием.
-  String _decryptApiKey(String encryptedApiKey) {
+  /// Параметры:
+  /// - [encryptedApiKey]: Зашифрованный API ключ.
+  /// - [recordId]: ID записи в БД (опционально, используется для миграции).
+  ///
+  /// Возвращает расшифрованный API ключ.
+  ///
+  /// Выбрасывает [EncryptionException] если расшифровка не удалась.
+  Future<String> _decryptApiKey(
+    String encryptedApiKey, {
+    int? recordId,
+  }) async {
+    if (encryptedApiKey.isEmpty) {
+      return '';
+    }
+
     try {
-      final bytes = base64Decode(encryptedApiKey);
-      return utf8.decode(bytes);
+      // Проверяем формат данных
+      if (EncryptionService.isAesEncrypted(encryptedApiKey)) {
+        // Новый формат (AES) - расшифровываем
+        return await _encryptionService.decrypt(encryptedApiKey);
+      } else if (EncryptionService.isBase64Encoded(encryptedApiKey)) {
+        // Старый формат (Base64) - декодируем и мигрируем
+        final decrypted = await _migrateFromBase64(encryptedApiKey, recordId);
+        return decrypted;
+      } else {
+        // Неизвестный формат - пробуем расшифровать как AES
+        try {
+          return await _encryptionService.decrypt(encryptedApiKey);
+        } catch (e) {
+          // Если не удалось, возвращаем как есть (для обратной совместимости)
+          debugPrint(
+            '[AuthRepository] Failed to decrypt API key, returning as-is: $e',
+          );
+          return encryptedApiKey;
+        }
+      }
     } catch (e) {
-      // Если декодирование не удалось, возвращаем как есть (для обратной совместимости)
+      debugPrint('[AuthRepository] Failed to decrypt API key: $e');
+      // Для обратной совместимости возвращаем как есть, если расшифровка не удалась
       return encryptedApiKey;
+    }
+  }
+
+  /// Мигрирует API ключ из Base64 в AES-256.
+  ///
+  /// Декодирует Base64, шифрует через AES и обновляет запись в БД.
+  ///
+  /// Параметры:
+  /// - [base64Encoded]: API ключ в формате Base64.
+  /// - [recordId]: ID записи в БД для обновления.
+  ///
+  /// Возвращает расшифрованный API ключ.
+  Future<String> _migrateFromBase64(String base64Encoded, int? recordId) async {
+    try {
+      // Декодируем Base64
+      final bytes = base64Decode(base64Encoded);
+      final plainText = utf8.decode(bytes);
+
+      // Шифруем через AES
+      final aesEncrypted = await _encryptionService.encrypt(plainText);
+
+      // Обновляем запись в БД, если указан ID
+      if (recordId != null) {
+        try {
+          final db = await _db;
+          await db.update(
+            'auth_keys',
+            {'api_key': aesEncrypted},
+            where: 'id = ?',
+            whereArgs: [recordId],
+          );
+          debugPrint(
+            '[AuthRepository] Migrated API key from Base64 to AES (record ID: $recordId)',
+          );
+        } catch (e) {
+          debugPrint(
+            '[AuthRepository] Failed to update migrated key in DB: $e',
+          );
+          // Продолжаем выполнение, даже если обновление не удалось
+        }
+      }
+
+      return plainText;
+    } catch (e) {
+      debugPrint('[AuthRepository] Failed to migrate from Base64: $e');
+      // Если миграция не удалась, пробуем вернуть декодированный Base64
+      try {
+        final bytes = base64Decode(base64Encoded);
+        return utf8.decode(bytes);
+      } catch (e2) {
+        throw EncryptionException('Failed to migrate from Base64: $e');
+      }
     }
   }
 
@@ -113,7 +216,7 @@ class AuthRepository {
       final db = await _db;
 
       // Шифруем API ключ перед сохранением
-      final encryptedApiKey = _encryptApiKey(apiKey);
+      final encryptedApiKey = await _encryptApiKey(apiKey);
       final now = DateTime.now().toIso8601String();
 
       // Используем транзакцию для атомарности операции
@@ -226,7 +329,8 @@ class AuthRepository {
       }
 
       // Расшифровываем API ключ
-      final apiKey = _decryptApiKey(encryptedApiKey);
+      final recordId = record['id'] as int?;
+      final apiKey = await _decryptApiKey(encryptedApiKey, recordId: recordId);
       final pinHash = record['pin_hash'] as String?;
       final provider = record['provider'] as String?;
 
@@ -258,18 +362,23 @@ class AuthRepository {
         orderBy: 'last_used DESC, created_at DESC',
       );
 
-      return records.map((record) {
+      // Расшифровываем все ключи (с миграцией при необходимости)
+      final decryptedKeys = <Map<String, String>>[];
+      for (final record in records) {
         final encryptedApiKey = record['api_key'] as String?;
-        final apiKey =
-            encryptedApiKey != null ? _decryptApiKey(encryptedApiKey) : '';
+        final recordId = record['id'] as int?;
+        final apiKey = encryptedApiKey != null
+            ? await _decryptApiKey(encryptedApiKey, recordId: recordId)
+            : '';
 
-        return {
+        decryptedKeys.add({
           'api_key': apiKey,
           'provider': record['provider'] as String? ?? '',
           'created_at': record['created_at'] as String? ?? '',
           'last_used': record['last_used'] as String? ?? '',
-        };
-      }).toList();
+        });
+      }
+      return decryptedKeys;
     } catch (e) {
       return [];
     }
@@ -310,7 +419,8 @@ class AuthRepository {
         return null;
       }
 
-      return _decryptApiKey(encryptedApiKey);
+      final recordId = records.first['id'] as int?;
+      return await _decryptApiKey(encryptedApiKey, recordId: recordId);
     } catch (e) {
       return null;
     }
