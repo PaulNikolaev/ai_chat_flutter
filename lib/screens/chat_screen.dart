@@ -112,6 +112,14 @@ class _ChatScreenState extends State<ChatScreen> {
     }
   }
 
+  /// Заголовок с названием провайдера для AppBar.
+  String _providerTitle() {
+    final provider = widget.apiClient?.provider?.toLowerCase() ?? '';
+    if (provider == 'vsegpt') return 'VSEGPT';
+    if (provider == 'openrouter') return 'OpenRouter';
+    return 'AI Chat';
+  }
+
   /// Инициализирует логирование для экрана чата.
   Future<void> _initializeLogger() async {
     try {
@@ -784,7 +792,7 @@ class _ChatScreenState extends State<ChatScreen> {
     return Scaffold(
       backgroundColor: AppStyles.backgroundColor,
       appBar: AppBar(
-        title: const Text('AI Chat'),
+        title: Text(_providerTitle()),
         automaticallyImplyLeading:
             false, // Убираем кнопку "назад" в контексте HomeScreen
         actions: [
