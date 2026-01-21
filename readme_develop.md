@@ -19,7 +19,7 @@
 3. **Клонируйте проект**:
    ```bash
    git clone <repository-url>
-   cd AI_chat_flutter
+   cd ai_chat_flutter
    ```
 4. **Установите зависимости**:
    ```bash
@@ -33,9 +33,10 @@
 ```env
 OPENROUTER_API_KEY=ваш_api_ключ
 OPENROUTER_BASE_URL=https://openrouter.ai/api/v1
-VSEGPT_BASE_URL=https://vsegpt.ru/v1
+VSEGPT_BASE_URL=https://api.vsegpt.ru/v1
 MAX_TOKENS=1000
 TEMPERATURE=0.7
+DEBUG_LOG_HTTP=false
 ```
 
 **Важно:** Файл `.env` не должен попадать в git (он уже в `.gitignore`).
@@ -350,6 +351,18 @@ flutter pub outdated
 
 - Консоль приложения (debug режим)
 - Файлы логов (если настроено)
+
+#### HTTP debug logging
+
+Для отладки сетевых запросов можно включить подробные логи HTTP через переменные окружения:
+
+```env
+DEBUG=true
+LOG_LEVEL=DEBUG
+DEBUG_LOG_HTTP=true
+```
+
+В production/release детальные логи должны быть выключены.
 
 ### DevTools
 
