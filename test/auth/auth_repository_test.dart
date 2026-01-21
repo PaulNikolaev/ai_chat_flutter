@@ -1,4 +1,6 @@
 import 'package:flutter_test/flutter_test.dart';
+import 'package:flutter_secure_storage/flutter_secure_storage.dart';
+import 'package:flutter_dotenv/flutter_dotenv.dart';
 import 'package:sqflite_common_ffi/sqflite_ffi.dart';
 import 'package:path/path.dart' as path;
 import 'dart:io';
@@ -8,6 +10,9 @@ import 'package:ai_chat/auth/auth_repository.dart';
 void main() {
   // Инициализируем sqflite_ffi для тестирования на десктопе
   setUpAll(() {
+    TestWidgetsFlutterBinding.ensureInitialized();
+    FlutterSecureStorage.setMockInitialValues({});
+    dotenv.testLoad(fileInput: '');
     sqfliteFfiInit();
     databaseFactory = databaseFactoryFfi;
   });
@@ -72,7 +77,8 @@ void main() {
     });
     
     tearDownAll(() async {
-      // Удаляем тестовую БД после всех тестов
+      // Закрываем перед удалением, чтобы не было lock
+      await testDb.close();
       final file = File(testDbPath);
       if (await file.exists()) {
         await file.delete();

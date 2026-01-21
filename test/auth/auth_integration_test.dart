@@ -1,4 +1,6 @@
 import 'package:flutter_test/flutter_test.dart';
+import 'package:flutter_secure_storage/flutter_secure_storage.dart';
+import 'package:flutter_dotenv/flutter_dotenv.dart';
 import 'package:sqflite_common_ffi/sqflite_ffi.dart';
 import 'package:http/http.dart' as http;
 
@@ -158,10 +160,12 @@ class MockAuthValidatorForIntegration extends AuthValidator {
 }
 
 void main() {
-  // Инициализируем sqflite_ffi для тестирования на десктопе
+  TestWidgetsFlutterBinding.ensureInitialized();
+  FlutterSecureStorage.setMockInitialValues({});
   setUpAll(() {
     sqfliteFfiInit();
     databaseFactory = databaseFactoryFfi;
+    dotenv.testLoad(fileInput: '');
   });
 
   group('Integration Tests - Full Authentication Flow', () {

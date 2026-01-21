@@ -1,4 +1,6 @@
 import 'package:flutter_test/flutter_test.dart';
+import 'package:flutter_secure_storage/flutter_secure_storage.dart';
+import 'package:flutter_dotenv/flutter_dotenv.dart';
 import 'package:sqflite_common_ffi/sqflite_ffi.dart';
 
 import 'package:ai_chat/auth/auth_manager.dart';
@@ -78,6 +80,37 @@ class MockAuthStorage extends AuthStorage {
   }
 
   @override
+  Future<List<Map<String, String>>> getAllApiKeys() async {
+    if (!_hasAuth || _storedApiKey == null || _storedProvider == null) {
+      return [];
+    }
+    return [
+      {
+        'api_key': _storedApiKey!,
+        'provider': _storedProvider!,
+        'created_at': '',
+        'last_used': '',
+      }
+    ];
+  }
+
+  @override
+  Future<bool> updateLastUsed(String provider) async {
+    _storedProvider = provider;
+    return true;
+  }
+
+  @override
+  Future<bool> deleteApiKey(String provider) async {
+    if (_storedProvider == provider) {
+      _storedProvider = null;
+      _storedApiKey = null;
+      _hasAuth = false;
+    }
+    return true;
+  }
+
+  @override
   Future<bool> clearAuth() async {
     if (_clearAuthShouldFail) {
       return false;
@@ -119,6 +152,21 @@ class MockAuthStorage extends AuthStorage {
 
   void setClearAuthShouldFail(bool value) {
     _clearAuthShouldFail = value;
+  }
+
+  void setApiKey(String apiKey) {
+    _storedApiKey = apiKey;
+    _hasAuth = true;
+  }
+
+  void setPinHash(String pinHash) {
+    _storedPinHash = pinHash;
+    _hasAuth = true;
+  }
+
+  void setProvider(String provider) {
+    _storedProvider = provider;
+    _hasAuth = true;
   }
 }
 
@@ -163,8 +211,11 @@ class MockAuthValidator extends AuthValidator {
 }
 
 void main() {
+  TestWidgetsFlutterBinding.ensureInitialized();
+  FlutterSecureStorage.setMockInitialValues({});
   // Инициализируем sqflite_ffi для тестирования на десктопе
   setUpAll(() {
+    dotenv.testLoad(fileInput: '');
     sqfliteFfiInit();
     databaseFactory = databaseFactoryFfi;
   });

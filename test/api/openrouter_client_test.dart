@@ -1,10 +1,15 @@
 import 'package:flutter_test/flutter_test.dart';
+import 'package:flutter_dotenv/flutter_dotenv.dart';
 import 'package:http/http.dart' as http;
 import 'package:http/testing.dart';
 
 import 'package:ai_chat/api/api.dart';
 
 void main() {
+  TestWidgetsFlutterBinding.ensureInitialized();
+  setUpAll(() {
+    dotenv.testLoad(fileInput: '');
+  });
   group('OpenRouterClient Tests', () {
     late OpenRouterClient client;
     late MockClient mockHttpClient;
@@ -110,7 +115,7 @@ void main() {
       // Мокаем ответ для баланса - используем правильный endpoint /credits для OpenRouter
       final balanceMockClient = MockClient((request) async {
         if (request.url.path.contains('/credits')) {
-          return http.Response('{"data": 100.50}', 200);
+          return http.Response('{"data": {"total_credits": 150.50, "total_usage": 50.00}}', 200);
         }
         return http.Response('Not Found', 404);
       });
@@ -123,7 +128,7 @@ void main() {
       );
 
       final balance = await balanceClient.getBalance();
-      expect(balance, equals('100.50'));
+      expect(balance, equals(r'$100.50'));
       
       balanceClient.dispose();
     });
@@ -131,7 +136,7 @@ void main() {
     test('getBalance - использует кэш', () async {
       final balanceMockClient = MockClient((request) async {
         if (request.url.path.contains('/credits')) {
-          return http.Response('{"data": 100.50}', 200);
+          return http.Response('{"data": {"total_credits": 150.50, "total_usage": 50.00}}', 200);
         }
         return http.Response('Not Found', 404);
       });
@@ -147,7 +152,7 @@ void main() {
       final balance2 = await balanceClient.getBalance();
       
       expect(balance1, equals(balance2));
-      expect(balance1, equals('100.50'));
+      expect(balance1, equals(r'$100.50'));
       
       balanceClient.dispose();
     });
@@ -155,7 +160,7 @@ void main() {
     test('getBalance - очищает кэш после clearBalanceCache', () async {
       final balanceMockClient = MockClient((request) async {
         if (request.url.path.contains('/credits')) {
-          return http.Response('{"data": 100.50}', 200);
+          return http.Response('{"data": {"total_credits": 150.50, "total_usage": 50.00}}', 200);
         }
         return http.Response('Not Found', 404);
       });
@@ -172,7 +177,7 @@ void main() {
       
       // После очистки кэша следующий вызов должен загрузить данные заново
       final balance = await balanceClient.getBalance(forceRefresh: true);
-      expect(balance, equals('100.50'));
+      expect(balance, equals(r'$100.50'));
       
       balanceClient.dispose();
     });
