@@ -154,46 +154,86 @@ flutter format .
 flutter format --dry-run .
 ```
 
-### Сборка приложения
+### Сборка десктопного приложения (release)
+
+#### Требования
+
+- Flutter SDK установлен и доступен в PATH
+- Для **Windows**: Visual Studio 2022 + “Desktop development with C++”
+- Для **Linux**: CMake, pkg-config, GTK dev packages
+- Для **macOS**: Xcode + CocoaPods
+
+#### Сборка
 
 ```bash
-# Debug сборка
-flutter build windows --debug
-flutter build apk --debug
-
-# Release сборка
+# Windows
 flutter build windows --release
-flutter build apk --release
 
-# App Bundle для Google Play
-flutter build appbundle --release
+# Linux
+flutter build linux --release
+
+# macOS
+flutter build macos --release
 ```
 
-### Сборка Android (release)
+#### Где искать сборки
+
+- **Windows**: `build/windows/x64/runner/Release/`
+- **Linux**: `build/linux/x64/release/bundle/`
+- **macOS**: `build/macos/Build/Products/Release/`
+
+---
+
+### Сборка мобильного приложения (release)
+
+## Android
+
+#### Требования
+
+- Android SDK (API 21+), установлены platform-tools и build-tools
+- JDK 11+ (рекомендуется 17, если окружение Flutter настроено под него)
+
+#### Подпись (release)
 
 1. **Сгенерируйте keystore** (один раз):
-   ```bash
-   keytool -genkey -v -keystore android/app/key.jks -keyalg RSA -keysize 2048 -validity 10000 -alias upload
-   ```
-2. **Создайте `android/key.properties`** (не коммитить):
-   ```properties
-   storePassword=<ваш_пароль>
-   keyPassword=<ваш_пароль>
-   keyAlias=upload
-   storeFile=key.jks
-   ```
-3. **Проверьте `android/app/build.gradle`** — блок `signingConfigs`/`buildTypes` должен ссылаться на `key.properties`.
-4. **Соберите release:**
-   - APK: `flutter build apk --release`
-   - AAB: `flutter build appbundle --release`
-5. **Где искать сборки:**
-   - APK: `android/app/build/outputs/flutter-apk/app-release.apk` (копируется также в `build/app/outputs/flutter-apk/` для совместимости)
-   - AAB: `android/app/build/outputs/bundle/release/app-release.aab` (копируется также в `build/app/outputs/bundle/release/`)
 
-Минимальные требования:
-- Android SDK API 21+
-- Установлены platform-tools, build-tools
-- JDK 11+
+```bash
+keytool -genkey -v -keystore android/app/key.jks -keyalg RSA -keysize 2048 -validity 10000 -alias upload
+```
+
+2. **Создайте `android/key.properties`** (не коммитить):
+
+```properties
+storePassword=<ваш_пароль>
+keyPassword=<ваш_пароль>
+keyAlias=upload
+storeFile=key.jks
+```
+
+3. **Проверьте `android/app/build.gradle.kts`** — `signingConfig`/`buildTypes` должны читать `key.properties` (или используйте свою схему подписи).
+
+#### Сборка
+
+- APK: `flutter build apk --release`
+- AAB (Google Play): `flutter build appbundle --release`
+
+#### Где искать сборки
+
+- APK: `build/app/outputs/flutter-apk/app-release.apk`  
+  (оригинал: `android/app/build/outputs/flutter-apk/app-release.apk`)
+- AAB: `build/app/outputs/bundle/release/app-release.aab`  
+  (оригинал: `android/app/build/outputs/bundle/release/app-release.aab`)
+
+## iOS (только macOS)
+
+#### Требования
+
+- macOS, Xcode, CocoaPods
+
+#### Сборка
+
+- IPA (через Xcode архив): `flutter build ipa --release`
+- Или сборка для запуска на устройстве: `flutter build ios --release`
 
 ### Очистка проекта
 
