@@ -121,6 +121,9 @@ class EnvConfig {
   /// Режим отладки.
   static bool get debug => getBool('DEBUG', fallback: false);
 
+  /// Детальное логирование HTTP (для отладки; выключено в проде).
+  static bool get debugLogHttp => getBool('DEBUG_LOG_HTTP', fallback: false);
+
   /// Максимальное количество токенов для генерации.
   static int get maxTokens {
     final value = getString('MAX_TOKENS');

@@ -318,8 +318,10 @@ class OpenRouterClient {
     if (provider == 'vsegpt') {
       // Для VSEGPT используем /v1/chat/completions
       final baseUri = Uri.parse(baseUrl);
-      debugPrint('[OpenRouterClient] VSEGPT baseUrl: $baseUrl');
-      debugPrint('[OpenRouterClient] Parsed baseUri path: ${baseUri.path}');
+      if (EnvConfig.debugLogHttp) {
+        debugPrint(
+            '[OpenRouterClient] VSEGPT baseUri path: ${baseUri.path.isEmpty ? '/' : baseUri.path}');
+      }
 
       // Если baseUrl уже содержит полный путь /v1/chat/completions, используем его как есть
       if (baseUri.path == '/v1/chat/completions' ||
@@ -356,11 +358,17 @@ class OpenRouterClient {
         // Иначе добавляем /v1/chat/completions
         uri = baseUri.resolve('/v1/chat/completions');
       }
-      debugPrint('[OpenRouterClient] Final VSEGPT URI: $uri');
+      if (EnvConfig.debugLogHttp) {
+        debugPrint(
+            '[OpenRouterClient] Final VSEGPT endpoint: ${_safeEndpoint(uri)}');
+      }
     } else {
       // Для OpenRouter используем стандартный /chat/completions
       uri = Uri.parse('$baseUrl/chat/completions');
-      debugPrint('[OpenRouterClient] OpenRouter URI: $uri');
+      if (EnvConfig.debugLogHttp) {
+        debugPrint(
+            '[OpenRouterClient] OpenRouter endpoint: ${_safeEndpoint(uri)}');
+      }
     }
 
     final body = <String, dynamic>{
@@ -375,24 +383,34 @@ class OpenRouterClient {
       'temperature': EnvConfig.temperature,
     };
 
-    // Логируем URL и параметры запроса для диагностики
-    // ВАЖНО: Не логируем Authorization header, чтобы не раскрывать API ключ
-    debugPrint('[OpenRouterClient] Sending message to: $uri');
-    debugPrint('[OpenRouterClient] Provider: $provider');
-    debugPrint('[OpenRouterClient] Model: $model');
-    // Логируем body без чувствительных данных (API ключ в заголовках, не в body)
-    debugPrint('[OpenRouterClient] Request body: ${jsonEncode(body)}');
+    final requestId = DateTime.now().microsecondsSinceEpoch.toString();
+    final stopwatch = Stopwatch()..start();
+    if (EnvConfig.debugLogHttp) {
+      debugPrint(
+          '[OpenRouterClient][$requestId] send provider=$provider model=$model endpoint=${_safeEndpoint(uri)}');
+    }
 
     http.Response response;
     try {
       response = await _postWithRetry(uri, body: body);
-      debugPrint('[OpenRouterClient] Response status: ${response.statusCode}');
-      debugPrint('[OpenRouterClient] Response body: ${response.body}');
+      stopwatch.stop();
+      if (EnvConfig.debugLogHttp) {
+        debugPrint(
+            '[OpenRouterClient][$requestId] done status=${response.statusCode} durationMs=${stopwatch.elapsedMilliseconds}');
+      }
     } on http.ClientException catch (e) {
-      debugPrint('[OpenRouterClient] Network error: $e');
+      stopwatch.stop();
+      if (EnvConfig.debugLogHttp) {
+        debugPrint(
+            '[OpenRouterClient][$requestId] network error after ${stopwatch.elapsedMilliseconds}ms: $e');
+      }
       throw OpenRouterException('Network error while sending message: $e');
     } catch (e) {
-      debugPrint('[OpenRouterClient] Unexpected error: $e');
+      stopwatch.stop();
+      if (EnvConfig.debugLogHttp) {
+        debugPrint(
+            '[OpenRouterClient][$requestId] unexpected error after ${stopwatch.elapsedMilliseconds}ms: $e');
+      }
       throw OpenRouterException('Unexpected error while sending message: $e');
     }
 
@@ -440,8 +458,6 @@ class OpenRouterClient {
     try {
       final dynamic decoded = jsonDecode(response.body);
       if (decoded is! Map<String, dynamic>) {
-        debugPrint(
-            '[OpenRouterClient] Response is not a JSON object: ${decoded.runtimeType}');
         throw const FormatException('Response is not a JSON object');
       }
 
@@ -459,17 +475,12 @@ class OpenRouterClient {
       }
 
       if (choices is! List || choices.isEmpty) {
-        debugPrint('[OpenRouterClient] Response structure: ${decoded.keys}');
-        debugPrint(
-            '[OpenRouterClient] Choices type: ${choices.runtimeType}, value: $choices');
         throw FormatException(
             'Response does not contain choices. Response keys: ${decoded.keys}');
       }
 
       final first = choices.first;
       if (first is! Map<String, dynamic>) {
-        debugPrint(
-            '[OpenRouterClient] First choice type: ${first.runtimeType}');
         throw const FormatException('First choice is not an object');
       }
 
@@ -492,8 +503,6 @@ class OpenRouterClient {
       }
 
       if (content == null || content.isEmpty) {
-        debugPrint('[OpenRouterClient] First choice keys: ${first.keys}');
-        debugPrint('[OpenRouterClient] First choice: $first');
         throw FormatException(
             'Could not extract content from response. Choice keys: ${first.keys}');
       }
@@ -507,9 +516,6 @@ class OpenRouterClient {
       final completionTokens = usage?['completion_tokens'] as int? ??
           usage?['completionTokens'] as int?;
 
-      debugPrint(
-          '[OpenRouterClient] Successfully parsed response. Content length: ${content.length}');
-
       return ChatCompletionResult(
         text: content,
         totalTokens: totalTokens,
@@ -517,14 +523,25 @@ class OpenRouterClient {
         completionTokens: completionTokens,
       );
     } on FormatException catch (e) {
-      debugPrint('[OpenRouterClient] FormatException: $e');
-      debugPrint('[OpenRouterClient] Response body: ${response.body}');
+      if (EnvConfig.debugLogHttp) {
+        debugPrint('[OpenRouterClient] FormatException: $e');
+      }
       throw OpenRouterException('Invalid chat completion response format: $e');
     } catch (e) {
-      debugPrint('[OpenRouterClient] Parse error: $e');
-      debugPrint('[OpenRouterClient] Response body: ${response.body}');
+      if (EnvConfig.debugLogHttp) {
+        debugPrint('[OpenRouterClient] Parse error: $e');
+      }
       throw OpenRouterException('Failed to parse chat completion response: $e');
     }
+  }
+
+  /// Возвращает безопасное строковое представление URI без query/fragment.
+  ///
+  /// Удаляет query параметры и fragment из URI для безопасного логирования,
+  /// чтобы не раскрывать чувствительные данные в логах.
+  String _safeEndpoint(Uri uri) {
+    final port = uri.hasPort ? ':${uri.port}' : '';
+    return '${uri.scheme}://${uri.host}$port${uri.path}';
   }
 
   /// Получает текущий баланс аккаунта.
