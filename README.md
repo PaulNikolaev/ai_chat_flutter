@@ -151,8 +151,6 @@ flutter build windows --release  # Сборка
 
 Приложение использует систему аутентификации с поддержкой API ключей OpenRouter и VSEGPT.
 
-**Подробное руководство**: [AUTH_GUIDE.md](AUTH_GUIDE.md)
-
 **Краткая информация:**
 - Первый вход: введите API ключ (OpenRouter: `sk-or-v1-...` или VSEGPT: `sk-or-vv-...`)
 - Повторный вход: используйте PIN код (4 цифры) или обновите API ключ
@@ -164,4 +162,4 @@ flutter build windows --release  # Сборка
 1. `flutter pub get` - установка зависимостей
 2. `flutter doctor` - проверка окружения
 3. Проверьте логи в `logs/`
-4. См. [AUTH_GUIDE.md](AUTH_GUIDE.md) для вопросов по аутентификации
+4. См. [readme_develop.md](readme_develop.md) для вопросов по разработке
