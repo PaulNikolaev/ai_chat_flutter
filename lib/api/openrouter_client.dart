@@ -41,6 +41,22 @@ class OpenRouterClient {
   /// Максимальный возраст кэша баланса в секундах (60 секунд).
   static const int _balanceCacheMaxAgeSeconds = 60;
 
+  /// Включено ли детальное HTTP-логирование (только для debug уровня).
+  bool get _httpLogEnabled =>
+      EnvConfig.debug &&
+      EnvConfig.debugLogHttp &&
+      EnvConfig.logLevel.toUpperCase() == 'DEBUG';
+
+  /// Безопасный лог в структуре JSON, без чувствительных данных.
+  void _logHttp(String event, Map<String, dynamic> data) {
+    if (!_httpLogEnabled) return;
+    final payload = <String, dynamic>{
+      'event': event,
+      ...data,
+    };
+    debugPrint(jsonEncode(payload));
+  }
+
   /// Очищает кэш моделей.
   ///
   /// Вызывается при переключении провайдера для принудительной перезагрузки моделей.
@@ -318,10 +334,10 @@ class OpenRouterClient {
     if (provider == 'vsegpt') {
       // Для VSEGPT используем /v1/chat/completions
       final baseUri = Uri.parse(baseUrl);
-      if (EnvConfig.debugLogHttp) {
-        debugPrint(
-            '[OpenRouterClient] VSEGPT baseUri path: ${baseUri.path.isEmpty ? '/' : baseUri.path}');
-      }
+      _logHttp('build_uri', {
+        'provider': provider,
+        'base_path': baseUri.path.isEmpty ? '/' : baseUri.path,
+      });
 
       // Если baseUrl уже содержит полный путь /v1/chat/completions, используем его как есть
       if (baseUri.path == '/v1/chat/completions' ||
@@ -358,19 +374,21 @@ class OpenRouterClient {
         // Иначе добавляем /v1/chat/completions
         uri = baseUri.resolve('/v1/chat/completions');
       }
-      if (EnvConfig.debugLogHttp) {
-        debugPrint(
-            '[OpenRouterClient] Final VSEGPT endpoint: ${_safeEndpoint(uri)}');
-      }
+      _logHttp('resolved_uri', {
+        'provider': provider,
+        'endpoint': _safeEndpoint(uri, masked: !_httpLogEnabled),
+      });
     } else {
       // Для OpenRouter используем стандартный /chat/completions
       uri = Uri.parse('$baseUrl/chat/completions');
-      if (EnvConfig.debugLogHttp) {
-        debugPrint(
-            '[OpenRouterClient] OpenRouter endpoint: ${_safeEndpoint(uri)}');
-      }
+      _logHttp('resolved_uri', {
+        'provider': provider,
+        'endpoint': _safeEndpoint(uri, masked: !_httpLogEnabled),
+      });
     }
 
+    final maskedModel = EnvConfig.debug ? model : '***';
+    final maskedEndpoint = EnvConfig.debug ? _safeEndpoint(uri) : '***';
     final body = <String, dynamic>{
       'model': model,
       'messages': [
@@ -385,32 +403,43 @@ class OpenRouterClient {
 
     final requestId = DateTime.now().microsecondsSinceEpoch.toString();
     final stopwatch = Stopwatch()..start();
-    if (EnvConfig.debugLogHttp) {
-      debugPrint(
-          '[OpenRouterClient][$requestId] send provider=$provider model=$model endpoint=${_safeEndpoint(uri)}');
-    }
+    _logHttp('request_start', {
+      'requestId': requestId,
+      'provider': provider,
+      'model': maskedModel,
+      'endpoint': maskedEndpoint,
+    });
 
     http.Response response;
     try {
       response = await _postWithRetry(uri, body: body);
       stopwatch.stop();
-      if (EnvConfig.debugLogHttp) {
-        debugPrint(
-            '[OpenRouterClient][$requestId] done status=${response.statusCode} durationMs=${stopwatch.elapsedMilliseconds}');
-      }
+      _logHttp('request_done', {
+        'requestId': requestId,
+        'provider': provider,
+        'status': response.statusCode,
+        'latencyMs': stopwatch.elapsedMilliseconds,
+        'endpoint': maskedEndpoint,
+      });
     } on http.ClientException catch (e) {
       stopwatch.stop();
-      if (EnvConfig.debugLogHttp) {
-        debugPrint(
-            '[OpenRouterClient][$requestId] network error after ${stopwatch.elapsedMilliseconds}ms: $e');
-      }
+      _logHttp('request_error', {
+        'requestId': requestId,
+        'provider': provider,
+        'error': 'network',
+        'message': e.toString(),
+        'latencyMs': stopwatch.elapsedMilliseconds,
+      });
       throw OpenRouterException('Network error while sending message: $e');
     } catch (e) {
       stopwatch.stop();
-      if (EnvConfig.debugLogHttp) {
-        debugPrint(
-            '[OpenRouterClient][$requestId] unexpected error after ${stopwatch.elapsedMilliseconds}ms: $e');
-      }
+      _logHttp('request_error', {
+        'requestId': requestId,
+        'provider': provider,
+        'error': 'unexpected',
+        'message': e.toString(),
+        'latencyMs': stopwatch.elapsedMilliseconds,
+      });
       throw OpenRouterException('Unexpected error while sending message: $e');
     }
 
@@ -523,14 +552,20 @@ class OpenRouterClient {
         completionTokens: completionTokens,
       );
     } on FormatException catch (e) {
-      if (EnvConfig.debugLogHttp) {
-        debugPrint('[OpenRouterClient] FormatException: $e');
-      }
+      _logHttp('parse_error', {
+        'requestId': null,
+        'provider': provider,
+        'type': 'format',
+        'message': e.toString(),
+      });
       throw OpenRouterException('Invalid chat completion response format: $e');
     } catch (e) {
-      if (EnvConfig.debugLogHttp) {
-        debugPrint('[OpenRouterClient] Parse error: $e');
-      }
+      _logHttp('parse_error', {
+        'requestId': null,
+        'provider': provider,
+        'type': 'parse',
+        'message': e.toString(),
+      });
       throw OpenRouterException('Failed to parse chat completion response: $e');
     }
   }
@@ -539,7 +574,8 @@ class OpenRouterClient {
   ///
   /// Удаляет query параметры и fragment из URI для безопасного логирования,
   /// чтобы не раскрывать чувствительные данные в логах.
-  String _safeEndpoint(Uri uri) {
+  String _safeEndpoint(Uri uri, {bool masked = false}) {
+    if (masked) return '***';
     final port = uri.hasPort ? ':${uri.port}' : '';
     return '${uri.scheme}://${uri.host}$port${uri.path}';
   }
